@@ -1,0 +1,805 @@
+import React, { useState, useEffect } from 'react'
+import { DataGrid } from '@mui/x-data-grid'
+import {
+  Button,
+  FormControl,
+  InputLabel,
+  MenuItem,
+  Select,
+  TextField,
+  Tooltip,
+  IconButton,
+} from '@mui/material'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  addExpense,
+  deleteReceipt,
+  editExpense,
+  getExpenses,
+  getSubCategoryListByCategoryId,
+} from '@/constants/apis'
+import { useDispatch, useSelector } from 'react-redux'
+import Breadcrumb from '@/components/Breadcrumb'
+import { closeModal, openModal } from '@/redux/modalSlice'
+import Modal from '@/components/Modal'
+import { DatePicker } from '@mui/x-date-pickers'
+import dayjs from 'dayjs'
+import {
+  Edit,
+  EditAttributes,
+  EditNote,
+  CloudUpload,
+  Delete,
+  FilePresentOutlined,
+  OpenInNew,
+  Close,
+  DocumentScanner,
+  Add,
+} from '@mui/icons-material'
+import CustomToolbar from '@/components/CustomToolbar'
+import FilteredDataGrid from '@/components/FilteredDataGrid'
+import ReportExportToolbar from '@/components/ReportExportToolbar'
+import { toast } from 'react-toastify'
+import { toastconfig } from '@/utils/toastconfig'
+import Link from 'next/link'
+import { Autocomplete } from '@mui/material'
+import { FaFileCircleExclamation } from 'react-icons/fa6'
+import { getBranchName } from '@/utils/branchMapping'
+import BranchDataTest from '@/components/BranchDataTest'
+
+const Expenses = () => {
+  const user = useSelector(store => store.user)
+  const dropdowns = useSelector(store => store.dropdowns)
+  const { branches } = dropdowns
+  const paymentMode = [{ id: 1, name: 'CASH' }, { id: 2, name: 'ONLINE' }]
+  //useQuery for dat fetchin,g
+  const queryClient = useQueryClient()
+
+  console.log('dropdowns', dropdowns?.expenseCategories)
+  console.log('branches dropdown:', dropdowns?.branches)
+  
+  const { data: expencesData } = useQuery({
+    queryKey: ['expenses'],
+    queryFn: async () => {
+      const res = await getExpenses(user?.accessToken)
+      if (res.status === 200) {
+        // Transform data to ensure branch information is properly mapped
+        const transformedData = res.data?.map(expense => ({
+          ...expense,
+          // Ensure branch data is properly structured
+          branch: expense.branch || {
+            id: expense.branchId,
+            name: dropdowns?.branches?.find(b => b.id === expense.branchId)?.name || 'Unknown Branch'
+          }
+        }))
+        return transformedData
+      } else {
+        throw new Error('Error fetching expenses')
+      }
+    },
+  })
+
+  // Debug logging after data is available
+  useEffect(() => {
+    if (expencesData) {
+      console.log('expenses data structure:', expencesData)
+      console.log('first expense item:', expencesData?.[0])
+    }
+  }, [expencesData])
+  const expenseModel = {
+    // expenseName: '',
+    branchId: '',
+    category: '',
+    subCategory: '',
+    amount: '',
+    paymentMode: '',
+    description: '',
+    paymentDate: dayjs(new Date()).format('YYYY-MM-DD'),
+    invoiceReceipt: null,
+  }
+  const [modalType, setModal] = useState()
+  //expenseForm
+  const [expenseForm, setExpenseForm] = useState(expenseModel)
+  const addExpenseMutation = useMutation({
+    mutationKey: ['addExpense'],
+    mutationFn: async expenseData => {
+      const formData = new FormData()
+      Object.keys(expenseData).forEach(key => {
+        if (expenseData[key]) {
+          if (key === 'invoiceReceipt') {
+            // Handle multiple files
+            expenseData[key].forEach((file, index) => {
+              formData.append(`invoiceReceipt`, file)
+            })
+          } else {
+            formData.append(key, expenseData[key])
+          }
+        }
+      })
+
+      const res = await addExpense(user?.accessToken, formData)
+      if (res.status === 200) {
+        dispatch(closeModal('Expense'))
+        setExpenseForm(expenseModel)
+        queryClient.invalidateQueries(['expenses'])
+        return res.data
+      } else {
+        throw new Error('Error adding expense')
+      }
+    },
+  })
+  const editExpenseMutation = useMutation({
+    mutationKey: ['editExpense'],
+    mutationFn: async expenseData => {
+      const formData = new FormData()
+      Object.keys(expenseData).forEach(key => {
+        if (expenseData[key]) {
+          if (key === 'invoiceReceipt') {
+            expenseData[key].forEach((file, index) => {
+              if (typeof file === 'object') {
+                formData.append(`invoiceReceipt`, file)
+              }
+            })
+          } else {
+            formData.append(key, expenseData[key])
+          }
+        }
+      })
+
+      const res = await editExpense(user?.accessToken, formData)
+      if (res.status === 200) {
+        dispatch(closeModal('Expense'))
+        setExpenseForm(expenseModel)
+        queryClient.invalidateQueries(['expenses'])
+        return res.data
+      } else {
+        throw new Error('Error editing expense')
+      }
+    },
+  })
+  const { data: subCategories } = useQuery({
+    queryKey: ['subcategories', expenseForm.category],
+    queryFn: async () => {
+      const res = await getSubCategoryListByCategoryId(
+        user.accessToken,
+        expenseForm.category,
+      )
+      if (res.status === 200) {
+        console.log('ress', res)
+        return res.data
+      } else {
+        throw new Error('Error fetching subcategories')
+      }
+    },
+    enabled: !!expenseForm.category,
+  })
+  const handleExpenseFormChange = e => {
+    setExpenseForm({ ...expenseForm, [e.target.name]: e.target.value })
+  }
+  const dispatch = useDispatch()
+  const columns = [
+    // { field: 'id', headerName: 'ID', width: 70 },
+    {
+      field: 'paymentDate',
+      headerName: 'Payment Date',
+      width: 120,
+      flex: 0.5,
+      // type: 'date',
+      renderCell: params => {
+        return <span>{dayjs(params.value).format('DD-MM-YYYY')}</span>
+      },
+
+      // valueGetter: params => new Date(params),
+      // renderCell: (params) => {
+      //     return <DatePicker value={dayjs(params.value)} />
+      // }
+    },
+    // Added Branch column - copied from Orders report structure
+    {
+      field: 'branch',
+      headerName: 'Branch',
+      width: 120,
+      flex: 0.6,
+      renderCell: params => {
+        // Use utility function to get branch name
+        const branchName = getBranchName(params.row, dropdowns?.branches || [])
+        
+        return (
+          <Tooltip title={branchName}>
+            <span className="truncate">
+              {branchName}
+            </span>
+          </Tooltip>
+        )
+      },
+    },
+    // { field: 'expenseName', headerName: 'Expense Name', width: 200 },
+    {
+      field: 'categoryName',
+      headerName: 'Category',
+      width: 250,
+      flex: 0.7,
+      renderCell: params => {
+        // console.log(params)
+        return (
+          <Tooltip title={params?.row.category?.categoryName}>
+            <span
+              className="truncate"
+              // title={params?.row.category?.categoryName}
+            >
+              {params?.row.category?.categoryName}
+            </span>
+          </Tooltip>
+        )
+      },
+    },
+    {
+      field: 'subCategoryName',
+      headerName: 'Sub Category',
+      width: 250,
+      flex: 0.7,
+      renderCell: params => {
+        // console.log(params)
+        return (
+          <Tooltip title={params?.row.subCategory?.subCategoryName}>
+            <span
+              className="truncate"
+              // title={params?.row.subCategory?.subCategoryName}
+            >
+              {params?.row.subCategory?.subCategoryName}
+            </span>
+          </Tooltip>
+        )
+      },
+    },
+    {
+      field: 'amount',
+      headerName: 'Amount',
+      width: 100,
+      flex: 0.5,
+      type: 'number',
+    },
+    {
+      field: 'paymentMode',
+      headerName: 'Payment Mode',
+      width: 120,
+      flex: 0.5,
+      renderCell: params => {
+        const mode = params?.row.paymentMode?.toLowerCase() || ''
+        return <span>{mode.charAt(0).toUpperCase() + mode.slice(1)}</span>
+      },
+    },
+    {
+      field: 'description',
+      headerName: 'Description',
+      width: 300,
+      flex: 3,
+      minWidth: 250,
+      renderCell: params => {
+        return (
+          <Tooltip title={params.row.description || 'No description'}>
+            <div
+              className="text-sm leading-relaxed"
+              style={{
+                maxWidth: '100%',
+                wordWrap: 'break-word',
+                whiteSpace: 'pre-wrap',
+                overflow: 'visible'
+              }}
+            >
+              {params.row.description || 'No description'}
+            </div>
+          </Tooltip>
+        )
+      },
+    },
+
+    {
+      field: 'actions',
+      headerName: 'Actions',
+      width: 120,
+      flex: 1,
+      renderCell: params => (
+        <Button
+          variant="outlined"
+          color="primary"
+          size="small"
+          startIcon={<EditNote />}
+          onClick={() => handleEdit(params.row)}
+        >
+          Edit
+        </Button>
+      ),
+    },
+  ]
+
+  const handleEdit = row => {
+    console.log('Edit clicked for row:', row)
+    const {
+      id,
+      category,
+      subCategory,
+      amount,
+      description,
+      paymentDate,
+      branch,
+      invoiceReceipt,
+    } = row
+
+    const newObject = {
+      id,
+      category: category.id,
+      subCategory: subCategory.id,
+      amount,
+      description,
+      paymentDate,
+      branchId: branch.id,
+      invoiceReceipt: invoiceReceipt || [], // Initialize with existing invoiceReceipt or empty array
+    }
+    setExpenseForm(newObject)
+    dispatch(openModal('Expense'))
+    setModal('edit')
+  }
+
+  const handleNewExpence = () => {
+    dispatch(openModal('Expense'))
+    setModal('add')
+  }
+  const handleDateChange = value => {
+    setExpenseForm({
+      ...expenseForm,
+      paymentDate: dayjs(value).format('YYYY-MM-DD'),
+    })
+  }
+  const handleClose = () => {
+    dispatch(closeModal('Expense'))
+    setExpenseForm(expenseModel)
+  }
+
+  // const [filters, setFilters] = useState({
+  //   category: '',
+  //   subCategory: '',
+  //   amount: '',
+  //   dateRange: {
+  //     start: null,
+  //     end: null,
+  //   },
+  // })
+
+  const customFilters = [
+    {
+      field: 'category',
+      label: 'Category',
+      type: 'select',
+    },
+    {
+      field: 'subCategory',
+      label: 'Sub Category',
+      type: 'select',
+    },
+    {
+      field: 'amount',
+      label: 'Amount',
+      type: 'number',
+    },
+    // {
+    //   field: 'dateRange',
+    //   label: 'Date Range',
+    //   type: 'dateRange',
+    // },
+  ]
+
+  const getUniqueValues = field => {
+    if (!expencesData) return []
+    const values = new Set(
+      expencesData.map(row => {
+        if (field === 'category') {
+          return row.category?.categoryName.trim()
+        }
+        if (field === 'subCategory') {
+          return row.subCategory?.subCategoryName.trim()
+        }
+        return row[field]
+      }),
+    )
+    return Array.from(values).filter(Boolean)
+  }
+
+  const filterData = (data, filters) => {
+    if (!data) return []
+    return data.filter(row => {
+      return Object.entries(filters).every(([field, filter]) => {
+        if (!filter || !filter.value) return true
+
+        // Handle different field types
+        switch (field) {
+          case 'category':
+            const categoryName = row.category?.categoryName
+            if (!categoryName) return false
+
+            if (filter.prefix === 'IN') {
+              return filter.value.includes(categoryName)
+            }
+            return filter.prefix === 'NOT IN'
+              ? !filter.value.includes(categoryName)
+              : true
+
+          case 'subCategory':
+            const subCategoryName = row.subCategory?.subCategoryName
+            if (!subCategoryName) return false
+
+            if (filter.prefix === 'IN') {
+              return filter.value.includes(subCategoryName)
+            }
+            return filter.prefix === 'NOT IN'
+              ? !filter.value.includes(subCategoryName)
+              : true
+
+          case 'amount':
+            const amount = Number(row.amount)
+            const filterValue = Number(filter.value)
+
+            if (isNaN(amount) || isNaN(filterValue)) return true
+
+            switch (filter.prefix) {
+              case 'LESS_THAN':
+                return amount < filterValue
+              case 'GREATER_THAN':
+                return amount > filterValue
+              default:
+                return true
+            }
+
+          case 'dateRange':
+            if (!filter.start && !filter.end) return true
+
+            const rowDate = dayjs(row.paymentDate)
+            if (!rowDate.isValid()) return false
+
+            if (
+              filter.start &&
+              rowDate.isBefore(dayjs(filter.start).startOf('day'))
+            ) {
+              return false
+            }
+            if (filter.end && rowDate.isAfter(dayjs(filter.end).endOf('day'))) {
+              return false
+            }
+            return true
+
+          default:
+            return true
+        }
+      })
+    })
+  }
+
+  // Add this mutation for deleting invoiceReceipt
+  const deleteReceiptMutation = useMutation({
+    mutationKey: ['deleteReceipt'],
+    mutationFn: async data => {
+      const res = await deleteReceipt(user?.accessToken, data)
+
+      if (res.status === 200) {
+        toast.success('Receipt deleted successfully', toastconfig)
+        setExpenseForm(prev => ({
+          ...prev,
+          invoiceReceipt: prev.invoiceReceipt.filter(
+            file => file !== data.receiptUrl,
+          ),
+        }))
+        queryClient.invalidateQueries({ queryKey: ['expenses'] })
+        // return res.json()
+      } else {
+        throw new Error('Error deleting receipt')
+      }
+    },
+    onError: error => {
+      toast.error(error.message || 'Failed to delete receipt', toastconfig)
+    },
+  })
+
+  return (
+    <div style={{ height: 600, width: '100%' }} className="p-5">
+      <div className="flex justify-between m-3">
+        <div>
+          <Breadcrumb />
+        </div>
+        <Button
+          onClick={handleNewExpence}
+          variant="contained"
+          className="text-white"
+        >
+          Add New
+        </Button>
+      </div>
+      
+      {/* Temporary debug component - remove in production */}
+      <BranchDataTest 
+        data={expencesData || []} 
+        branches={dropdowns?.branches || []} 
+      />
+      <FilteredDataGrid
+        rows={expencesData || []}
+        columns={columns}
+        customFilters={customFilters}
+        filterData={filterData}
+        getUniqueValues={getUniqueValues}
+        reportName="Expenses_Report"
+        reportType="expenses"
+        branchName="All_Branches"
+        filters={{}}
+        pageSize={5}
+        rowsPerPageOptions={[5]}
+        disableRowSelectionOnClick
+        slots={{
+          toolbar: ReportExportToolbar,
+        }}
+        slotProps={{
+          toolbar: {
+            data: expencesData || [],
+            columns,
+            reportName: "Expenses_Report",
+            reportType: "expenses",
+            branchName: "All_Branches",
+            filters: {}
+          },
+        }}
+      />
+
+      <Modal
+        uniqueKey={'Expense'}
+        closeOnOutsideClick={false}
+        maxWidth={'sm'}
+        // handleClose={handleClose}
+      >
+        <div className="flex justify-between">
+          <span className="text-2xl font-semibold text-secondary">
+            Add Expense
+          </span>
+          <IconButton onClick={handleClose}>
+            <Close />
+          </IconButton>
+        </div>
+        <div className="flex flex-col mt-3 gap-3">
+          {/* <TextField
+            name="expenseName"
+            label="Expense Name"
+            variant="outlined"
+            value={expenseForm?.expenseName}
+            onChange={handleExpenseFormChange}
+          /> */}
+          <FormControl>
+            <Autocomplete
+              options={dropdowns?.expenseCategories || []}
+              getOptionLabel={option => option.name}
+              value={
+                dropdowns?.expenseCategories?.find(
+                  cat => cat.id === expenseForm?.category,
+                ) || null
+              }
+              onChange={(_, value) => {
+                setExpenseForm({
+                  ...expenseForm,
+                  category: value?.id || '',
+                })
+              }}
+              renderInput={params => (
+                <TextField {...params} label="Expense Category" />
+              )}
+            />
+          </FormControl>
+          <FormControl>
+            <Autocomplete
+              options={subCategories || []}
+              getOptionLabel={option => option.ledgerName}
+              value={
+                subCategories?.find(
+                  sub => sub.id === expenseForm?.subCategory,
+                ) || null
+              }
+              onChange={(_, value) => {
+                setExpenseForm({
+                  ...expenseForm,
+                  subCategory: value?.id || '',
+                })
+              }}
+              renderInput={params => (
+                <TextField {...params} label="Expense Sub Category" />
+              )}
+            />
+          </FormControl>
+          <FormControl>
+            <Autocomplete
+              options={branches || []}
+              getOptionLabel={option => option.name}
+              value={
+                branches?.find(branch => branch.id === expenseForm?.branchId) ||
+                null
+              }
+              onChange={(_, value) => {
+                setExpenseForm({
+                  ...expenseForm,
+                  branchId: value?.id || '',
+                })
+              }}
+              renderInput={params => <TextField {...params} label="Branch" />}
+            />
+          </FormControl>
+          <TextField
+            label="Amount"
+            type="number"
+            variant="outlined"
+            value={expenseForm?.amount}
+            name="amount"
+            onChange={handleExpenseFormChange}
+          />
+          <FormControl>
+            <Autocomplete
+              options={paymentMode || []}
+              getOptionLabel={option => option.name}
+              value={
+                paymentMode?.find(
+                  pay => pay.name === expenseForm?.paymentMode,
+                ) || null
+              }
+              onChange={(_, value) => {
+                setExpenseForm({
+                  ...expenseForm,
+                  paymentMode: value?.name,
+                })
+              }}
+              renderInput={params => (
+                <TextField {...params} label="Payment Mode" />
+              )}
+            />
+          </FormControl>
+          <TextField
+            multiline={true}
+            rows={3}
+            label="Description"
+            variant="outlined"
+            value={expenseForm?.description}
+            name="description"
+            onChange={handleExpenseFormChange}
+          />
+          <DatePicker
+            className=" bg-white"
+            value={dayjs(expenseForm?.paymentDate)}
+            format="DD/MM/YYYY"
+            onChange={handleDateChange}
+            name="paymentDate"
+          />
+          <div className="flex flex-col gap-2">
+            <input
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png"
+              className="hidden"
+              id="invoice-upload"
+              multiple
+              onChange={e => {
+                const files = Array.from(e.target.files || [])
+                const validFiles = files.filter(file => {
+                  if (file.size > 5 * 1024 * 1024) {
+                    toast.error(
+                      `File ${file.name} is larger than 5MB`,
+                      toastconfig,
+                    )
+                    return false
+                  }
+                  return true
+                })
+
+                setExpenseForm(prev => ({
+                  ...prev,
+                  invoiceReceipt: [
+                    ...(prev.invoiceReceipt || []),
+                    ...validFiles,
+                  ],
+                }))
+              }}
+            />
+            <div className="flex flex-wrap gap-2">
+              {!expenseForm?.invoiceReceipt?.length ? (
+                <Button
+                  variant="outlined"
+                  startIcon={<CloudUpload />}
+                  onClick={() =>
+                    document.getElementById('invoice-upload').click()
+                  }
+                  className="capitalize"
+                >
+                  Upload Invoice/Receipt
+                </Button>
+              ) : (
+                <>
+                  <div className="flex flex-wrap gap-2 items-center">
+                    {expenseForm.invoiceReceipt.map((file, index) => (
+                      <div key={index} className="flex items-center gap-2">
+                        <div className="flex items-center font-bold  gap-2 text-secondary rounded border p-1">
+                          <span className="flex items-center gap-2">
+                            <DocumentScanner />
+                            <Button
+                              variant="text"
+                              className="truncate"
+                              onClick={() => {
+                                window.open(file, '_blank')
+                              }}
+                            >
+                              {typeof file === 'string'
+                                ? `Receipt ${index + 1}`
+                                : file.name}
+                            </Button>
+                          </span>
+                          <IconButton
+                            edge="end"
+                            aria-label="delete"
+                            color="error"
+                            onClick={() => {
+                              if (typeof file === 'string') {
+                                if (
+                                  window.confirm(
+                                    'Are you sure you want to delete this receipt?',
+                                  )
+                                ) {
+                                  deleteReceiptMutation.mutate({
+                                    expenseId: expenseForm.id,
+                                    receiptUrl: file,
+                                  })
+                                }
+                              } else {
+                                setExpenseForm(prev => ({
+                                  ...prev,
+                                  invoiceReceipt: prev.invoiceReceipt.filter(
+                                    (_, i) => i !== index,
+                                  ),
+                                }))
+                              }
+                            }}
+                          >
+                            <Delete />
+                          </IconButton>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <Button
+                    variant="outlined"
+                    startIcon={<Add />}
+                    onClick={() =>
+                      document.getElementById('invoice-upload').click()
+                    }
+                    className="capitalize mt-2"
+                  >
+                    Receipt
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+          <div className="flex justify-end">
+            {modalType == 'add' ? (
+              <Button
+                variant="outlined"
+                color="primary"
+                onClick={() => addExpenseMutation?.mutate(expenseForm)}
+              >
+                Add
+              </Button>
+            ) : (
+              <Button
+                variant="outlined"
+                color="primary"
+                onClick={() => editExpenseMutation.mutate(expenseForm)}
+              >
+                Save Changes
+              </Button>
+            )}
+          </div>
+        </div>
+      </Modal>
+    </div>
+  )
+}
+
+export default Expenses
