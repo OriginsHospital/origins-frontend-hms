@@ -1,126 +1,138 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { Pie } from 'react-chartjs-2'
 import { Chart as ChartJS, ArcElement, Title, Tooltip, Legend } from 'chart.js'
+import { CircularProgress } from '@mui/material'
 
 ChartJS.register(ArcElement, Title, Tooltip, Legend)
 
-const SalesChart = ({ salesData }) => {
-  const colors = [
-    { 1: '#00C49F' },
-    { 2: '#0088FE' },
-    { 3: '#FFBB28' },
-    { 4: '#FF8042' },
-    { 5: '#FF99E6' },
-    { 6: '#FF9999' },
-    { 7: 'red' },
-  ]
+const SalesChart = ({ dataset, isLoading, hasData }) => {
+  const totalAmount = useMemo(() => {
+    return (dataset?.amounts || []).reduce((sum, amount) => sum + amount, 0)
+  }, [dataset])
 
-  // Product Type Pie Data (existing)
-  const productPieData = {
-    labels:
-      salesData?.totalSalesProductTypeWise?.map(item => item.productType) || [],
-    datasets: [
-      {
-        data:
-          salesData?.totalSalesProductTypeWise?.map(item => item.amount) || [],
-        backgroundColor:
-          salesData?.totalSalesProductTypeWise?.map(
-            (_, index) => colors[index][index + 1],
-          ) || [],
-        borderColor: '#ffffff',
-        borderWidth: 2,
-      },
-    ],
-  }
+  const pieData = useMemo(() => {
+    const labels = dataset?.labels || []
+    const amounts = dataset?.amounts || []
+    const colors = dataset?.colors || []
 
-  // Payment Mode Pie Data (new)
-  const paymentPieData = {
-    labels:
-      salesData?.totalSalesPaymentModeWise?.map(item => item.paymentMode) || [],
-    datasets: [
-      {
-        data:
-          salesData?.totalSalesPaymentModeWise?.map(item => item.amount) || [],
-        backgroundColor:
-          salesData?.totalSalesPaymentModeWise?.map(
-            (_, index) => colors[index][index + 1],
-          ) || [],
-        borderColor: '#ffffff',
-        borderWidth: 2,
-      },
-    ],
-  }
+    return {
+      labels,
+      datasets: [
+        {
+          data: amounts,
+          backgroundColor: colors,
+          borderColor: '#ffffff',
+          borderWidth: 2,
+        },
+      ],
+    }
+  }, [dataset])
 
-  // Common options for both charts
-  const createPieOptions = title => ({
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      title: {
-        display: false,
-        text: title,
-        font: {
-          size: 16,
-          weight: 'bold',
-        },
+  const chartOptions = useMemo(
+    () =>
+      createPieOptions({
+        totalAmount,
+      }),
+    [totalAmount],
+  )
+
+  const legendItems = useMemo(() => {
+    if (!pieData.labels?.length) return []
+    const labels = pieData.labels
+    const amounts = pieData.datasets?.[0]?.data || []
+    const colors = pieData.datasets?.[0]?.backgroundColor || []
+
+    return labels
+      .map((label, index) => {
+        const amount = Number(amounts[index]) || 0
+        return {
+          label,
+          amount,
+          color: colors[index],
+          percentage: computePercentage(amount, totalAmount),
+        }
+      })
+      .sort((a, b) => a.label.localeCompare(b.label))
+  }, [pieData, totalAmount])
+
+  const legendColumns = useMemo(() => {
+    if (!legendItems.length) return []
+    const columnCount = 3
+    const itemsPerColumn = Math.ceil(legendItems.length / columnCount)
+
+    return Array.from({ length: columnCount }, (_, index) =>
+      legendItems.slice(index * itemsPerColumn, (index + 1) * itemsPerColumn),
+    ).filter((column) => column.length > 0)
+  }, [legendItems])
+
+  return (
+    <div className="flex flex-col justify-center items-center gap-4 h-full w-full">
+      <div className="relative bg-white rounded-lg shadow-sm p-4 w-full h-[360px] transition-opacity duration-300">
+        {isLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/60 z-10">
+            <CircularProgress size={28} thickness={5} />
+          </div>
+        )}
+        {hasData ? (
+          <Pie data={pieData} options={chartOptions} />
+        ) : (
+          <div className="flex items-center justify-center h-full text-gray-500">
+            No data available for the selected filters
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+const createPieOptions = ({ totalAmount }) => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  animation: {
+    duration: 500,
+    easing: 'easeInOutQuad',
+  },
+  animations: {
+    numbers: {
+      type: 'number',
+      easing: 'easeOutQuad',
+      duration: 500,
+    },
+    animateRotate: {
+      duration: 500,
+    },
+    animateScale: {
+      duration: 500,
+    },
+  },
+  plugins: {
+    title: {
+      display: false,
+      font: {
+        size: 16,
+        weight: 'bold',
       },
-      legend: {
-        position: 'bottom',
-        onClick: (e, legendItem, legend) => {
-          const index = legendItem.index
-          const chart = legend.chart
-          const datasetMeta = chart.getDatasetMeta(0)
-          const alreadyHidden = datasetMeta.data[index].hidden
-          datasetMeta.data[index].hidden = !alreadyHidden
-          legendItem.hidden = !alreadyHidden
-          chart.update()
-        },
-        labels: {
-          padding: 10,
-          font: { size: 12 },
-          generateLabels: chart => {
-            const datasets = chart.data.datasets
-            const meta = chart.getDatasetMeta(0)
-            return chart.data.labels.map((label, index) => ({
-              text: ` ${label} - ₹${datasets[0].data[index]?.toLocaleString(
-                'en-IN',
-              ) || 0}`,
-              fillStyle: datasets[0].backgroundColor[index],
-              hidden: meta.data[index] ? meta.data[index].hidden : false,
-              index: index,
-            }))
-          },
-        },
-      },
-      tooltip: {
-        callbacks: {
-          label: context => `₹${(context.raw || 0).toLocaleString('en-IN')}`,
+    },
+    legend: {
+      display: false,
+    },
+    tooltip: {
+      callbacks: {
+        label: (context) => {
+          const amount = context.raw || 0
+          return `₹${amount.toLocaleString('en-IN')} (${computePercentage(
+            amount,
+            totalAmount,
+          )})`
         },
       },
     },
-  })
+  },
+})
 
-  return (
-    <div className="flex flex-col justify-center items-center gap-4">
-      <div className="bg-white rounded-lg shadow-sm p-4 w-full h-[400px]">
-        {salesData?.totalSalesProductTypeWise?.length > 0 ? (
-          <Pie
-            data={productPieData}
-            options={createPieOptions('Sales by Product Type')}
-          />
-        ) : (
-          <div className="text-gray-500">No product data available</div>
-        )}
-      </div>
-      {/* <div className="bg-white rounded-lg shadow-sm p-4 ">
-        {salesData?.totalSalesPaymentModeWise?.length > 0 ? (
-          <Pie data={paymentPieData} options={createPieOptions('Sales by Payment Mode')} />
-        ) : (
-          <div className="text-gray-500">No payment mode data available</div>
-        )}
-      </div> */}
-    </div>
-  )
+const computePercentage = (value, total) => {
+  if (!total) return '0%'
+  return `${((Number(value || 0) / total) * 100).toFixed(1)}%`
 }
 
 export default SalesChart

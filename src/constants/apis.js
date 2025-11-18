@@ -2,7 +2,7 @@ import { API_ROUTES } from './constants'
 import { useRouter } from 'next/router'
 import { useSelector, useDispatch } from 'react-redux'
 
-export const getLoggedUserInfo = async token => {
+export const getLoggedUserInfo = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -21,7 +21,7 @@ export const getLoggedUserInfo = async token => {
   return response.json()
 }
 
-export const getNewAccessToken = async token => {
+export const getNewAccessToken = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -76,7 +76,7 @@ export const getUsersList = async (token, isvalidusers) => {
   return data
 }
 
-export const getValidUsersList = async token => {
+export const getValidUsersList = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -131,7 +131,7 @@ export const getModules = async () => {
   // console.log("modules list", data);
   return data
 }
-export const getRoleDetails = async roleid => {
+export const getRoleDetails = async (roleid) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${localStorage.getItem('token')}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -170,7 +170,7 @@ export const getRoleDetails = async roleid => {
 //         .catch((error) => console.error(error));
 
 // }
-export const getUserDetails = async userid => {
+export const getUserDetails = async (userid) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${localStorage.getItem('token')}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -223,7 +223,7 @@ export const validateUser = async (row, Permissions) => {
   return data
 }
 
-export const logout = async token => {
+export const logout = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -239,6 +239,22 @@ export const logout = async token => {
 
   return response.json()
 }
+export const closeVisit = async (token, appointmentId) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.CLOSE_VISIT}/${appointmentId}`,
+    {
+      method: 'PUT',
+      headers: myHeaders,
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
 export const getAllPatients = async (token, searchValue) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
@@ -273,7 +289,7 @@ export const getPatientTreatmentCycles = async (token, searchValue) => {
   return response.json()
 }
 
-export const getDonarInformation = async token => {
+export const getDonarInformation = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -312,7 +328,7 @@ export const saveDonarRecord = async (token, payload) => {
   myHeaders.append('Authorization', `Bearer ${token}`)
 
   const body = new FormData()
-  Object.keys(payload).forEach(key => {
+  Object.keys(payload).forEach((key) => {
     if (payload[key]) {
       body.append(key, payload[key])
     }
@@ -338,7 +354,7 @@ export const updateDonarRecord = async (token, payload) => {
   myHeaders.append('Authorization', `Bearer ${token}`)
 
   const body = new FormData()
-  Object.keys(payload).forEach(key => {
+  Object.keys(payload).forEach((key) => {
     if (payload[key]) {
       body.append(key, payload[key])
     }
@@ -376,7 +392,7 @@ export const deleteDonorFile = async (token, payload) => {
   return response.json()
 }
 
-export const getDropdowns = async token => {
+export const getDropdowns = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -408,7 +424,7 @@ export const getPatientByAadharOrMobile = async (token, searchValue) => {
   return response.json()
 }
 
-export const getCities = async function(token, stateId) {
+export const getCities = async function (token, stateId) {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -432,7 +448,7 @@ export const createPatientRecord = async (
   const formData = new FormData()
   const { aadhaarCard, marriageCertificate, affidavit, ...rest } = payload
 
-  Object.keys(rest).forEach(key => {
+  Object.keys(rest).forEach((key) => {
     if (typeof payload[key] === 'object') {
       formData.append(key, JSON.stringify(payload[key]))
     } else {
@@ -479,7 +495,7 @@ export const editPatientRecord = async (
 ) => {
   const formData = new FormData()
   const { aadhaarCard, marriageCertificate, affidavit, ...rest } = payload
-  Object.keys(rest).forEach(key => {
+  Object.keys(rest).forEach((key) => {
     // console.log(key, payload[key])
     if (typeof payload[key] === 'object') {
       formData.append(key, JSON.stringify(payload[key]))
@@ -652,7 +668,7 @@ export const getVisitInfoById = async (token, visitId) => {
   return response.json()
 }
 
-export const getDoctorsList = async token => {
+export const getDoctorsList = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -719,7 +735,7 @@ export const saveDoctorAvailability = async (token, payload) => {
   return response.json()
 }
 
-export const getDoctorsForAvailability = async token => {
+export const getDoctorsForAvailability = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -752,7 +768,7 @@ export const createConsultationOrTreatment = async (token, payload) => {
   return response.json()
 }
 // /api/getTreatmentTypes
-export const getTreatmentTypes = async token => {
+export const getTreatmentTypes = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -1401,7 +1417,7 @@ export const getSavedLabTestValues = async (
   return response.json()
 }
 
-export const getProfileDetails = async token => {
+export const getProfileDetails = async (token) => {
   // call api
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
@@ -1586,7 +1602,7 @@ export const saveGrnDetails = async (token, payload) => {
   return response.json()
 }
 
-export const getAllGrnData = async token => {
+export const getAllGrnData = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -1617,7 +1633,7 @@ export const getGrnDataById = async (token, id) => {
   return response.json()
 }
 
-export const getGRNReturnedHistory = async token => {
+export const getGRNReturnedHistory = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -1701,7 +1717,7 @@ export const sendTransactionId = async (token, payload) => {
   )
   return response.json()
 }
-export const getStockExpiryReport = async token => {
+export const getStockExpiryReport = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -1716,7 +1732,7 @@ export const getStockExpiryReport = async token => {
   )
   return response.json()
 }
-export const getPrescribedPurchaseReport = async token => {
+export const getPrescribedPurchaseReport = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -1731,7 +1747,7 @@ export const getPrescribedPurchaseReport = async token => {
   )
   return response.json()
 }
-export const getGrnVendorPaymentsReport = async token => {
+export const getGrnVendorPaymentsReport = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -1844,24 +1860,51 @@ export const getFormFReportByDateRange = async (token, fromDate, toDate) => {
   return response.json()
 }
 
+export const getDailyReportSummary = async (token, { date, branchId }) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_DAILY_REPORT_SUMMARY}`,
+    {
+      method: 'POST',
+      headers: myHeaders,
+      body: JSON.stringify({
+        date,
+        branchId: Number(branchId) || branchId,
+      }),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
 export const SalesReportDashboard = async (
   token,
   fromDate,
   toDate,
   branchId,
+  paymentMode, // optional: 'CASH'|'UPI' or undefined for all
 ) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
-  const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.SALES_REPORT_DASHBOARD}?fromDate=${fromDate}&toDate=${toDate}&branchId=${branchId}`,
-    {
-      method: 'GET',
-      headers: myHeaders,
-      redirect: 'follow',
-      credentials: 'include',
-    },
+  const url = new URL(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.SALES_REPORT_DASHBOARD}`,
   )
+  url.searchParams.append('fromDate', fromDate)
+  url.searchParams.append('toDate', toDate)
+  url.searchParams.append('branchId', branchId)
+  if (paymentMode) url.searchParams.append('paymentMode', paymentMode)
+
+  const response = await fetch(url.toString(), {
+    method: 'GET',
+    headers: myHeaders,
+    redirect: 'follow',
+    credentials: 'include',
+  })
   return response.json()
 }
 export const ReturnItems = async (token, payload) => {
@@ -1946,7 +1989,7 @@ export const SaveScanResult = async (token, payload) => {
   )
   return response.json()
 }
-export const getFormFTemplate = async token => {
+export const getFormFTemplate = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -1980,7 +2023,7 @@ export const saveGrnPayments = async (token, payload) => {
 }
 //GRN_SALES_REPORT
 
-export const grnSalesReport = async token => {
+export const grnSalesReport = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -2155,20 +2198,37 @@ export const saveInjectionChanges = async (token, payload) => {
 }
 
 //get expences
-
-export const getExpenses = async token => {
+export const getExpenses = async (token, filters = {}) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
-  const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_EXPENSES}`,
-    {
-      method: 'GET',
-      headers: myHeaders,
-      redirect: 'follow',
-      credentials: 'include',
-    },
-  )
+
+  // Build query string from filters
+  const queryParams = new URLSearchParams()
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== null && value !== undefined && value !== '') {
+      // Convert date objects to strings if needed
+      if (value instanceof Date) {
+        queryParams.append(key, dayjs(value).format('DD-MM-YYYY'))
+      } else {
+        queryParams.append(key, value.toString())
+      }
+    }
+  })
+
+  const queryString = queryParams.toString()
+  const url = `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_EXPENSES}${queryString ? `?${queryString}` : ''}`
+
+  console.log('API Call - URL:', url)
+  console.log('API Call - Filters:', filters)
+  console.log('API Call - Query String:', queryString)
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: myHeaders,
+    redirect: 'follow',
+    credentials: 'include',
+  })
   return response.json()
 }
 //post call for add expense
@@ -2207,7 +2267,7 @@ export const editExpense = async (token, payload) => {
   return response.json()
 }
 
-export const getOTDropdowns = async token => {
+export const getOTDropdowns = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -2574,7 +2634,7 @@ export const downloadConsentFormById = async (token, id, patientId) => {
       redirect: 'follow',
       credentials: 'include',
     },
-  ).then(response => {
+  ).then((response) => {
     downloadPDF(response)
   })
   // downloadPDF(response)
@@ -2598,7 +2658,7 @@ export const downloadSampleFormF = async (
       redirect: 'follow',
       credentials: 'include',
     },
-  ).then(response => {
+  ).then((response) => {
     downloadPDF(response)
   })
   // downloadPDF(response)
@@ -3117,7 +3177,7 @@ export const applyPackageDiscount = async (token, payload) => {
   return response.json()
 }
 
-export const getCoupons = async token => {
+export const getCoupons = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -3212,7 +3272,7 @@ export const SaveEmbryologyTreatment = async (token, payload) => {
   const formData = new FormData()
   console.log(payload)
 
-  Object.keys(payload).forEach(key => {
+  Object.keys(payload).forEach((key) => {
     if (key != 'imageLink' && key != 'embryologyImage') {
       if (typeof payload[key] === 'object') {
         formData.append(key, JSON.stringify(payload[key]))
@@ -3249,7 +3309,7 @@ export const SaveEmbryologyTreatment = async (token, payload) => {
 export const SaveEmbryologyConsultation = async (token, payload, file) => {
   const myHeaders = new Headers()
   const formData = new FormData()
-  Object.keys(payload).forEach(key => {
+  Object.keys(payload).forEach((key) => {
     if (key != 'imageLink' && key != 'embryologyImage') {
       formData.append(key, payload[key])
     }
@@ -3283,7 +3343,7 @@ export const editEmbryologyTreatment = async (token, payload, id) => {
 
   const formData = new FormData()
   console.log(payload, id)
-  Object.keys(payload).forEach(key => {
+  Object.keys(payload).forEach((key) => {
     if (key !== 'imageLink' && key !== 'embryologyImage') {
       if (typeof payload[key] === 'object') {
         formData.append(key, JSON.stringify(payload[key]))
@@ -3322,7 +3382,7 @@ export const editEmbryologyConsultation = async (token, payload, id) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   const formData = new FormData()
-  Object.keys(payload).forEach(key => {
+  Object.keys(payload).forEach((key) => {
     if (key != 'imageLink' && key != 'embryologyImage') {
       formData.append(key, payload[key])
     }
@@ -3506,7 +3566,7 @@ export const getPaymentHistoryByVisitId = async (token, visitId) => {
   return response.json()
 }
 
-export const getAllAppointmentReasons = async token => {
+export const getAllAppointmentReasons = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -3601,7 +3661,7 @@ export const closeVisitInConsultation = async (token, payload, visitId) => {
   )
   return response.json()
 }
-export const noShowReport = async token => {
+export const noShowReport = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -3634,7 +3694,7 @@ export const getItemPurchaseHistoryReport = async (token, itemId) => {
   return response.json()
 }
 
-export const getAllIncidents = async token => {
+export const getAllIncidents = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -3700,7 +3760,7 @@ export const editIncident = async (token, payload) => {
   return response.json()
 }
 
-export const getAllOrders = async token => {
+export const getAllOrders = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -3794,7 +3854,7 @@ export const receiveOrder = async (token, payload) => {
   return response.json()
 }
 
-export const getAllDepartments = async token => {
+export const getAllDepartments = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -3811,7 +3871,7 @@ export const getAllDepartments = async token => {
   return response.json()
 }
 
-export const getAllVendors = async token => {
+export const getAllVendors = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -3845,7 +3905,7 @@ export const getAllVendorsByDepartmentId = async (token, departmentId) => {
   return response.json()
 }
 
-export const getAllSupplies = async token => {
+export const getAllSupplies = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -3982,7 +4042,7 @@ export const printPrescription = async (token, payload) => {
   return response.json()
 }
 
-export const getAllTasks = async token => {
+export const getAllTasks = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -4176,7 +4236,7 @@ export const createAlert = async (token, payload) => {
   return response.json()
 }
 
-export const getAllAlerts = async token => {
+export const getAllAlerts = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -4279,7 +4339,7 @@ export const getAvailableGrnInfoByItemId = async (
   return response.json()
 }
 
-export const getConsultantRoasters = async token => {
+export const getConsultantRoasters = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -4342,7 +4402,7 @@ export const downloadEmbryologyReport = async (token, payload) => {
       redirect: 'follow',
       credentials: 'include',
     },
-  ).then(response => {
+  ).then((response) => {
     downloadPDF(response)
   })
 }
@@ -4358,7 +4418,7 @@ export const downloadEmbryologyImagesReport = async (token, payload) => {
       redirect: 'follow',
       credentials: 'include',
     },
-  ).then(response => {
+  ).then((response) => {
     downloadPDF(response)
   })
   return response.json()
@@ -4611,7 +4671,7 @@ export const deleteEmbryologyImage = async (token, payload) => {
   return response.json()
 }
 
-export const getIndentList = async token => {
+export const getIndentList = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -4749,6 +4809,72 @@ export const createIPRegistration = async (token, payload) => {
       method: 'POST',
       headers: myHeaders,
       body: JSON.stringify(payload),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const closeIpRegistration = async (token, payload) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.CLOSE_IP_REGISTRATION}`,
+    {
+      method: 'POST',
+      headers: myHeaders,
+      body: JSON.stringify(payload),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const registerBuildingStructure = async (token, payload) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.REGISTER_BUILDING}`,
+    {
+      method: 'POST',
+      headers: myHeaders,
+      body: JSON.stringify(payload),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const getLayoutOverview = async (token, branchId) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_LAYOUT_OVERVIEW}?branchId=${branchId}`,
+    {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const getBedDetails = async (token, bedId) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_BED_DETAILS}/${bedId}`,
+    {
+      method: 'GET',
+      headers: myHeaders,
       redirect: 'follow',
       credentials: 'include',
     },

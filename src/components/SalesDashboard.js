@@ -1,32 +1,43 @@
-import React, { useState } from 'react'
-import {
-  Card,
-  CardContent,
-  Typography,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
-  Chip,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Box,
-} from '@mui/material'
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
-import { DatePicker } from '@mui/x-date-pickers'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Card, CardContent } from '@mui/material'
 import dayjs from 'dayjs'
-import { DataGrid } from '@mui/x-data-grid'
 import SalesChart from './charts/SalesChart'
-import CustomToolbar from './CustomToolbar'
+import RevenueLegendTable from './RevenueLegendTable'
 import FilteredDataGrid from './FilteredDataGrid'
 
-const SalesDashboard = ({ data, branchId, labels, activeView, reportName, reportType, branchName, filters: reportFilters }) => {
+const SERVICE_COLORS = {
+  'IVF PACKAGE': '#27ae60',
+  PHARMACY: '#008080',
+  'LAB TEST': '#f39c12',
+  CONSULTATION: '#2980b9',
+  SONOGRAPHY: '#9b59b6',
+  PROCEDURE: '#16a085',
+  MEDICATION: '#1abc9c',
+  'OPD PACKAGE': '#d35400',
+}
+
+const FALLBACK_COLORS = [
+  '#1abc9c',
+  '#3498db',
+  '#9b59b6',
+  '#f1c40f',
+  '#e67e22',
+  '#e74c3c',
+  '#2ecc71',
+  '#34495e',
+  '#7f8c8d',
+]
+
+const SalesDashboard = ({
+  data,
+  branchId,
+  labels,
+  activeView,
+  reportName,
+  reportType,
+  branchName,
+  filters: reportFilters,
+}) => {
   const [filters, setFilters] = useState({
     patientName: '',
     productType: '',
@@ -36,6 +47,104 @@ const SalesDashboard = ({ data, branchId, labels, activeView, reportName, report
       end: null,
     },
   })
+  const [visibleSalesRows, setVisibleSalesRows] = useState([])
+  const [isChartLoading, setIsChartLoading] = useState(false)
+  const debounceRef = useRef(null)
+  const prevRowsSignatureRef = useRef('')
+
+  const computeRowsSignature = useCallback((rows) => {
+    if (!rows || rows.length === 0) return '__EMPTY__'
+    return rows
+      .map(
+        (row) => `${row.orderId}-${row.productType}-${Number(row.amount) || 0}`,
+      )
+      .join('|')
+  }, [])
+
+  // Normalize incoming rows to ensure consistent fields for display and export
+  const normalizeRow = (row) => {
+    if (!row) return row
+    const lastNameFromDb = row.last_name ?? row.lastName ?? ''
+    const firstNameFromDb = row.first_name ?? row.firstName ?? ''
+
+    let lastName = lastNameFromDb
+    let firstName = firstNameFromDb
+
+    // If DB fields are missing, try to derive from existing patientName (fallback)
+    if ((!lastName || !firstName) && row.patientName) {
+      const parts = String(row.patientName).trim().split(/\s+/)
+      if (parts.length > 0) {
+        firstName = parts[0] // First part is the first name
+        if (parts.length > 1) {
+          // Rest of the parts combine to form the last name
+          lastName = parts.slice(1).join(' ')
+        }
+      }
+    }
+
+    // Create the patient name in the format: last_name + ' ' + first_name (surname first)
+    const combinedPatientName = [lastName, firstName]
+      .filter(Boolean)
+      .join(' ')
+      .trim()
+
+    return {
+      ...row,
+      lastName: lastName || '',
+      firstName: firstName || '',
+      patientName: combinedPatientName,
+    }
+  }
+
+  const dataNormalizedSales = (data?.salesData || []).map(normalizeRow)
+  const dataNormalizedReturns = (data?.returnData || []).map(normalizeRow)
+
+  const rowsForActiveBranch = useMemo(() => {
+    return (dataNormalizedSales || []).filter(
+      (row) => row.branchId === branchId,
+    )
+  }, [dataNormalizedSales, branchId])
+
+  const rowsForActiveBranchReturns = useMemo(() => {
+    return (dataNormalizedReturns || []).filter(
+      (row) => row.branchId === branchId,
+    )
+  }, [dataNormalizedReturns, branchId])
+
+  const scheduleVisibleRowsUpdate = useCallback(
+    (rows) => {
+      const signature = computeRowsSignature(rows)
+      if (signature === prevRowsSignatureRef.current) {
+        return
+      }
+
+      prevRowsSignatureRef.current = signature
+
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current)
+      }
+
+      setIsChartLoading(true)
+      debounceRef.current = setTimeout(() => {
+        setVisibleSalesRows(rows || [])
+        setIsChartLoading(false)
+        debounceRef.current = null
+      }, 250)
+    },
+    [computeRowsSignature],
+  )
+
+  useEffect(() => {
+    scheduleVisibleRowsUpdate(rowsForActiveBranch)
+  }, [rowsForActiveBranch, scheduleVisibleRowsUpdate])
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current)
+      }
+    }
+  }, [])
 
   const columns = [
     {
@@ -44,7 +153,7 @@ const SalesDashboard = ({ data, branchId, labels, activeView, reportName, report
       flex: 1,
       align: 'left',
       headerAlign: 'left',
-      renderCell: params => (
+      renderCell: (params) => (
         <div>{dayjs(params?.row?.date).format('DD-MM-YYYY')}</div>
       ),
       filterField: 'date',
@@ -53,10 +162,29 @@ const SalesDashboard = ({ data, branchId, labels, activeView, reportName, report
       field: 'patientName',
       headerName: 'Patient Name',
       type: 'string',
-      flex: 1.3,
+      flex: 2,
       align: 'left',
       headerAlign: 'left',
       filterField: 'patientName',
+      renderCell: (params) => <div>{params?.row?.patientName || ''}</div>,
+      // Support searching by both first and last name
+      valueGetter: (params) => params?.row?.patientName || '',
+      filterOperators: [
+        {
+          label: 'contains',
+          value: 'contains',
+          getApplyFilterFn: (filterItem) => {
+            if (!filterItem.value) {
+              return null
+            }
+            return (params) => {
+              const searchValue = filterItem.value.toLowerCase()
+              const patientName = (params.value || '').toLowerCase()
+              return patientName.includes(searchValue)
+            }
+          },
+        },
+      ],
     },
     {
       field: 'productType',
@@ -64,7 +192,7 @@ const SalesDashboard = ({ data, branchId, labels, activeView, reportName, report
       flex: 1.2,
       align: 'left',
       headerAlign: 'left',
-      renderCell: params => (
+      renderCell: (params) => (
         <>
           {params?.row?.productType?.charAt(0).toUpperCase() +
             params?.row?.productType?.slice(1).toLowerCase()}
@@ -78,7 +206,7 @@ const SalesDashboard = ({ data, branchId, labels, activeView, reportName, report
       flex: 1.2,
       align: 'left',
       headerAlign: 'left',
-      renderCell: params => {
+      renderCell: (params) => {
         if (params?.row?.paymentMode) {
           return (
             <>
@@ -97,6 +225,18 @@ const SalesDashboard = ({ data, branchId, labels, activeView, reportName, report
       flex: 1,
       align: 'left',
       headerAlign: 'left',
+      // Round the displayed value
+      renderCell: (params) => {
+        const amount = params?.row?.amount
+        return <div>{amount ? Math.round(amount) : 0}</div>
+      },
+      // Format value for exports and sorting
+      valueFormatter: (params) => {
+        const amount = params?.value
+        return amount ? Math.round(amount) : 0
+      },
+      // Keep original value for sorting
+      sortComparator: (v1, v2) => v1 - v2,
     },
     {
       field: 'discountAmount',
@@ -153,8 +293,10 @@ const SalesDashboard = ({ data, branchId, labels, activeView, reportName, report
   // }
 
   // Get unique values for dropdowns
-  const getUniqueValues = field => {
-    const values = new Set(data?.salesData?.map(row => row[field]) || [])
+  const getUniqueValues = (field) => {
+    // Use normalized sales data when available so fields like lastName/firstName work
+    const source = dataNormalizedSales || data?.salesData || []
+    const values = new Set(source.map((row) => row[field]) || [])
     return Array.from(values).filter(Boolean)
   }
 
@@ -168,7 +310,7 @@ const SalesDashboard = ({ data, branchId, labels, activeView, reportName, report
       field: 'productType',
       label: 'Service Type',
       type: 'select',
-      options: getUniqueValues('productType').map(value => ({
+      options: getUniqueValues('productType').map((value) => ({
         value,
         label: value.charAt(0).toUpperCase() + value.slice(1).toLowerCase(),
       })),
@@ -177,7 +319,7 @@ const SalesDashboard = ({ data, branchId, labels, activeView, reportName, report
       field: 'paymentMode',
       label: 'Payment Mode',
       type: 'select',
-      options: getUniqueValues('paymentMode').map(value => ({
+      options: getUniqueValues('paymentMode').map((value) => ({
         value,
         label: value.charAt(0).toUpperCase() + value.slice(1).toLowerCase(),
       })),
@@ -189,13 +331,13 @@ const SalesDashboard = ({ data, branchId, labels, activeView, reportName, report
     },
   ]
 
-  const handleApplyFilters = newFilters => {
+  const handleApplyFilters = (newFilters) => {
     setFilters(newFilters)
   }
 
   const filterData = (data, filters) => {
     if (!data) return []
-    return data.filter(row => {
+    return data.filter((row) => {
       return Object.entries(filters).every(([field, filter]) => {
         if (!filter || !filter.value) return true
 
@@ -257,42 +399,64 @@ const SalesDashboard = ({ data, branchId, labels, activeView, reportName, report
   }
 
   // Transform data for the pie charts with null checks
+  // Use normalized sales data for any aggregations
   const chartData = {
-    totalSalesProductTypeWise: data?.salesDashboard?.totalSalesProductTypeWise
-      ? data.salesDashboard.totalSalesProductTypeWise.map(item => ({
-          ...item,
-          productType: item.productType,
-        }))
-      : [],
-    // Add payment mode statistics
-    totalSalesPaymentModeWise: data?.salesData
-      ? Object.values(
-          data.salesData.reduce((acc, item) => {
-            const mode = item.paymentMode || 'CASH'
-            if (!acc[mode]) {
-              acc[mode] = { paymentMode: mode, amount: 0 }
-            }
-            acc[mode].amount += Number(item.amount) || 0
-            return acc
-          }, {}),
-        )
-      : [],
+    totalSalesProductTypeWise: [],
     totalSales: data?.salesDashboard?.totalSales || 0,
     totalReturns: data?.salesDashboard?.totalReturns || 0,
   }
 
-  // Add null check for product type cards
-  const hasProductTypeData =
-    data?.salesDashboard?.totalSalesProductTypeWise &&
-    data.salesDashboard.totalSalesProductTypeWise.length > 0
+  const pieChartDataset = useMemo(() => {
+    if (!visibleSalesRows || visibleSalesRows.length === 0) {
+      return { labels: [], amounts: [], colors: [] }
+    }
+
+    const totalsByService = visibleSalesRows.reduce((acc, row) => {
+      const key = String(row.productType || 'Unknown').toUpperCase()
+      if (!acc[key]) {
+        acc[key] = 0
+      }
+      acc[key] += Number(row.amount) || 0
+      return acc
+    }, {})
+
+    // Sort labels alphabetically (case-insensitive, strict A→Z order)
+    const labels = Object.keys(totalsByService).sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }),
+    )
+    const amounts = labels.map((label) => totalsByService[label])
+    const assignedColors = labels.map((label, index) => {
+      if (SERVICE_COLORS[label]) {
+        return SERVICE_COLORS[label]
+      }
+      const fallbackIndex = index % FALLBACK_COLORS.length
+      return FALLBACK_COLORS[fallbackIndex]
+    })
+
+    return { labels, amounts, colors: assignedColors }
+  }, [visibleSalesRows])
+
+  const hasChartData =
+    pieChartDataset.labels.length > 0 &&
+    pieChartDataset.amounts.some((amount) => amount > 0)
+
+  // Prepare legend table items for revenueNew
+  const legendTableItems = pieChartDataset.labels.map((label, idx) => ({
+    label,
+    amount: pieChartDataset.amounts[idx],
+    color: pieChartDataset.colors[idx],
+    percentage: hasChartData
+      ? `${((pieChartDataset.amounts[idx] / (pieChartDataset.amounts.reduce((a, b) => a + b, 0) || 1)) * 100).toFixed(1)}%`
+      : '0%',
+  }))
 
   return (
     <div className="grid grid-cols-12 gap-5">
       {/* Table Section with null check */}
       {activeView === 'sales' ? (
-        <div className="col-span-8">
+        <div className="col-span-12 lg:col-span-8">
           <SalesTable
-            data={data?.salesData || []}
+            data={rowsForActiveBranch}
             title="Sales"
             columns={columns}
             branchId={branchId}
@@ -303,12 +467,13 @@ const SalesDashboard = ({ data, branchId, labels, activeView, reportName, report
             reportType={reportType}
             branchName={branchName}
             filters={reportFilters}
+            onRowsChange={scheduleVisibleRowsUpdate}
           />
         </div>
       ) : (
         <div className="col-span-12">
           <SalesTable
-            data={data?.returnData || []}
+            data={rowsForActiveBranchReturns}
             title={labels?.returns || 'Refunds'}
             columns={columns}
             branchId={branchId}
@@ -322,15 +487,24 @@ const SalesDashboard = ({ data, branchId, labels, activeView, reportName, report
           />
         </div>
       )}
-      {/* Chart Section with null check */}
-      <div className="col-span-4">
-        {hasProductTypeData ? (
-          <div className="col-span-8">
-            {activeView === 'sales' && <SalesChart salesData={chartData} />}
+      {/* Chart and Table Section */}
+      <div className="col-span-12 lg:col-span-4">
+        {activeView === 'sales' ? (
+          <div className="flex flex-col gap-4 h-full">
+            <div className="flex-1 flex items-center justify-center">
+              <SalesChart
+                dataset={pieChartDataset}
+                isLoading={isChartLoading}
+                hasData={hasChartData}
+              />
+            </div>
+            <div className="flex-1">
+              <RevenueLegendTable items={legendTableItems} />
+            </div>
           </div>
         ) : (
           <div className="text-center p-4 text-gray-500">
-            No data available for the selected date range
+            No chart available for the selected view
           </div>
         )}
       </div>
@@ -350,6 +524,7 @@ const SalesTable = ({
   reportType,
   branchName,
   filters,
+  onRowsChange,
 }) => (
   <div className="p-5">
     {/* <Typography variant="h6" className="mb-4">
@@ -357,8 +532,8 @@ const SalesTable = ({
     </Typography> */}
     <FilteredDataGrid
       key={`SalesTable-${branchId}-${data?.length}`}
-      rows={data?.filter(e => e.branchId === branchId) || []}
-      getRowId={row => row.orderId + row.productType}
+      rows={data || []}
+      getRowId={(row) => row.orderId + row.productType}
       columns={columns}
       className="h-[60vh]"
       customFilters={customFilters}
@@ -368,6 +543,7 @@ const SalesTable = ({
       reportType={reportType}
       branchName={branchName}
       filters={filters}
+      onRowsChange={onRowsChange}
     />
   </div>
 )

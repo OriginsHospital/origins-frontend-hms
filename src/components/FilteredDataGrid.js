@@ -12,17 +12,26 @@ const FilteredDataGrid = ({
   reportType,
   branchName,
   filters = {},
+  onRowsChange,
   ...props
 }) => {
   const [filteredRows, setFilteredRows] = useState(rows)
 
+  const notifyChange = (newRows) => {
+    if (typeof onRowsChange === 'function') {
+      onRowsChange(newRows)
+    }
+  }
+
   useEffect(() => {
     setFilteredRows(rows)
+    notifyChange(rows)
   }, [rows])
 
-  const handleFilterChange = filters => {
+  const handleFilterChange = (filters) => {
     const filtered = filterData(rows, filters)
     setFilteredRows(filtered)
+    notifyChange(filtered)
   }
 
   return (

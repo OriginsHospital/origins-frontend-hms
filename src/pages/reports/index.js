@@ -13,7 +13,7 @@ const subNav = [
   {
     path: '/reports/revenue',
     title: 'Revenue',
-    relatedModule: 'revenueReport',
+    relatedModule: null,
     icon: TbFileAnalytics,
   },
   {
@@ -100,20 +100,26 @@ const subNav = [
     relatedModule: 'treatmentCycles',
     icon: TbFileAnalytics,
   },
+  {
+    path: '/reports/revenueNew',
+    title: 'Revenue New',
+    relatedModule: null,
+    icon: TbFileAnalytics,
+  },
 ]
 function Reports() {
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   return (
     <div className=" w-full grid gap-4 grid-cols-2 lg:grid-cols-4 m-4">
       {subNav?.map((eachNav, i) => {
-        const PermissionedDashboardCard = withPermission(
-          DashboardCard,
-          false,
-          eachNav.relatedModule,
-          [ACCESS_TYPES.READ, ACCESS_TYPES.WRITE],
-        )
+        const CardComponent = eachNav.relatedModule
+          ? withPermission(DashboardCard, false, eachNav.relatedModule, [
+              ACCESS_TYPES.READ,
+              ACCESS_TYPES.WRITE,
+            ])
+          : DashboardCard
         return (
-          <PermissionedDashboardCard
+          <CardComponent
             key={eachNav.title + '-' + i}
             title={eachNav.title}
             // subtitle="Registration & Appointments"

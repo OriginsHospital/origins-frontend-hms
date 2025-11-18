@@ -12,6 +12,7 @@ import {
   MenuItem,
   Select,
   Typography,
+  Button,
 } from '@mui/material'
 import { DatePicker } from '@mui/x-date-pickers'
 import { useQuery } from '@tanstack/react-query'
@@ -19,13 +20,19 @@ import dayjs from 'dayjs'
 import React, { useContext, useEffect, useState } from 'react'
 import { useSelector } from 'react-redux'
 function Sales() {
-  const userDetails = useSelector(store => store.user)
-  const dropdowns = useSelector(store => store.dropdowns)
+  const userDetails = useSelector((store) => store.user)
+  const dropdowns = useSelector((store) => store.dropdowns)
   const [fromDate, setFromDate] = useState(new Date())
   const [toDate, setToDate] = useState(new Date())
   const [branchId, setBranchId] = useState('')
+  const [paymentMode, setPaymentMode] = useState('')
   const [activeView, setActiveView] = useState('sales') // 'sales' or 'refunds'
   const [filteredData, setFilteredData] = useState(null)
+
+  // Applied filters (used to trigger API)
+  const [appliedFromDate, setAppliedFromDate] = useState(null)
+  const [appliedToDate, setAppliedToDate] = useState(null)
+  const [appliedBranchId, setAppliedBranchId] = useState('')
 
   useEffect(() => {
     if (dropdowns?.branches?.length > 0) {
@@ -33,31 +40,119 @@ function Sales() {
     }
   }, [dropdowns])
 
-  const { data: salesDashboardData } = useQuery({
+  // Initialize applied filters once branch is available
+  useEffect(() => {
+    if (branchId && !appliedBranchId) {
+      setAppliedBranchId(branchId)
+      setAppliedFromDate(fromDate)
+      setAppliedToDate(toDate)
+    }
+  }, [branchId, fromDate, toDate])
+
+  const {
+    data: salesDashboardData,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: [
       'salesDashboardData',
       userDetails.accessToken,
-      fromDate,
-      toDate,
-      branchId,
+      appliedFromDate,
+      appliedToDate,
+      appliedBranchId,
     ],
     queryFn: async () => {
+      console.log('Revenue API Call:', {
+        token: userDetails?.accessToken ? 'Present' : 'Missing',
+        fromDate: appliedFromDate
+          ? dayjs(appliedFromDate).format('YYYY-MM-DD')
+          : 'Missing',
+        toDate: appliedToDate
+          ? dayjs(appliedToDate).format('YYYY-MM-DD')
+          : 'Missing',
+        branchId: appliedBranchId || 'Missing',
+      })
       const response = await SalesReportDashboard(
         userDetails?.accessToken,
-        dayjs(fromDate).format('YYYY-MM-DD'),
-        dayjs(toDate).format('YYYY-MM-DD'),
-        branchId,
+        dayjs(appliedFromDate).format('YYYY-MM-DD'),
+        dayjs(appliedToDate).format('YYYY-MM-DD'),
+        appliedBranchId,
       )
+      console.log('Revenue API Response:', response)
       return response.data
     },
-    enabled: userDetails.accessToken && branchId ? true : false,
+    enabled:
+      userDetails.accessToken &&
+      appliedBranchId &&
+      appliedFromDate &&
+      appliedToDate
+        ? true
+        : false,
   })
 
   useEffect(() => {
     if (salesDashboardData) {
-      setFilteredData(salesDashboardData)
+      let filtered = salesDashboardData
+
+      // Apply payment mode filter if selected
+      if (paymentMode) {
+        const filteredSalesData =
+          salesDashboardData.salesData?.filter(
+            (item) => item.paymentMode === paymentMode,
+          ) || []
+
+        const filteredReturnData =
+          salesDashboardData.returnData?.filter(
+            (item) => item.paymentMode === paymentMode,
+          ) || []
+
+        // Recalculate totals from filtered data
+        const totalSales = filteredSalesData.reduce(
+          (sum, item) => sum + (item.amount || 0),
+          0,
+        )
+        const totalReturns = filteredReturnData.reduce(
+          (sum, item) => sum + (Math.abs(item.amount) || 0),
+          0,
+        )
+
+        filtered = {
+          ...salesDashboardData,
+          salesData: filteredSalesData,
+          returnData: filteredReturnData,
+          salesDashboard: {
+            ...salesDashboardData.salesDashboard,
+            totalSales: totalSales,
+            totalReturns: totalReturns,
+          },
+        }
+      }
+
+      setFilteredData(filtered)
     }
-  }, [salesDashboardData, fromDate, toDate])
+  }, [salesDashboardData, paymentMode])
+
+  const handleApplyFilters = () => {
+    setAppliedFromDate(fromDate)
+    setAppliedToDate(toDate)
+    setAppliedBranchId(branchId)
+  }
+
+  const handleResetFilters = () => {
+    const defaultFrom = dayjs().subtract(30, 'day').toDate()
+    const defaultTo = new Date()
+    const defaultBranch = dropdowns?.branches?.[0]?.id || ''
+    setFromDate(defaultFrom)
+    setToDate(defaultTo)
+    setBranchId(defaultBranch)
+    setPaymentMode('')
+    setFilteredData(null)
+    setAppliedFromDate(defaultFrom)
+    setAppliedToDate(defaultTo)
+    setAppliedBranchId(defaultBranch)
+  }
 
   return (
     <div>
@@ -74,9 +169,12 @@ function Sales() {
             <SummaryCard
               title="Total Sales"
               value={`₹${(
-                salesDashboardData?.salesDashboard?.totalSales || 0
+                filteredData?.salesDashboard?.totalSales ||
+                salesDashboardData?.salesDashboard?.totalSales ||
+                0
               ).toLocaleString('en-IN')}`}
               isActive={activeView === 'sales'}
+              minWidth="125px"
             />
           </div>
           <div
@@ -86,39 +184,47 @@ function Sales() {
             <SummaryCard
               title={'Total Refunds'}
               value={`₹${(
-                salesDashboardData?.salesDashboard?.totalReturns || 0
+                filteredData?.salesDashboard?.totalReturns ||
+                salesDashboardData?.salesDashboard?.totalReturns ||
+                0
               ).toLocaleString('en-IN')}`}
               isActive={activeView === 'refunds'}
+              minWidth="125px"
             />
           </div>
         </div>
         <DatePicker
           label="From Date"
           // disabled={isEdit == 'noneditable'}
-
+          sx={{ width: '150px' }}
           value={fromDate ? dayjs(fromDate) : null}
           name="fromDate"
           format="DD/MM/YYYY"
-          onChange={newValue => setFromDate(newValue)}
+          onChange={(newValue) => setFromDate(newValue)}
         />
         <DatePicker
           label="To Date"
           // disabled={isEdit == 'noneditable'}
           format="DD/MM/YYYY"
           className="bg-white rounded-lg"
+          sx={{ width: '150px' }}
           value={toDate ? dayjs(toDate) : null}
           name="fromDate"
-          onChange={newValue => setToDate(newValue)}
+          onChange={(newValue) => setToDate(newValue)}
         />
         <Grid item xs={12} sm={3}>
-          <FormControl fullWidth variant="outlined" className="bg-white">
+          <FormControl
+            variant="outlined"
+            className="bg-white"
+            sx={{ width: '125px' }}
+          >
             <InputLabel>Branch</InputLabel>
             <Select
               label="Branch"
               name="branchId"
               value={branchId}
-              onChange={e => setBranchId(e.target.value)}
-              className="flex w-[125px]"
+              onChange={(e) => setBranchId(e.target.value)}
+              className="flex"
               placeholder="branch"
             >
               {dropdowns?.branches?.map((branch, idx) => (
@@ -129,33 +235,80 @@ function Sales() {
             </Select>
           </FormControl>
         </Grid>
+        {/* NIKKI PAYMENT MODE FILTER 28/10/25*/}
+        <Grid item xs={12} sm={3}>
+          <FormControl
+            variant="outlined"
+            className="bg-white"
+            sx={{ width: '175px' }}
+          >
+            <InputLabel>Payment Mode</InputLabel>
+            <Select
+              label="Payment Mode"
+              name="paymentMode"
+              value={paymentMode}
+              onChange={(e) => setPaymentMode(e.target.value)}
+              className="flex"
+            >
+              <MenuItem value="">All</MenuItem>
+              <MenuItem value="CASH">Cash</MenuItem>
+              <MenuItem value="UPI">Upi</MenuItem>
+            </Select>
+          </FormControl>
+          {/* NIKKI PAYMENT MODE FILTER 28/10/25*/}
+        </Grid>
+        <div className="flex items-end gap-3">
+          <Button
+            variant="contained"
+            onClick={handleApplyFilters}
+            disabled={!branchId}
+          >
+            Apply
+          </Button>
+          <Button variant="outlined" onClick={handleResetFilters}>
+            Reset
+          </Button>
+        </div>
       </div>
+      {isLoading && (
+        <div className="px-5 text-sm text-gray-500">
+          Loading revenue data...
+        </div>
+      )}
+      {isError && (
+        <div className="px-5 text-sm text-red-500">
+          Failed to load revenue data
+          {error?.message ? `: ${error.message}` : ''}
+        </div>
+      )}
       <SalesDashboard
         data={filteredData || salesDashboardData}
-        branchId={branchId}
+        branchId={appliedBranchId}
         reportName="Revenue_Report"
         reportType="revenue"
-        branchName={dropdowns?.branches?.find(branch => branch.id === branchId)?.name}
+        branchName={
+          dropdowns?.branches?.find((branch) => branch.id === appliedBranchId)
+            ?.name
+        }
         filters={{
-          fromDate: dayjs(fromDate).format('YYYY-MM-DD'),
-          toDate: dayjs(toDate).format('YYYY-MM-DD'),
-          branchId: branchId
+          fromDate: appliedFromDate
+            ? dayjs(appliedFromDate).format('YYYY-MM-DD')
+            : '',
+          toDate: appliedToDate
+            ? dayjs(appliedToDate).format('YYYY-MM-DD')
+            : '',
+          branchId: appliedBranchId,
         }}
-        // labels={{
-        //   returns: 'Refunds',
-        //   milestone: 'IVF Package',
-        //   labTest: 'Lab',
-        // }}
         activeView={activeView}
       />
     </div>
   )
 }
-const SummaryCard = ({ title, value, isActive }) => (
+const SummaryCard = ({ title, value, isActive, minWidth = '125px' }) => (
   <Card
     className="row-span-1"
     style={{
-      minWidth: '200px',
+      minWidth: minWidth,
       maxHeight: '60px',
       backgroundColor: isActive ? '#b0e9fa' : 'white',
       // border: isActive ? '1px solid #0ea5e9' : '1px solid #e5e7eb',
@@ -168,7 +321,4 @@ const SummaryCard = ({ title, value, isActive }) => (
   </Card>
 )
 
-export default withPermission(Sales, true, 'revenueReport', [
-  ACCESS_TYPES.READ,
-  ACCESS_TYPES.WRITE,
-])
+export default Sales

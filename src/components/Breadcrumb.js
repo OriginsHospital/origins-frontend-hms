@@ -4,9 +4,9 @@ import Link from 'next/link'
 import { ChevronRight } from '@mui/icons-material'
 // import { ChevronRight } from 'lucide-react';
 
-const Breadcrumb = props => {
+const Breadcrumb = (props) => {
   const router = useRouter()
-  const pathSegments = router.asPath.split('/').filter(segment => segment)
+  const pathSegments = router.asPath.split('/').filter((segment) => segment)
 
   return (
     <nav className="flex" aria-label="Breadcrumb">
@@ -36,10 +36,8 @@ const Breadcrumb = props => {
                   }`}
                   aria-current={isLast ? 'page' : undefined}
                 >
-                  {segment
-                    .split('?')[0]
-                    .charAt(0)
-                    .toUpperCase() + segment.split('?')[0].slice(1)}
+                  {segment.split('?')[0].charAt(0).toUpperCase() +
+                    segment.split('?')[0].slice(1)}
                 </Link>
               </div>
             </li>

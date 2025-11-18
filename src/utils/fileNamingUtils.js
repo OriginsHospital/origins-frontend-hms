@@ -12,18 +12,20 @@ import dayjs from 'dayjs'
  */
 export const sanitizeFileName = (str) => {
   if (!str) return ''
-  
-  return str
-    .toString()
-    .trim()
-    // Replace spaces with underscores
-    .replace(/\s+/g, '_')
-    // Replace special characters with underscores
-    .replace(/[^a-zA-Z0-9._-]/g, '_')
-    // Remove multiple consecutive underscores
-    .replace(/_+/g, '_')
-    // Remove leading/trailing underscores
-    .replace(/^_+|_+$/g, '')
+
+  return (
+    str
+      .toString()
+      .trim()
+      // Replace spaces with underscores
+      .replace(/\s+/g, '_')
+      // Replace special characters with underscores
+      .replace(/[^a-zA-Z0-9._-]/g, '_')
+      // Remove multiple consecutive underscores
+      .replace(/_+/g, '_')
+      // Remove leading/trailing underscores
+      .replace(/^_+|_+$/g, '')
+  )
 }
 
 /**
@@ -50,14 +52,14 @@ export const generateUniqueId = () => {
  */
 export const getFileExtension = (format) => {
   const formatMap = {
-    'csv': '.csv',
-    'xlsx': '.xlsx',
-    'xls': '.xls',
-    'pdf': '.pdf',
-    'json': '.json',
-    'txt': '.txt'
+    csv: '.csv',
+    xlsx: '.xlsx',
+    xls: '.xls',
+    pdf: '.pdf',
+    json: '.json',
+    txt: '.txt',
   }
-  
+
   return formatMap[format?.toLowerCase()] || '.csv'
 }
 
@@ -80,38 +82,38 @@ export const generateReportFileName = ({
   date = new Date(),
   branchName = null,
   includeTimestamp = true,
-  includeUniqueId = false
+  includeUniqueId = false,
 }) => {
   // Start with the report name or type
   let fileName = reportName || reportType || 'Report'
-  
+
   // Add branch name if provided
   if (branchName) {
     fileName += `_${sanitizeFileName(branchName)}`
   }
-  
+
   // Add date
   const dateStr = dayjs(date).format('YYYY-MM-DD')
   fileName += `_${dateStr}`
-  
+
   // Add timestamp if requested
   if (includeTimestamp) {
     const timeStr = dayjs(date).format('HHmm')
     fileName += `_${timeStr}`
   }
-  
+
   // Add unique ID if requested (for multiple downloads on same day)
   if (includeUniqueId) {
     fileName += `_${generateUniqueId()}`
   }
-  
+
   // Sanitize the entire filename
   fileName = sanitizeFileName(fileName)
-  
+
   // Add file extension
   const extension = getFileExtension(format)
   fileName += extension
-  
+
   return fileName
 }
 
@@ -126,82 +128,82 @@ export const detectReportContext = (pathname, props = {}) => {
     '/reports/revenue': {
       reportName: 'Revenue_Report',
       reportType: 'revenue',
-      defaultFormat: 'csv'
+      defaultFormat: 'csv',
     },
     '/reports/expenses': {
       reportName: 'Expenses_Report',
       reportType: 'expenses',
-      defaultFormat: 'csv'
+      defaultFormat: 'csv',
     },
     '/reports/orders': {
       reportName: 'Orders_Report',
       reportType: 'orders',
-      defaultFormat: 'csv'
+      defaultFormat: 'csv',
     },
     '/reports/stockReport': {
       reportName: 'Stock_Report',
       reportType: 'stock',
-      defaultFormat: 'csv'
+      defaultFormat: 'csv',
     },
     '/reports/treatmentCycles': {
       reportName: 'Treatment_Cycles_Report',
       reportType: 'treatment_cycles',
-      defaultFormat: 'csv'
+      defaultFormat: 'csv',
     },
     '/reports/stageReports': {
       reportName: 'Stage_Reports',
       reportType: 'stage_reports',
-      defaultFormat: 'csv'
+      defaultFormat: 'csv',
     },
     '/reports/prescribedReport': {
       reportName: 'Prescribed_Report',
       reportType: 'prescribed',
-      defaultFormat: 'csv'
+      defaultFormat: 'csv',
     },
     '/reports/noShowReport': {
       reportName: 'No_Show_Report',
       reportType: 'no_show',
-      defaultFormat: 'csv'
+      defaultFormat: 'csv',
     },
     '/reports/incidents': {
       reportName: 'Incidents_Report',
       reportType: 'incidents',
-      defaultFormat: 'csv'
+      defaultFormat: 'csv',
     },
     '/reports/gstGRN': {
       reportName: 'GST_GRN_Report',
       reportType: 'gst_grn',
-      defaultFormat: 'csv'
+      defaultFormat: 'csv',
     },
     '/reports/grnvendor': {
       reportName: 'GRN_Vendor_Report',
       reportType: 'grn_vendor',
-      defaultFormat: 'csv'
+      defaultFormat: 'csv',
     },
     '/reports/formFReport': {
       reportName: 'Form_F_Report',
       reportType: 'form_f',
-      defaultFormat: 'csv'
+      defaultFormat: 'csv',
     },
     '/reports/alerts': {
       reportName: 'Alerts_Report',
       reportType: 'alerts',
-      defaultFormat: 'csv'
-    }
+      defaultFormat: 'csv',
+    },
   }
-  
+
   // Get context from pathname
   const context = contextMap[pathname] || {
     reportName: 'Report',
     reportType: 'general',
-    defaultFormat: 'csv'
+    defaultFormat: 'csv',
   }
-  
+
   // Add branch information if available
   if (props.branchId && props.branchName) {
     context.branchName = props.branchName
   }
-  
+
   return context
 }
 
@@ -219,16 +221,16 @@ export const generateEnhancedReportFileName = (options) => {
     branchName = null,
     filters = {},
     includeTimestamp = true,
-    includeUniqueId = false
+    includeUniqueId = false,
   } = options
-  
+
   let fileName = reportName || reportType || 'Report'
-  
+
   // Add branch name if provided
   if (branchName) {
     fileName += `_${sanitizeFileName(branchName)}`
   }
-  
+
   // Add date range if filters contain date range
   if (filters.dateRange && filters.dateRange.start && filters.dateRange.end) {
     const startDate = dayjs(filters.dateRange.start).format('YYYY-MM-DD')
@@ -239,25 +241,25 @@ export const generateEnhancedReportFileName = (options) => {
     const dateStr = dayjs(date).format('YYYY-MM-DD')
     fileName += `_${dateStr}`
   }
-  
+
   // Add timestamp if requested
   if (includeTimestamp) {
     const timeStr = dayjs(date).format('HHmm')
     fileName += `_${timeStr}`
   }
-  
+
   // Add unique ID if requested
   if (includeUniqueId) {
     fileName += `_${generateUniqueId()}`
   }
-  
+
   // Sanitize the entire filename
   fileName = sanitizeFileName(fileName)
-  
+
   // Add file extension
   const extension = getFileExtension(format)
   fileName += extension
-  
+
   return fileName
 }
 
@@ -272,11 +274,11 @@ export const downloadFile = (blob, fileName) => {
   const link = document.createElement('a')
   link.href = url
   link.download = fileName
-  
+
   // Trigger download
   document.body.appendChild(link)
   link.click()
-  
+
   // Cleanup
   document.body.removeChild(link)
   window.URL.revokeObjectURL(url)
@@ -290,5 +292,5 @@ export default {
   generateReportFileName,
   detectReportContext,
   generateEnhancedReportFileName,
-  downloadFile
+  downloadFile,
 }
