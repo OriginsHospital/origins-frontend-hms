@@ -17,7 +17,7 @@ const FilteredDataGrid = ({
 }) => {
   const [filteredRows, setFilteredRows] = useState(rows)
 
-  const notifyChange = (newRows) => {
+  const notifyChange = newRows => {
     if (typeof onRowsChange === 'function') {
       onRowsChange(newRows)
     }
@@ -28,7 +28,7 @@ const FilteredDataGrid = ({
     notifyChange(rows)
   }, [rows])
 
-  const handleFilterChange = (filters) => {
+  const handleFilterChange = filters => {
     const filtered = filterData(rows, filters)
     setFilteredRows(filtered)
     notifyChange(filtered)

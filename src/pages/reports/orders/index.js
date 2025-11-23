@@ -48,8 +48,8 @@ import { Close } from '@mui/icons-material'
 import FilteredDataGrid from '@/components/FilteredDataGrid'
 
 function OrdersPage() {
-  const userDetails = useSelector(store => store.user)
-  const dropdowns = useSelector(store => store.dropdowns)
+  const userDetails = useSelector((store) => store.user)
+  const dropdowns = useSelector((store) => store.dropdowns)
   const dispatch = useDispatch()
   const queryClient = useQueryClient()
   const [invoiceUrl, setInvoiceUrl] = useState(null)
@@ -222,7 +222,7 @@ function OrdersPage() {
   const [supply, setSupply] = useState([])
   const [supplyQuant, setSupplyQuant] = useState([])
 
-  const handleFileChange = event => {
+  const handleFileChange = (event) => {
     setInvoiceFile(event.target.files[0])
   }
 
@@ -258,18 +258,18 @@ function OrdersPage() {
   useEffect(() => {
     if (data) {
       const selectedOrder = data.data.find(
-        order => order.orderId === selectedOrderId,
+        (order) => order.orderId === selectedOrderId,
       )
       setOrderInfo(selectedOrder)
     }
   }, [data, selectedOrderId])
 
-  const viewInfo = orderId => {
+  const viewInfo = (orderId) => {
     setSelectedOrderId(orderId)
     dispatch(openModal('viewInfoModal'))
   }
 
-  const viewInvoice = invoiceUrl => {
+  const viewInvoice = (invoiceUrl) => {
     setInvoiceUrl(invoiceUrl)
     dispatch(openModal('viewInvoiceModal'))
   }
@@ -302,7 +302,7 @@ function OrdersPage() {
   })
 
   const createOrderMutation = useMutation({
-    mutationFn: async newOrder => {
+    mutationFn: async (newOrder) => {
       const res = await createNewOrder(userDetails?.accessToken, newOrder)
       if (res?.status === 200) {
         toast.success(res?.message, toastconfig)
@@ -329,7 +329,7 @@ function OrdersPage() {
   })
 
   const placeOrderMutation = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const res = await placeOrder(userDetails?.accessToken, payload)
       if (res?.status === 200) {
         dispatch(closeModal())
@@ -343,7 +343,7 @@ function OrdersPage() {
   })
 
   const payOrderMutation = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const res = await payOrder(userDetails?.accessToken, payload)
       if (res?.status === 200) {
         dispatch(closeModal())
@@ -356,9 +356,9 @@ function OrdersPage() {
     },
   })
 
-  const handleInputChange = e => {
+  const handleInputChange = (e) => {
     const { name, value } = e.target
-    setOrderForm(prev => ({ ...prev, [name]: value }))
+    setOrderForm((prev) => ({ ...prev, [name]: value }))
     if (name === 'departmentId') {
       setSupplyQuant([])
       setSupply([])
@@ -371,7 +371,7 @@ function OrdersPage() {
       alert('Please select atleast one supply item and quantity.')
     } else {
       const hasError = supplyQuant.some(
-        item =>
+        (item) =>
           item.quantity === null || isNaN(item.quantity) || item.quantity === 0,
       )
 
@@ -387,7 +387,7 @@ function OrdersPage() {
     placeOrderMutation.mutate({ orderId: selectedOrderId, expectedArrivalDate })
   }
 
-  const handlePayOrder = payload => {
+  const handlePayOrder = (payload) => {
     payOrderMutation.mutate(payload)
   }
 
@@ -403,32 +403,32 @@ function OrdersPage() {
   // }
   const supplies = dropdowns?.suppliesList || []
 
-  const handleSupplyChange = event => {
+  const handleSupplyChange = (event) => {
     const { value } = event.target
     const selectedSupplies =
       typeof value === 'string' ? value.split(',') : value
 
     setSupply(selectedSupplies)
 
-    setSupplyQuant(prev => {
+    setSupplyQuant((prev) => {
       // Keep only selected items
-      const updatedSupplyQuant = prev.filter(item =>
+      const updatedSupplyQuant = prev.filter((item) =>
         selectedSupplies.includes(
-          supplies.find(s => s.id === item.supplyItemId)?.name,
+          supplies.find((s) => s.id === item.supplyItemId)?.name,
         ),
       )
 
       // Add new selections while preserving previous quantities
-      selectedSupplies.forEach(selectedItem => {
+      selectedSupplies.forEach((selectedItem) => {
         const existingItem = updatedSupplyQuant.find(
-          item =>
+          (item) =>
             item.supplyItemId ===
-            supplies.find(s => s.name === selectedItem)?.id,
+            supplies.find((s) => s.name === selectedItem)?.id,
         )
 
         if (!existingItem) {
           updatedSupplyQuant.push({
-            supplyItemId: supplies.find(s => s.name === selectedItem)?.id,
+            supplyItemId: supplies.find((s) => s.name === selectedItem)?.id,
             quantity: null,
           })
         }
@@ -441,8 +441,8 @@ function OrdersPage() {
   const handleQuantity = (event, supplyItemId) => {
     const { value } = event.target
 
-    setSupplyQuant(prev =>
-      prev.map(item =>
+    setSupplyQuant((prev) =>
+      prev.map((item) =>
         item.supplyItemId === supplyItemId
           ? { ...item, quantity: Number(value) }
           : item,
@@ -477,7 +477,7 @@ function OrdersPage() {
           </div>
           <div className="space-y-2">
             <span className="font-bold">Supply Items</span>
-            {orderInfo.supplyItems.map(item => (
+            {orderInfo.supplyItems.map((item) => (
               <div
                 key={item.id}
                 className="flex justify-between p-2 border rounded-lg bg-gray-50 w-full"
@@ -556,14 +556,16 @@ function OrdersPage() {
       field: 'branch',
       label: 'Branch',
       type: 'select',
-      options: data?.data ? [...new Set(data.data.map(row => row.branch))] : [],
+      options: data?.data
+        ? [...new Set(data.data.map((row) => row.branch))]
+        : [],
     },
     {
       field: 'department.departmentName',
       label: 'Department',
       type: 'select',
       options: data?.data
-        ? [...new Set(data.data.map(row => row.department.departmentName))]
+        ? [...new Set(data.data.map((row) => row.department.departmentName))]
         : [],
     },
     {
@@ -571,24 +573,24 @@ function OrdersPage() {
       label: 'Status',
       type: 'select',
       options: data?.data
-        ? [...new Set(data.data.map(row => row.orderStatus))]
+        ? [...new Set(data.data.map((row) => row.orderStatus))]
         : [],
     },
   ]
 
-  const getUniqueValues = field => {
+  const getUniqueValues = (field) => {
     if (!data?.data) return []
 
     if (field === 'branch') {
-      return [...new Set(data.data.map(row => row.branch))]
+      return [...new Set(data.data.map((row) => row.branch))]
     }
 
     if (field === 'department.departmentName') {
-      return [...new Set(data.data.map(row => row.department.departmentName))]
+      return [...new Set(data.data.map((row) => row.department.departmentName))]
     }
 
     if (field === 'orderStatus') {
-      return [...new Set(data.data.map(row => row.orderStatus))]
+      return [...new Set(data.data.map((row) => row.orderStatus))]
     }
 
     return []
@@ -597,7 +599,7 @@ function OrdersPage() {
   const filterData = (data, filters) => {
     if (!data) return []
 
-    return data.filter(row => {
+    return data.filter((row) => {
       return Object.entries(filters).every(([field, filterValue]) => {
         // If no filter value is set or filter is null, include the row
         if (!filterValue || filterValue === null) return true
@@ -666,7 +668,7 @@ function OrdersPage() {
       <div style={{ height: '75vh', width: '100%' }}>
         <FilteredDataGrid
           rows={data?.data || []}
-          getRowId={row => row.orderId}
+          getRowId={(row) => row.orderId}
           columns={columns}
           className="my-5 mx-2 py-3 bg-white"
           loading={isLoading}
@@ -685,10 +687,10 @@ function OrdersPage() {
             toolbar: {
               data: data?.data || [],
               columns,
-              reportName: "Orders_Report",
-              reportType: "orders",
-              branchName: "All_Branches",
-              filters: {}
+              reportName: 'Orders_Report',
+              reportType: 'orders',
+              branchName: 'All_Branches',
+              filters: {},
             },
           }}
         />
@@ -704,7 +706,6 @@ function OrdersPage() {
         <CreateOrderForm
           createOrderMutation={createOrderMutation}
           orderForm={orderForm}
-          setOrderForm={setOrderForm}
           handleInputChange={handleInputChange}
           getVendorsByDepartment={getVendorsByDepartment}
           getSuppliesByDepartment={getSuppliesByDepartment}
@@ -715,6 +716,7 @@ function OrdersPage() {
           handleCreateOrder={handleCreateOrder}
           supplies={supplies}
           handleQuantity={handleQuantity}
+          setOrderForm={setOrderForm}
         />
       </Modal>
       <Modal uniqueKey="placeOrderModal" closeOnOutsideClick={true}>
@@ -764,7 +766,6 @@ function OrdersPage() {
 const CreateOrderForm = ({
   createOrderMutation,
   orderForm,
-  setOrderForm,
   handleInputChange,
   getVendorsByDepartment,
   getSuppliesByDepartment,
@@ -775,8 +776,9 @@ const CreateOrderForm = ({
   handleCreateOrder,
   supplies,
   handleQuantity,
+  setOrderForm,
 }) => {
-  const dropdowns = useSelector(store => store.dropdowns)
+  const dropdowns = useSelector((store) => store.dropdowns)
   const dispatch = useDispatch()
   return (
     <div className="p-5 space-y-4 w-full">
@@ -789,7 +791,7 @@ const CreateOrderForm = ({
         value={orderForm.branchId}
         onChange={handleInputChange}
       >
-        {dropdowns?.branches?.map(branch => (
+        {dropdowns?.branches?.map((branch) => (
           <MenuItem key={branch.id} value={branch.id}>
             {branch.name}
           </MenuItem>
@@ -800,71 +802,89 @@ const CreateOrderForm = ({
         className="w-full"
         label="Order Date"
         value={dayjs(orderForm.orderDate)}
-        onChange={newDate =>
-          setOrderForm(prev => ({
+        onChange={(newDate) =>
+          setOrderForm((prev) => ({
             ...prev,
             orderDate: dayjs(newDate).format('YYYY-MM-DD'),
           }))
         }
         format="DD-MM-YYYY"
-        renderInput={params => <TextField {...params} fullWidth />}
+        renderInput={(params) => <TextField {...params} fullWidth />}
       />
       {/* </LocalizationProvider> */}
-      <TextField
-        select
+      <Autocomplete
         fullWidth
-        label="Department"
-        name="departmentId"
-        value={orderForm.departmentId}
-        onChange={handleInputChange}
-      >
-        {dropdowns?.departmentList?.map(department => (
-          <MenuItem key={department.id} value={department.id}>
-            {department.name}
-          </MenuItem>
-        ))}
-      </TextField>
-      <TextField
-        select
-        fullWidth
-        label="Vendor"
-        name="vendorId"
-        value={orderForm.vendorId}
-        onChange={handleInputChange}
-      >
-        {(getVendorsByDepartment ? getVendorsByDepartment?.data : [])?.map(
-          vendor => (
-            <MenuItem key={vendor.id} value={vendor.id}>
-              {vendor.name}
-            </MenuItem>
-          ),
+        options={(dropdowns?.departmentList || [])
+          .slice()
+          .sort((a, b) => a.name?.localeCompare(b.name))}
+        getOptionLabel={(option) => option.name || ''}
+        value={
+          (dropdowns?.departmentList || []).find(
+            (dept) => dept.id === orderForm.departmentId,
+          ) || null
+        }
+        onChange={(event, newValue) => {
+          setOrderForm((prev) => ({
+            ...prev,
+            departmentId: newValue?.id || '',
+            vendorId: '', // Clear vendor when department changes
+          }))
+          setSupplyQuant([])
+          setSupply([])
+        }}
+        renderInput={(params) => (
+          <TextField {...params} label="Department" variant="outlined" />
         )}
-      </TextField>
+      />
+      <Autocomplete
+        fullWidth
+        options={(
+          (getVendorsByDepartment ? getVendorsByDepartment?.data : []) || []
+        )
+          .slice()
+          .sort((a, b) => a.name?.localeCompare(b.name))}
+        getOptionLabel={(option) => option.name || ''}
+        value={
+          (
+            (getVendorsByDepartment ? getVendorsByDepartment?.data : []) || []
+          ).find((vendor) => vendor.id === orderForm.vendorId) || null
+        }
+        onChange={(event, newValue) => {
+          setOrderForm((prev) => ({
+            ...prev,
+            vendorId: newValue?.id || '',
+          }))
+        }}
+        renderInput={(params) => (
+          <TextField {...params} label="Vendor" variant="outlined" />
+        )}
+        disabled={!orderForm.departmentId}
+      />
       <div>
         <Autocomplete
           multiple
           options={(getSuppliesByDepartment
             ? getSuppliesByDepartment?.data
             : []
-          ).map(item => item.name)}
+          ).map((item) => item.name)}
           value={supply}
           onChange={(event, newValue) => {
             setSupply(newValue)
-            setSupplyQuant(prev => {
-              const updatedSupplyQuant = prev.filter(item =>
+            setSupplyQuant((prev) => {
+              const updatedSupplyQuant = prev.filter((item) =>
                 newValue.includes(
-                  supplies.find(s => s.id === item.supplyItemId)?.name,
+                  supplies.find((s) => s.id === item.supplyItemId)?.name,
                 ),
               )
-              newValue.forEach(selectedItem => {
+              newValue.forEach((selectedItem) => {
                 const existingItem = updatedSupplyQuant.find(
-                  item =>
+                  (item) =>
                     item.supplyItemId ===
-                    supplies.find(s => s.name === selectedItem)?.id,
+                    supplies.find((s) => s.name === selectedItem)?.id,
                 )
                 if (!existingItem) {
                   updatedSupplyQuant.push({
-                    supplyItemId: supplies.find(s => s.name === selectedItem)
+                    supplyItemId: supplies.find((s) => s.name === selectedItem)
                       ?.id,
                     quantity: null,
                   })
@@ -873,7 +893,7 @@ const CreateOrderForm = ({
               return updatedSupplyQuant
             })
           }}
-          renderInput={params => (
+          renderInput={(params) => (
             <TextField
               {...params}
               label="Supply Items"
@@ -883,10 +903,10 @@ const CreateOrderForm = ({
         />
         {supply?.length > 0 && (
           <div className="w-full border p-2 mt-2 flex flex-col items-center rounded bg-white gap-2 shadow-lg border-secondary">
-            {supply?.map(item => {
-              const supplyItemId = supplies.find(s => s.name === item)?.id
+            {supply?.map((item) => {
+              const supplyItemId = supplies.find((s) => s.name === item)?.id
               const quantity =
-                supplyQuant.find(q => q.supplyItemId === supplyItemId)
+                supplyQuant.find((q) => q.supplyItemId === supplyItemId)
                   ?.quantity || null
               console.log('supplyItemId', supplyItemId)
               return (
@@ -903,8 +923,8 @@ const CreateOrderForm = ({
                     variant="outlined"
                     type="number"
                     value={quantity !== null ? quantity : ''}
-                    onChange={event => handleQuantity(event, supplyItemId)}
-                    onFocus={event => event.target.select()}
+                    onChange={(event) => handleQuantity(event, supplyItemId)}
+                    onFocus={(event) => event.target.select()}
                     fullWidth
                   />
                 </div>
@@ -966,8 +986,8 @@ const PayOrderForm = ({
         label="Payment Date"
         value={paymentDate}
         format="DD-MM-YYYY"
-        onChange={newDate => setPaymentDate(dayjs(newDate))}
-        renderInput={params => <TextField {...params} fullWidth />}
+        onChange={(newDate) => setPaymentDate(dayjs(newDate))}
+        renderInput={(params) => <TextField {...params} fullWidth />}
       />
       {/* </LocalizationProvider> */}
       <TextField
@@ -976,7 +996,7 @@ const PayOrderForm = ({
         label="Payment Amount"
         name="paymentAmount"
         value={paymentAmount.toString()}
-        onChange={e => setPaymentAmount(e.target.value)}
+        onChange={(e) => setPaymentAmount(e.target.value)}
       />
       <div className="flex justify-end space-x-2">
         <Button
@@ -1027,8 +1047,8 @@ const ReceiveOrderForm = ({
         label="Received Date"
         value={receivedDate}
         format="DD-MM-YYYY"
-        onChange={newDate => setReceivedDate(dayjs(newDate))}
-        renderInput={params => <TextField {...params} fullWidth />}
+        onChange={(newDate) => setReceivedDate(dayjs(newDate))}
+        renderInput={(params) => <TextField {...params} fullWidth />}
       />
       {/* </LocalizationProvider> */}
       <div className="flex flex-col gap-2">
@@ -1079,8 +1099,8 @@ const PlaceOrderForm = ({
         label="Expected Arrival Date"
         value={expectedArrivalDate}
         format="DD-MM-YYYY"
-        onChange={newDate => setExpectedArrivalDate(dayjs(newDate))}
-        renderInput={params => <TextField {...params} fullWidth />}
+        onChange={(newDate) => setExpectedArrivalDate(dayjs(newDate))}
+        renderInput={(params) => <TextField {...params} fullWidth />}
       />
       {/* </LocalizationProvider> */}
       <div className="flex justify-end space-x-2">

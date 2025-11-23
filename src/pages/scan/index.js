@@ -44,9 +44,9 @@ import { Close, Download } from '@mui/icons-material'
 function TextJoedit({ contents, savedContent, onCloseClick, onSaveClick }) {
   // const [content, setContent] = useState(contents)
   const editorRef = useRef(null)
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const userModule = user.moduleList?.find(
-    eachModuleObj => eachModuleObj.enum == 'scanModule',
+    (eachModuleObj) => eachModuleObj.enum == 'scanModule',
   )
   const readOnly = userModule.accessType.includes([ACCESS_TYPES.READ])
 
@@ -56,7 +56,7 @@ function TextJoedit({ contents, savedContent, onCloseClick, onSaveClick }) {
         ref={editorRef}
         value={contents}
         tabIndex={1} // tabIndex of textarea
-        onBlur={newContent => {
+        onBlur={(newContent) => {
           onSaveClick(newContent)
           // setSaveContent(newContent)
           // setContent(newContent)
@@ -89,12 +89,10 @@ function TextJoedit({ contents, savedContent, onCloseClick, onSaveClick }) {
   )
 }
 function RenderUserRelatedTestDetails(appointmentId, tests, type) {
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const [labtestIdSelected, setLabtestIdSelected] = useState()
-  const [
-    labtestAppointmentIdSelected,
-    setLabtestAppointmentIdSelected,
-  ] = useState()
+  const [labtestAppointmentIdSelected, setLabtestAppointmentIdSelected] =
+    useState()
   const [labtestTypeSelected, setLabtestTypeSelected] = useState()
   const [scanTemplate, setScanTemplate] = useState(null)
   const [editorContent, setEditorContent] = useState(null)
@@ -107,6 +105,7 @@ function RenderUserRelatedTestDetails(appointmentId, tests, type) {
   const {
     data: labTestFieldValues,
     isLoading: isLoadingFieldValues,
+    error: labTestFieldValuesError,
   } = useQuery({
     queryKey: ['LabTestValues', labtestIdSelected, appointmentId],
     enabled: !!labtestIdSelected,
@@ -121,8 +120,14 @@ function RenderUserRelatedTestDetails(appointmentId, tests, type) {
         const { scanTemplate } = responsejson.data
         if (scanTemplate) {
           setScanTemplate(scanTemplate)
+        } else {
+          // Initialize with empty string if no template exists
+          // This ensures the modal still opens
+          setScanTemplate('')
         }
       } else {
+        // Set empty template so modal can still open
+        setScanTemplate('')
         toast.error(
           responsejson?.message || 'Error while fetching labtest field values',
           toastconfig,
@@ -132,36 +137,34 @@ function RenderUserRelatedTestDetails(appointmentId, tests, type) {
     },
   })
 
-  const {
-    data: savedScanResult,
-    isLoading: isLoadingSavedScanResult,
-  } = useQuery({
-    queryKey: ['savedScanResult', labtestIdSelected, appointmentId],
-    enabled: !!labtestIdSelected,
-    queryFn: async () => {
-      const responsejson = await getSavedScanResults(
-        user.accessToken,
-        type,
-        appointmentId,
-        labtestIdSelected,
-      )
-      if (responsejson.status == 200) {
-        const { scanResult } = responsejson.data
-        if (scanResult) {
-          setSavedTemplate(scanResult)
-        }
-        return responsejson.data
-      } else {
-        toast.error(
-          responsejson.data?.message ||
-            'Error while fetching labtest field values',
-          toastconfig,
+  const { data: savedScanResult, isLoading: isLoadingSavedScanResult } =
+    useQuery({
+      queryKey: ['savedScanResult', labtestIdSelected, appointmentId],
+      enabled: !!labtestIdSelected,
+      queryFn: async () => {
+        const responsejson = await getSavedScanResults(
+          user.accessToken,
+          type,
+          appointmentId,
+          labtestIdSelected,
         )
-      }
-    },
-  })
+        if (responsejson.status == 200) {
+          const { scanResult } = responsejson.data
+          if (scanResult) {
+            setSavedTemplate(scanResult)
+          }
+          return responsejson.data
+        } else {
+          toast.error(
+            responsejson.data?.message ||
+              'Error while fetching labtest field values',
+            toastconfig,
+          )
+        }
+      },
+    })
   const { mutate, isPending } = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const res = await SaveScanResult(user.accessToken, payload)
       if (res.status === 200) {
         if (payload?.scanTestStatus == 1) {
@@ -193,7 +196,7 @@ function RenderUserRelatedTestDetails(appointmentId, tests, type) {
     dispatch(openModal(userRegID + '' + itemId))
   }
 
-  const handleSavedContent = content => {
+  const handleSavedContent = (content) => {
     setEditorContent(content)
   }
   const onModalOutClick = () => {
@@ -203,7 +206,7 @@ function RenderUserRelatedTestDetails(appointmentId, tests, type) {
     setLabtestIdSelected()
     dispatch(closeModal())
   }
-  const onSaveClick = contents => {
+  const onSaveClick = (contents) => {
     if (editorContent && labtestIdSelected) {
       mutate({
         appointmentId: appointmentId,
@@ -217,7 +220,7 @@ function RenderUserRelatedTestDetails(appointmentId, tests, type) {
     }
   }
 
-  const editButtonWithPermission = function() {
+  const editButtonWithPermission = function () {
     const EditButton = () => (
       <Button
         variant="outlined"
@@ -251,7 +254,7 @@ function RenderUserRelatedTestDetails(appointmentId, tests, type) {
   }, [isLoadingFieldValues, isLoadingSavedScanResult])
 
   const { mutate: downloadScanReportsMutation } = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       console.log('payload', payload)
       const response = await downloadScanReport(
         user.accessToken,
@@ -354,7 +357,7 @@ function RenderUserRelatedTestDetails(appointmentId, tests, type) {
         <span>List is empty</span>
       )}
 
-      {labtestIdSelected && scanTemplate && (
+      {labtestIdSelected && (
         <Modal
           maxWidth={'md'}
           uniqueKey={appointmentId + '' + labtestIdSelected}
@@ -362,18 +365,30 @@ function RenderUserRelatedTestDetails(appointmentId, tests, type) {
         >
           <div className="flex justify-between">
             <Typography variant="h6" className="text-gray-800 mb-2">
-              {labtestIdSelected && scanTemplate && savedTemplate
-                ? 'Update'
-                : 'Add'}
+              {labtestIdSelected && savedTemplate ? 'Update' : 'Add'}
             </Typography>
             <IconButton onClick={() => dispatch(closeModal())}>
               <Close />
             </IconButton>
           </div>
           <div className="flex flex-col gap-2 max-h-[500px] overflow-y-auto">
-            {labtestIdSelected && (scanTemplate || savedTemplate) && (
+            {isLoadingFieldValues || isLoadingSavedScanResult ? (
+              <div className="text-center p-4">
+                <Typography>Loading scan template...</Typography>
+              </div>
+            ) : labTestFieldValuesError ? (
+              <div className="text-center p-4">
+                <Typography color="error" className="mb-2">
+                  Error loading template. You can still create a new report.
+                </Typography>
+                <TextJoedit
+                  contents={savedTemplate || scanTemplate || ''}
+                  onSaveClick={handleSavedContent}
+                />
+              </div>
+            ) : (
               <TextJoedit
-                contents={savedTemplate ? savedTemplate : scanTemplate}
+                contents={savedTemplate || scanTemplate || ''}
                 onSaveClick={handleSavedContent}
               />
             )}
@@ -383,6 +398,7 @@ function RenderUserRelatedTestDetails(appointmentId, tests, type) {
               variant="contained"
               className="text-white"
               onClick={onSaveClick}
+              disabled={isLoadingFieldValues || isLoadingSavedScanResult}
             >
               Save
             </Button>
@@ -404,13 +420,8 @@ function RenderUserRelatedTestDetails(appointmentId, tests, type) {
   )
 }
 function LabTestCards(props) {
-  const {
-    patientName,
-    appointmentId,
-    scanTests,
-    patientPhoto,
-    type,
-  } = props?.userInfo
+  const { patientName, appointmentId, scanTests, patientPhoto, type } =
+    props?.userInfo
   function handleExpandClicked(id) {
     props.setSelectedId(id)
   }
@@ -463,7 +474,7 @@ function LabTestCards(props) {
   )
 }
 const Index = () => {
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const branches = user?.branchDetails
   const [branchId, setBranchId] = useState()
   const router = useRouter()
@@ -518,7 +529,7 @@ const Index = () => {
     }
   }, [router.query])
 
-  const handleDateChange = value => {
+  const handleDateChange = (value) => {
     setDate(value)
     router.push(
       {
@@ -532,7 +543,7 @@ const Index = () => {
       { shallow: true },
     )
   }
-  const onBranchChange = value => {
+  const onBranchChange = (value) => {
     setBranchId(value?.id || null)
     router.push(
       {
@@ -553,9 +564,9 @@ const Index = () => {
     } else {
       if (labTestInfo && labTestInfo.length != 0) {
         let labTestInfoCopy = JSON.parse(JSON.stringify(labTestInfo))
-        let filteredPatientDetails = labTestInfoCopy.filter(patientInfo => {
+        let filteredPatientDetails = labTestInfoCopy.filter((patientInfo) => {
           if (patientInfo && patientInfo.scanTests.length != 0) {
-            let labtestdata = patientInfo.scanTests.filter(testsinfo => {
+            let labtestdata = patientInfo.scanTests.filter((testsinfo) => {
               if (testsinfo.stage == color) return testsinfo
             })
             if (labtestdata && labtestdata.length > 0) {
@@ -570,8 +581,8 @@ const Index = () => {
     }
     setSelectedPatientId(0)
   }
-  const filterButtonClicked = id => {
-    let filterData = ButtonsInfo.map(buttondata => {
+  const filterButtonClicked = (id) => {
+    let filterData = ButtonsInfo.map((buttondata) => {
       buttondata.clicked = buttondata.id == id ? true : false
       return buttondata
     })
@@ -590,7 +601,7 @@ const Index = () => {
     filterPatientInfo(color, id)
     setButtonFilterClicked(filterData)
   }
-  const getText = id => {
+  const getText = (id) => {
     switch (id) {
       case '1':
         return '#a1a10a' //yellow
@@ -602,7 +613,7 @@ const Index = () => {
         return '#06aee9' //secondary color
     }
   }
-  const getBg = id => {
+  const getBg = (id) => {
     switch (id) {
       case '1':
         return '#fafab0'
@@ -633,10 +644,10 @@ const Index = () => {
           <Autocomplete
             className="w-full text-center"
             options={branches || []}
-            getOptionLabel={option => option?.branchCode || option?.name}
-            value={branches?.find(branch => branch.id == branchId) || null}
+            getOptionLabel={(option) => option?.branchCode || option?.name}
+            value={branches?.find((branch) => branch.id == branchId) || null}
             onChange={(_, value) => onBranchChange(value)}
-            renderInput={params => <TextField {...params} fullWidth />}
+            renderInput={(params) => <TextField {...params} fullWidth />}
             clearIcon={null}
           />
         </div>
@@ -648,7 +659,7 @@ const Index = () => {
         />
         {ButtonFilter &&
           ButtonFilter.length != 0 &&
-          ButtonFilter.map(buttondata => {
+          ButtonFilter.map((buttondata) => {
             return (
               <span
                 key={buttondata.id + 'filterbutton'}

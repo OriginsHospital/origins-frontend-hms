@@ -6,15 +6,18 @@
 
 **Problem:** The code was trying to access `expencesData` variable before it was declared, causing a hoisting error.
 
-**Solution:** 
+**Solution:**
+
 - Moved console logs that reference `expencesData` to a `useEffect` hook
 - Added proper import for `useEffect`
 - Reorganized code to avoid variable hoisting issues
 
 **Files Modified:**
+
 - `src/pages/reports/expenses/index.js`
 
 **Code Changes:**
+
 ```javascript
 // Before (causing error)
 console.log('expenses data structure:', expencesData) // ❌ Error
@@ -35,19 +38,22 @@ useEffect(() => {
 **Problem:** Next.js version was outdated (14.2.2) causing warnings.
 
 **Solution:**
+
 - Updated Next.js to version 14.2.15
 - Updated prettier to version 3.0.0 to resolve dependency conflicts
 - Used `--legacy-peer-deps` flag to handle dependency conflicts
 
 **Files Modified:**
+
 - `package.json`
 
 **Changes Made:**
+
 ```json
 {
   "dependencies": {
-    "next": "^14.2.15",  // Updated from ^14.2.2
-    "prettier": "^3.0.0"  // Updated from ^1.18.2
+    "next": "^14.2.15", // Updated from ^14.2.2
+    "prettier": "^3.0.0" // Updated from ^1.18.2
   }
 }
 ```
@@ -57,6 +63,7 @@ useEffect(() => {
 **Problem:** Prettier version conflict with pretty-quick package.
 
 **Solution:**
+
 - Updated prettier to version 3.0.0
 - Used `--legacy-peer-deps` flag during installation
 - Resolved peer dependency conflicts

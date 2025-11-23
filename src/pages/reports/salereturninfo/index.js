@@ -43,7 +43,7 @@ function SaleReturnPage() {
   const [saleDetails, setSaleDetails] = useState(null)
   const [flattenedPurchaseDetails, setFlattenedPurchaseDetails] = useState([])
   const [nonPharmacyDetails, setNonPharmacyDetails] = useState(null)
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const dispatch = useDispatch()
   const queryClient = useQueryClient()
 
@@ -135,8 +135,8 @@ function SaleReturnPage() {
 
         // Flatten the nested structure for the original PurchaseDetails component
         const flattened = []
-        responsejson.data.orderInformation.purchasedItems.forEach(item => {
-          item.purchaseDetails.forEach(detail => {
+        responsejson.data.orderInformation.purchasedItems.forEach((item) => {
+          item.purchaseDetails.forEach((detail) => {
             flattened.push({
               itemName: item.itemName,
               refId: item.refId,
@@ -164,7 +164,7 @@ function SaleReturnPage() {
         )
       }
     },
-    onError: err => {
+    onError: (err) => {
       toast.error(
         'Failed to fetch sale return data: ' + err.message,
         toastconfig,
@@ -193,7 +193,7 @@ function SaleReturnPage() {
         }
         setNonPharmacyDetails({
           patientDetails: orderInfo.patientDetails,
-          purchaseDetails: orderInfo.purchasedItems.map(item => ({
+          purchaseDetails: orderInfo.purchasedItems.map((item) => ({
             ...item,
             quantity: 1, // Since quantity is not provided in the response
             price: item.totalCost,
@@ -207,7 +207,7 @@ function SaleReturnPage() {
         )
       }
     },
-    onError: err => {
+    onError: (err) => {
       toast.error(
         'Failed to fetch non-pharmacy return data: ' + err.message,
         toastconfig,
@@ -253,11 +253,11 @@ function SaleReturnPage() {
               label="Enter Order Id"
               fullWidth
               value={orderId}
-              onChange={e => setOrderId(e.target.value)}
+              onChange={(e) => setOrderId(e.target.value)}
             />
             <Button
               onClick={getSaleReturnInfo}
-              onKeyDown={e => {
+              onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   getSaleReturnInfo()
                 }
@@ -396,7 +396,7 @@ const PurchaseDetails = ({ details, headerDetails, type, orderId }) => {
   // State to track return quantities by refId and grnId
   const [returnQuantities, setReturnQuantities] = useState({})
   const dispatch = useDispatch()
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const getReturnValue = (refId, grnId) => {
     const key = `${refId}-${grnId}`
     return returnQuantities[key] || ''
@@ -404,13 +404,13 @@ const PurchaseDetails = ({ details, headerDetails, type, orderId }) => {
 
   const handleReturnValues = (value, refId, grnId) => {
     const key = `${refId}-${grnId}`
-    setReturnQuantities(prev => ({
+    setReturnQuantities((prev) => ({
       ...prev,
       [key]: value,
     }))
   }
   const { mutate, isPending } = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       console.log(payload)
       const res = await ReturnItems(user.accessToken, payload)
       if (res.status === 200) {
@@ -419,10 +419,10 @@ const PurchaseDetails = ({ details, headerDetails, type, orderId }) => {
         toast.error(res, toastconfig)
       }
     },
-    onMutate: payload => {
+    onMutate: (payload) => {
       toast.info('Processing return...', toastconfig)
     },
-    onError: error => {
+    onError: (error) => {
       toast.error('Error: ' + error.message, toastconfig)
     },
     onSettled: () => {
@@ -444,7 +444,7 @@ const PurchaseDetails = ({ details, headerDetails, type, orderId }) => {
     // Group return quantities by refId
     const returnDetailsByRefId = {}
 
-    details.forEach(item => {
+    details.forEach((item) => {
       const refId = item.refId
       const grnId = item.grnId
       const key = `${refId}-${grnId}`
@@ -534,7 +534,7 @@ const PurchaseDetails = ({ details, headerDetails, type, orderId }) => {
                         type="number"
                         size="small"
                         value={getReturnValue(item.refId, item.grnId)}
-                        onChange={e => {
+                        onChange={(e) => {
                           handleReturnValues(
                             e.target.value,
                             item.refId,
@@ -567,48 +567,46 @@ const NonPharmacyPurchaseDetails = ({ details, headerDetails, orderId }) => {
   const [selectedItems, setSelectedItems] = useState({})
   const dispatch = useDispatch()
   const queryClient = useQueryClient()
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
 
-  const handleItemSelect = itemId => {
-    setSelectedItems(prev => ({
+  const handleItemSelect = (itemId) => {
+    setSelectedItems((prev) => ({
       ...prev,
       [itemId]: !prev[itemId],
     }))
   }
 
   // Split items into available and returned
-  const availableItems = details?.filter(item => !item.isReturned) || []
-  const returnedItems = details?.filter(item => item.isReturned) || []
+  const availableItems = details?.filter((item) => !item.isReturned) || []
+  const returnedItems = details?.filter((item) => item.isReturned) || []
 
   const hasSelectedItems = Object.values(selectedItems).some(
-    selected => selected,
+    (selected) => selected,
   )
 
-  const {
-    mutate: returnItemsMutation,
-    isPending: isReturnItemsPending,
-  } = useMutation({
-    mutationFn: async payload => {
-      const res = await returnPurchasedItems(user.accessToken, payload)
-      if (res.status === 200) {
-        toast.success('Items returned successfully', toastconfig)
-        queryClient.invalidateQueries({
-          queryKey: ['fetchPurchaseReturnInfoData', orderId, 1],
-        })
-      } else {
-        toast.error(res, toastconfig)
-      }
-    },
-    onMutate: payload => {
-      toast.info('Processing return...', toastconfig)
-    },
-    onError: error => {
-      toast.error('Error: ' + error.message, toastconfig)
-    },
-    onSettled: () => {
-      dispatch(hideLoader())
-    },
-  })
+  const { mutate: returnItemsMutation, isPending: isReturnItemsPending } =
+    useMutation({
+      mutationFn: async (payload) => {
+        const res = await returnPurchasedItems(user.accessToken, payload)
+        if (res.status === 200) {
+          toast.success('Items returned successfully', toastconfig)
+          queryClient.invalidateQueries({
+            queryKey: ['fetchPurchaseReturnInfoData', orderId, 1],
+          })
+        } else {
+          toast.error(res, toastconfig)
+        }
+      },
+      onMutate: (payload) => {
+        toast.info('Processing return...', toastconfig)
+      },
+      onError: (error) => {
+        toast.error('Error: ' + error.message, toastconfig)
+      },
+      onSettled: () => {
+        dispatch(hideLoader())
+      },
+    })
 
   useEffect(() => {
     if (isReturnItemsPending) {
@@ -630,16 +628,22 @@ const NonPharmacyPurchaseDetails = ({ details, headerDetails, orderId }) => {
     let totAmount = 0
     const returnDetails = []
 
-    availableItems.forEach(item => {
+    availableItems.forEach((item) => {
       if (selectedItems[item.itemId]) {
-        totAmount += item.totalCost
-        returnDetails.push({
-          refId: item.refId,
-          itemId: item.itemId,
-          itemName: item.itemName,
-          itemType: item.productType,
-          itemCost: item.totalCost,
-        })
+        const returnQuantity =
+          returnQuantities[`${item.refId}-${item.grnId}`] || 0
+        if (returnQuantity > 0 && returnQuantity <= item.purchaseQuantity) {
+          totAmount += item.totalCost * (returnQuantity / item.purchaseQuantity)
+          returnDetails.push({
+            refId: item.refId,
+            itemId: item.itemId,
+            itemName: item.itemName,
+            itemType: item.productType,
+            itemCost: item.totalCost * (returnQuantity / item.purchaseQuantity),
+            quantity: parseInt(returnQuantity),
+            grnId: item.grnId,
+          })
+        }
       }
     })
 

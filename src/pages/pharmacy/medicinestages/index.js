@@ -14,6 +14,7 @@ import {
   Button,
   TableHead,
   TableContainer,
+  TableFooter,
   Avatar,
   Typography,
   Stack,
@@ -28,6 +29,7 @@ import {
   Autocomplete,
   Divider,
   IconButton,
+  Menu,
 } from '@mui/material'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import dayjs from 'dayjs'
@@ -40,7 +42,6 @@ import {
   getPharmacyDetailsByDate,
   savePaymentBreakup,
   savePharmacyItems,
-  sendTransactionId,
   getAvailableGrnInfoByItemId,
 } from '@/constants/apis'
 import { toast, Bounce } from 'react-toastify'
@@ -52,6 +53,7 @@ import {
   Delete,
   DeleteOutline,
   Edit,
+  LocalOffer,
 } from '@mui/icons-material'
 import { withPermission } from '@/components/withPermission'
 import { ACCESS_TYPES } from '@/constants/constants'
@@ -80,18 +82,24 @@ function RenderAccordianDetails({
   hdrKey,
   header,
   selectedbranch,
+  date,
 }) {
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const [details, setDetails] = useState([])
   const [disabled, setDisabled] = useState(true)
   const queryClient = useQueryClient()
   const [saveEnabled, setSaveEnabled] = useState(false)
   const dispatch = useDispatch()
   const [grnRows, setGrnRows] = useState({})
+  // State for per-item coupons: { itemId: { applied: boolean, discount: number } }
+  const [itemCoupons, setItemCoupons] = useState({})
+  // State for coupon menu anchor (which item's coupon menu is open)
+  const [couponMenuAnchor, setCouponMenuAnchor] = useState(null)
+  const [selectedItemForCoupon, setSelectedItemForCoupon] = useState(null)
 
-  const addGrnRow = medicineId => {
+  const addGrnRow = (medicineId) => {
     console.log(grnRows)
-    setGrnRows(prev => ({
+    setGrnRows((prev) => ({
       ...prev,
       [medicineId]: [
         ...(prev[medicineId] || []),
@@ -101,7 +109,7 @@ function RenderAccordianDetails({
   }
 
   const handleGrnRowChange = (medicineId, index, field, value) => {
-    setGrnRows(prev => ({
+    setGrnRows((prev) => ({
       ...prev,
       [medicineId]: prev[medicineId].map((row, i) =>
         i === index
@@ -136,12 +144,23 @@ function RenderAccordianDetails({
     return totalPackedQuantity <= prescribedQuantity
   }
   const validateAndCallAPI = () => {
-    const dbFormat = details.map(itemInfo => {
-      if (grnRows[itemInfo.id]) {
+    // Filter to only include medicines that have quantities entered (GRN rows selected)
+    const dbFormat = details
+      .filter((itemInfo) => {
+        // Only include medicines that have GRN rows with valid entries
+        const medicineGrnRows = grnRows[itemInfo.id] || []
+        return (
+          medicineGrnRows.length > 0 &&
+          medicineGrnRows.some(
+            (row) => row.grnId && Number(row.usedQuantity || 0) > 0,
+          )
+        )
+      })
+      .map((itemInfo) => {
         const itemGrnRows = grnRows[itemInfo.id]
         const itemPurchaseInformation = itemGrnRows
-          .filter(row => row.grnId && row.usedQuantity > 0)
-          .map(row => ({
+          .filter((row) => row.grnId && row.usedQuantity > 0)
+          .map((row) => ({
             grnId: row.grnId.grnId,
             expiryDate: row.grnId.expiryDate,
             mrpPerTablet: row.grnId.mrpPerTablet,
@@ -160,17 +179,53 @@ function RenderAccordianDetails({
           ),
           itemPurchaseInformation,
         }
-      }
-    })
+      })
+
+    // Only call API if there are medicines to move
+    if (dbFormat.length === 0) {
+      toast.error(
+        'Please enter quantity for at least one medicine',
+        toastconfig,
+      )
+      return
+    }
+
+    // Get IDs of medicines that will be moved
+    const movedMedicineIds = dbFormat.map((item) => item.id)
+
+    // Store moved IDs for cleanup after successful API call
+    const movedIdsRef = movedMedicineIds
 
     // Call API to move to packed
-    mutate({
-      movetopackedstage: dbFormat,
-    })
+    mutate(
+      {
+        movetopackedstage: dbFormat,
+      },
+      {
+        onSuccess: () => {
+          // Remove moved medicines from details so they disappear from Prescribed
+          setDetails((prevDetails) =>
+            prevDetails.filter((med) => !movedIdsRef.includes(med.id)),
+          )
+          // Clear GRN rows for moved medicines
+          setGrnRows((prevGrnRows) => {
+            const newGrnRows = { ...prevGrnRows }
+            movedIdsRef.forEach((id) => {
+              delete newGrnRows[id]
+            })
+            return newGrnRows
+          })
+        },
+        onError: (error) => {
+          console.error('Error moving medicines to packed:', error)
+          // Don't remove medicines if API call failed
+        },
+      },
+    )
   }
 
   const paymentBreakup = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       console.log('generateBreakUp', payload)
       const res = await savePaymentBreakup(user.accessToken, {
         generateBreakUp: payload.generateBreakUp,
@@ -180,40 +235,45 @@ function RenderAccordianDetails({
     onSuccess: (res, variables) => {
       if (details?.length != 0) {
         let detailsCopy = details
-        detailsCopy = detailsCopy.map(medicineDetails => {
+        detailsCopy = detailsCopy.map((medicineDetails) => {
           const itemResObject = res.find(
-            item => item.itemName == medicineDetails.itemName,
+            (item) => item.itemName == medicineDetails.itemName,
           )
           if (itemResObject) {
             medicineDetails['refId'] = itemResObject?.refId
             medicineDetails['totalCost'] = itemResObject?.totalCost
             medicineDetails['type'] = itemResObject?.type
             medicineDetails['purchaseDetails'] = itemResObject?.purchaseDetails
-            medicineDetails[
-              'itemPurchaseInformation'
-            ] = itemResObject?.purchaseDetails.map(detail => ({
-              grnId: detail.grnId,
-              expiryDate: detail.expiryDate,
-              mrpPerTablet: detail.mrpPerTablet,
-              usedQuantity: detail.usedQuantity,
-              returnedQuantity: detail.returnedQuantity,
-              batchNo: detail.batchNo,
-              initialUsedQuantity:
-                detail.initialUsedQuantity || detail.usedQuantity,
-            }))
+            medicineDetails['itemPurchaseInformation'] =
+              itemResObject?.purchaseDetails.map((detail) => ({
+                grnId: detail.grnId,
+                expiryDate: detail.expiryDate,
+                mrpPerTablet: detail.mrpPerTablet,
+                usedQuantity: detail.usedQuantity,
+                returnedQuantity: detail.returnedQuantity,
+                batchNo: detail.batchNo,
+                initialUsedQuantity:
+                  detail.initialUsedQuantity || detail.usedQuantity,
+              }))
           }
           return medicineDetails
         })
         setDetails(detailsCopy)
 
-        // Recalculate prices with the new data
+        // Recalculate prices with the new data (preserving coupon discounts)
         const newItemPrices = {}
         let newTotalAmount = 0
 
-        detailsCopy.forEach(medicineInfo => {
-          const itemPrice = medicineInfo.totalCost || 0
-          newItemPrices[medicineInfo.id] = itemPrice
-          newTotalAmount += itemPrice
+        detailsCopy.forEach((medicineInfo) => {
+          const basePrice = medicineInfo.totalCost || 0
+          // Check if coupon is applied for this item
+          const couponApplied =
+            itemCoupons[medicineInfo.id]?.applied &&
+            itemCoupons[medicineInfo.id]?.discount === 100
+          // Apply coupon discount
+          const discountedPrice = couponApplied ? 0 : basePrice
+          newItemPrices[medicineInfo.id] = discountedPrice
+          newTotalAmount += discountedPrice
         })
 
         setPriceDetails({
@@ -246,27 +306,123 @@ function RenderAccordianDetails({
       getGrnInfo.mutate(medicineId)
     }
   }
-  const handlePaymentClicked = modeOfPayment => {
-    if (modeOfPayment === 'Online') {
-      handlePaymentMethodOnline()
-    } else if (modeOfPayment === 'UPI') {
-      if (confirm('Are you sure you want to pay UPI?')) {
-        handlePaymentMethodOffline('UPI')
+  // Handle payment mode selection (just sets state, doesn't process payment)
+  const handlePaymentModeSelect = (modeOfPayment) => {
+    setSelectedPaymentMode(modeOfPayment)
+  }
+
+  // Handle actual payment processing
+  const handlePay = async () => {
+    if (!selectedPaymentMode) {
+      toast.error('Please select a payment mode', toastconfig)
+      return
+    }
+
+    // Prevent duplicate requests
+    if (isProcessingPayment) {
+      return
+    }
+
+    if (!header?.appointmentId) {
+      toast.error(
+        'Patient ID is missing. Please reload and try again.',
+        toastconfig,
+      )
+      console.error('Missing header.appointmentId:', header)
+      return
+    }
+
+    setIsProcessingPayment(true)
+
+    try {
+      dispatch(showLoader())
+
+      const detailsCopy = details
+      //refid, type, itemName, purchaseDetails, totalCost
+      let paymentDBFormat = []
+      detailsCopy.map((medicineInfo) => {
+        // Use discounted price if coupon is applied, otherwise use original totalCost
+        const discountedPrice = getItemPrice(medicineInfo.id)
+        paymentDBFormat.push({
+          refId: medicineInfo.refId,
+          itemName: medicineInfo.itemName,
+          prescribed: medicineInfo.purchaseQuantity || 0,
+          totalCost: discountedPrice,
+          type: medicineInfo.type,
+        })
+      })
+      const totalAmount = detailsCopy.reduce(function (acc, obj) {
+        return acc + Number(getItemPrice(obj.id))
+      }, 0)
+
+      const paymentPayload = {
+        totalOrderAmount: Math.round(totalAmount),
+        paidOrderAmount: Math.round(discountedAmount),
+        discountAmount: Math.round(totalAmount) - Math.round(discountedAmount),
+        couponCode: selectedCoupon?.id || null,
+        orderDetails: paymentDBFormat,
+        paymentMode: selectedPaymentMode, // CASH, UPI, or ONLINE
+        productType: 'PHARMACY',
       }
-    } else {
-      if (confirm('Are you sure you want to pay offline?')) {
-        handlePaymentMethodOffline('CASH')
+
+      console.log('Pharmacy payment payload:', paymentPayload)
+
+      const data = await getOrderId(user.accessToken, paymentPayload)
+
+      console.log('Pharmacy payment response:', data)
+
+      // For CASH/UPI: backend directly processes payment
+      // For ONLINE: backend might return orderId, but we treat it as successful without Razorpay
+      if (
+        data?.status === 200 ||
+        data?.success === true ||
+        data?.data?.orderId
+      ) {
+        dispatch(hideLoader())
+        dispatch(closeModal(header?.appointmentId + 'pay' + column.label))
+        setSelectedCoupon(null)
+        setDiscountedAmount(0)
+        setSelectedPaymentMode(null)
+        toast.success('Payment Successful', toastconfig)
+
+        // Refetch pharmacy data to move patient to Paid container
+        await queryClient.refetchQueries({
+          queryKey: ['pharmacyModuleInfoByDate', date, selectedbranch],
+        })
+      } else {
+        dispatch(hideLoader())
+        const errorMessage =
+          data?.message ||
+          data?.error?.message ||
+          data?.error ||
+          'Payment processing failed'
+        console.error('Payment failed:', data)
+        toast.error(`Payment failed: ${errorMessage}`, toastconfig)
       }
+    } catch (error) {
+      dispatch(hideLoader())
+      console.error('Error processing payment:', error)
+      let errorMessage = 'Payment failed, please try again'
+      if (error?.response?.data?.message) {
+        errorMessage = error.response.data.message
+      } else if (error?.message) {
+        errorMessage = error.message
+      } else if (error?.response?.data?.error) {
+        errorMessage = error.response.data.error
+      }
+      toast.error(`Payment Error: ${errorMessage}`, toastconfig)
+    } finally {
+      setIsProcessingPayment(false)
     }
   }
   const getPrescribedValue = (appointmentID, stage) => {
-    const searchedContent = details?.find(info => info?.id === appointmentID)
+    const searchedContent = details?.find((info) => info?.id === appointmentID)
     return stage === 'PRESCRIBED'
       ? searchedContent?.prescribedQuantity
       : searchedContent?.purchaseQuantity
   }
   const setQuantity = (appointmentID, value, stage) => {
-    const changedValues = details?.map(info => {
+    const changedValues = details?.map((info) => {
       if (info && info?.id == appointmentID) {
         if (stage === 'PRESCRIBED') {
           info.prescribedQuantity = value
@@ -293,7 +449,7 @@ function RenderAccordianDetails({
   //   return totalAmount
   // }
   const { mutate, isPending } = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const res = await savePharmacyItems(user.accessToken, payload)
       if (res.status === 200) {
         toast.success('Packed successfully', toastconfig)
@@ -306,6 +462,9 @@ function RenderAccordianDetails({
   })
   const [selectedCoupon, setSelectedCoupon] = useState(null)
   const [discountedAmount, setDiscountedAmount] = useState()
+  // Single payment mode state for Packed → Pay popup
+  const [selectedPaymentMode, setSelectedPaymentMode] = useState(null)
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false)
 
   // Add sample coupons (you can replace with API data)
   // const coupons = [
@@ -322,28 +481,23 @@ function RenderAccordianDetails({
   })
   // const coupons = useSelector(store => store.coupon)
   // console.log(coupons)
-  const calculateDiscountedAmount = coupon => {
+  const calculateDiscountedAmount = (coupon) => {
     if (!coupon) return calculateAmount()
     const discount = (calculateAmount() * coupon.discountPercentage) / 100
     return calculateAmount() - discount
   }
-
-  // Update useEffect to recalculate discounted amount when coupon changes
-  useEffect(() => {
-    setDiscountedAmount(calculateDiscountedAmount(selectedCoupon))
-  }, [selectedCoupon, details])
   const makePayment = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const res = await getOrderId(user.accessToken, payload)
       // return res
     },
-    onSuccess: response => {
+    onSuccess: (response) => {
       console.log(response)
     },
   })
-  const handleButtonAction = isSaveEnabled => {
+  const handleButtonAction = (isSaveEnabled) => {
     let raiseToast = false
-    details.map(medData => {
+    details.map((medData) => {
       if (medData.purchaseQuantity > medData.prescribedQuantity) {
         console.log(medData)
 
@@ -361,7 +515,7 @@ function RenderAccordianDetails({
         let data = details
         const dbFormat = []
 
-        data.forEach(itemInfo => {
+        data.forEach((itemInfo) => {
           // Check if this item has modified GRN rows
           if (grnRows[itemInfo.id]) {
             // This item has been modified - use new GRN data
@@ -387,11 +541,11 @@ function RenderAccordianDetails({
             // Format GRN information for modified items
             const itemPurchaseInformation = itemGrnRows
               .filter(
-                row =>
+                (row) =>
                   row.grnId &&
                   (row.usedQuantity > 0 || row.returnedQuantity > 0),
               )
-              .map(row => ({
+              .map((row) => ({
                 grnId: row.grnId.grnId,
                 expiryDate: row.grnId.expiryDate,
                 mrpPerTablet: row.grnId.mrpPerTablet,
@@ -426,7 +580,7 @@ function RenderAccordianDetails({
         })
 
         // Validate the data before sending
-        const isValid = dbFormat.every(item => {
+        const isValid = dbFormat.every((item) => {
           if (!grnRows[item.id]) return true // Skip validation for unmodified items
 
           const totalPackedQuantity = item.itemPurchaseInformation.reduce(
@@ -467,7 +621,7 @@ function RenderAccordianDetails({
     }
   }, [isPending, itemDetails, paymentBreakup?.isLoading])
   useEffect(() => {
-    let data = itemDetails.map(itemInfo => {
+    let data = itemDetails.map((itemInfo) => {
       let items = JSON.parse(itemInfo.itemPurchaseInformation)
       console.log(items)
       return {
@@ -481,7 +635,7 @@ function RenderAccordianDetails({
       }
     })
 
-    const dbFormat = data.map(itemInfo => {
+    const dbFormat = data.map((itemInfo) => {
       return {
         id: itemInfo.id,
         type: type,
@@ -502,6 +656,13 @@ function RenderAccordianDetails({
     setDetails(data)
   }, [])
 
+  // Re-validate button state when grnRows changes (for PRESCRIBED section)
+  useEffect(() => {
+    if (column?.label === 'PRESCRIBED' && details?.length > 0) {
+      validateQuantities(details)
+    }
+  }, [grnRows, details, column?.label])
+
   // const paymentBreakup = useMutation({
   //   mutationFn: async (payload) => {
   //     const res = await
@@ -513,141 +674,9 @@ function RenderAccordianDetails({
   //     }
   //   },
   // })
-  const handlePaymentMethodOffline = async (type = 'CASH') => {
-    const detailsCopy = details
-    //refid, type, itemName, purchaseDetails, totalCost
-    let paymentDBFormat = []
-    detailsCopy.map(medicineInfo => {
-      paymentDBFormat.push({
-        refId: medicineInfo.refId,
-        type: medicineInfo.type,
-        itemName: medicineInfo.itemName,
-        purchaseDetails: medicineInfo.purchaseDetails,
-        totalCost: medicineInfo.totalCost,
-      })
-    })
-    const totalAmout = detailsCopy.reduce(function(acc, obj) {
-      return acc + Number(obj.totalCost)
-    }, 0)
-    console.log(totalAmout)
-
-    try {
-      // const response = await axios.post('/api/payment', {
-      //   amount: 1000 * 10000
-      // })
-
-      const data = await getOrderId(user.accessToken, {
-        totalOrderAmount: totalAmout,
-        paidOrderAmount: discountedAmount,
-        discountAmount: totalAmout - discountedAmount,
-        couponCode: selectedCoupon?.id,
-        orderDetails: paymentDBFormat,
-        paymentMode: type === 'UPI' ? 'UPI' : 'CASH', // ONLINE OR CASH
-        productType: 'PHARMACY', //PHARMACY or LAB or SCAN
-      })
-      if (data.status == 200) {
-        dispatch(closeModal())
-        queryClient.invalidateQueries('pharmacyModuleInfoByDate')
-      }
-    } catch (error) {
-      console.log('Error fetching Order ID:', error)
-    }
-    // setIsLoading(false)
-  }
-  const handlePaymentMethodOnline = async () => {
-    const detailsCopy = details
-    //refid, type, itemName, purchaseDetails, totalCost
-    let paymentDBFormat = []
-    detailsCopy.map(medicineInfo => {
-      paymentDBFormat.push({
-        refId: medicineInfo.refId,
-        type: medicineInfo.type,
-        itemName: medicineInfo.itemName,
-        purchaseDetails: medicineInfo.purchaseDetails,
-        totalCost: medicineInfo.totalCost,
-      })
-    })
-    const totalAmout = detailsCopy.reduce(function(acc, obj) {
-      return acc + Number(obj.totalCost)
-    }, 0)
-    // console.log(totalAmout)
-    //check wheather payment is online or cash
-    // const breakupResponse = await savePaymentBreakup(user.accessToken, {
-    //   "generateBreakUp": [
-    //     {
-    //       "id": details[0].id,
-    //       "type": type,
-    //       "purchaseQuantity": details[0].purchaseQuantity
-    //     }
-    //   ]
-    // })
-    // console.log(breakupResponse)
-    try {
-      // const response = await axios.post('/api/payment', {
-      //   amount: 1000 * 10000
-      // })
-
-      const data = await getOrderId(user.accessToken, {
-        totalOrderAmount: Math.round(totalAmout),
-        paidOrderAmount: Math.round(discountedAmount),
-        discountAmount: Math.round(totalAmout) - Math.round(discountedAmount),
-        couponCode: selectedCoupon?.id,
-        orderDetails: paymentDBFormat,
-        paymentMode: 'ONLINE', // ONLINE OR CASH
-        productType: 'PHARMACY', //PHARMACY or LAB or SCAN
-      })
-
-      let options = {
-        key: process.env.NEXT_PUBLIC_RAZORPAY_ID,
-        amount: data.data.totalOrderAmount * 100, //{data.amount}
-        currency: 'INR',
-        name: 'Origins',
-
-        image:
-          'https://img.freepik.com/premium-vector/charity-abstract-logo-healthy-lifestyle_660762-34.jpg?size=626&ext=jpg',
-        description: 'Test Transaction',
-        order_id: data.data.orderId, //{ data.orderId}
-        'theme.color': '#FF6C22',
-        handler: async response => {
-          console.log(response)
-          const order_details = {
-            orderId: response.razorpay_order_id,
-            transactionId: response.razorpay_payment_id,
-            // ,
-            // transactionType: response.razorpay_signature,
-          }
-          // handle payment success
-          // write a mutate and invalidate the getPharmacyDetails
-          const p = await sendTransactionId(user.accessToken, order_details)
-          console.log(p)
-          if (order_details && order_details.transactionId) {
-            dispatch(closeModal())
-            queryClient.invalidateQueries('pharmacyModuleInfoByDate')
-          }
-        },
-      }
-
-      const paymentObject = new window.Razorpay(options)
-      paymentObject.open()
-
-      paymentObject.on('payment.failed', function(response) {
-        console.log(response.error.code)
-        console.log(response.error.description)
-        console.log(response.error.source)
-      })
-
-      paymentObject.on('payment.success', function(response) {
-        //queryClient.invalidateQueries(['pharmacyModuleInfoByDate'])
-        console.log('on success ', response)
-      })
-    } catch (error) {
-      console.log('Error fetching Order ID:', error)
-    }
-    // setIsLoading(false)
-  }
   const reportRef = useRef(null)
   const generateReport = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const res = await Generate_Invoice(user.accessToken, payload)
       console.log(res.data)
       reportRef.current.innerHTML = res?.data
@@ -681,13 +710,13 @@ function RenderAccordianDetails({
         .from(element)
         .toPdf()
         .get('pdf')
-        .then(pdf => {
+        .then((pdf) => {
           pdf.autoPrint()
           window.open(pdf.output('bloburl'), '_blank')
         })
     }
   }
-  const getInfo = med => {
+  const getInfo = (med) => {
     if (med?.prescriptionDetails?.startsWith('OTHER_')) {
       return `Dosage: ${med?.prescriptionDetails.split('_')[1]}, Days - ${
         med?.prescriptionDays
@@ -696,8 +725,65 @@ function RenderAccordianDetails({
     return `Quantity: ${med?.prescriptionDetails} , Days - ${med?.prescriptionDays}`
   }
 
+  // Calculate price for a medicine in PRESCRIBED section
+  // Uses actual entered/packed quantity, not prescribed quantity
+  const calculateMedicinePrice = (med) => {
+    // Get the actual quantity entered/selected (from GRN rows or TextField)
+    const medicineGrnRows = grnRows[med.id] || []
+
+    // If GRN rows are selected, use actual GRN quantities and their individual MRPs
+    if (
+      medicineGrnRows.length > 0 &&
+      medicineGrnRows.some((row) => row.grnId && row.usedQuantity > 0)
+    ) {
+      const selectedGrns = medicineGrnRows.filter(
+        (row) => row.grnId && Number(row.usedQuantity || 0) > 0,
+      )
+
+      if (selectedGrns.length > 0) {
+        // Calculate price based on actual GRN quantities × their MRPs
+        const totalPrice = selectedGrns.reduce((sum, row) => {
+          const qty = Number(row.usedQuantity || 0)
+          const mrpPerTablet = Number(row.grnId?.mrpPerTablet || 0)
+          return sum + qty * mrpPerTablet
+        }, 0)
+        return totalPrice
+      }
+    }
+
+    // If no GRN rows selected yet, use the quantity from TextField (user-entered quantity)
+    // This is stored in med.prescribedQuantity after setQuantity is called
+    const enteredQty = Number(med?.prescribedQuantity || 0)
+    if (enteredQty === 0) return 0
+
+    // Calculate price using entered quantity × average MRP from available GRNs
+    if (availableGrns && availableGrns.length > 0) {
+      const avgMrp =
+        availableGrns.reduce(
+          (sum, grn) => sum + Number(grn.mrpPerTablet || 0),
+          0,
+        ) / availableGrns.length
+      return enteredQty * avgMrp
+    }
+
+    // No price data available yet
+    return 0
+  }
+
+  // Calculate grand total for PRESCRIBED section
+  // Automatically recalculates when details or grnRows change
+  const calculateGrandTotal = () => {
+    if (column.label !== 'PRESCRIBED') return 0
+    return details.reduce((total, med) => {
+      return total + calculateMedicinePrice(med)
+    }, 0)
+  }
+
+  // Memoize grand total calculation for performance (optional optimization)
+  // Note: calculateMedicinePrice already uses current state values, so it's reactive
+
   const getGrnInfo = useMutation({
-    mutationFn: async itemId => {
+    mutationFn: async (itemId) => {
       const res = await getAvailableGrnInfoByItemId(
         user.accessToken,
         itemId,
@@ -706,7 +792,7 @@ function RenderAccordianDetails({
       )
       return res
     },
-    onSuccess: res => {
+    onSuccess: (res) => {
       console.log('data', res)
       if (res.status == 200) {
         setAvailableGrns(res.data.availableGrnInfo)
@@ -718,37 +804,60 @@ function RenderAccordianDetails({
   })
 
   const [availableGrns, setAvailableGrns] = useState([])
-  const validateQuantities = items => {
-    // Check if items array exists and has elements
-    if (!items || items.length === 0) return false
 
-    // Check if all items have matching total GRN quantities and prescribed quantities
-    const isValid = items.every(item => {
+  // Updated validation: Check if at least one medicine has quantity entered
+  // Button enables when at least one medicine has valid GRN selections or quantity entered
+  const validateQuantities = (items) => {
+    // Check if items array exists and has elements
+    if (!items || items.length === 0) {
+      setDisabled(true)
+      return false
+    }
+
+    // Check if at least one item has a valid GRN entry or quantity entered
+    // A valid entry means:
+    // 1. At least one GRN row exists for the medicine
+    // 2. That GRN row has a grnId selected
+    // 3. The usedQuantity is > 0
+    // 4. The total GRN quantity doesn't exceed prescribed quantity
+    const hasAtLeastOneValid = items.some((item) => {
       // Get GRN rows for this specific medicine
       const medicineGrnRows = grnRows[item.id] || []
 
+      // Check if there's at least one valid GRN entry
+      const hasValidGrnEntry = medicineGrnRows.some(
+        (row) => row.grnId && Number(row.usedQuantity || 0) > 0,
+      )
+
+      if (!hasValidGrnEntry) {
+        return false
+      }
+
       // Calculate total quantity from selected GRNs for this medicine
-      const totalGrnQuantity = medicineGrnRows?.reduce((sum, row) => {
+      const totalGrnQuantity = medicineGrnRows.reduce((sum, row) => {
         return sum + (Number(row.usedQuantity) || 0)
       }, 0)
 
-      // Compare with prescribed quantity
-      return totalGrnQuantity === parseFloat(item.prescribedQuantity)
+      // Ensure total GRN quantity doesn't exceed prescribed quantity
+      const prescribedQty = parseFloat(item.prescribedQuantity) || 0
+      return totalGrnQuantity > 0 && totalGrnQuantity <= prescribedQty
     })
 
     // Set button disabled state based on validation
-    setDisabled(!isValid)
+    // Enable if at least one medicine has quantity entered
+    setDisabled(!hasAtLeastOneValid)
+    return hasAtLeastOneValid
   }
-  const handleGrnSelection = medicineId => {
+  const handleGrnSelection = (medicineId) => {
     // Update the details state to include the selected GRNs
-    setDetails(prevDetails =>
-      prevDetails.map(med => {
+    setDetails((prevDetails) => {
+      const updatedDetails = prevDetails.map((med) => {
         if (med.id === medicineId) {
           return {
             ...med,
             itemPurchaseInformation: grnRows[medicineId]
-              .filter(row => row.grnId && row.usedQuantity > 0)
-              .map(row => ({
+              .filter((row) => row.grnId && row.usedQuantity > 0)
+              .map((row) => ({
                 expiryDate: row.grnId.expiryDate,
                 mrpPerTablet: row.grnId.mrpPerTablet,
                 grnId: row.grnId.grnId,
@@ -759,10 +868,15 @@ function RenderAccordianDetails({
           }
         }
         return med
-      }),
-    )
+      })
 
-    validateQuantities(details)
+      // Validate with updated details (will also be validated by useEffect when state updates)
+      // This ensures immediate validation feedback
+      validateQuantities(updatedDetails)
+
+      return updatedDetails
+    })
+
     dispatch(closeModal(`pack-modal-${medicineId}`))
   }
 
@@ -787,11 +901,19 @@ function RenderAccordianDetails({
     const newItemPrices = {}
     let newTotalAmount = 0
 
-    details.forEach(medicineInfo => {
-      // If totalCost exists from API response, use it
+    details.forEach((medicineInfo) => {
+      // Check if coupon is applied for this item
+      const couponApplied =
+        itemCoupons[medicineInfo.id]?.applied &&
+        itemCoupons[medicineInfo.id]?.discount === 100
+
+      // If totalCost exists from API response, use it (but apply coupon discount)
       if (medicineInfo.totalCost !== undefined) {
-        newItemPrices[medicineInfo.id] = medicineInfo.totalCost
-        newTotalAmount += medicineInfo.totalCost
+        const basePrice = medicineInfo.totalCost
+        // Apply coupon discount
+        const discountedPrice = couponApplied ? 0 : basePrice
+        newItemPrices[medicineInfo.id] = discountedPrice
+        newTotalAmount += discountedPrice
       } else {
         // Otherwise calculate from itemPurchaseInformation
         let itemPurchaseInformation = medicineInfo?.itemPurchaseInformation
@@ -811,8 +933,10 @@ function RenderAccordianDetails({
           return sum + finalQuantity * mrpPerTablet
         }, 0)
 
-        newItemPrices[medicineInfo.id] = itemPrice
-        newTotalAmount += itemPrice
+        // Apply coupon discount
+        const discountedPrice = couponApplied ? 0 : itemPrice
+        newItemPrices[medicineInfo.id] = discountedPrice
+        newTotalAmount += discountedPrice
       }
     })
 
@@ -820,7 +944,7 @@ function RenderAccordianDetails({
       itemPrices: newItemPrices,
       totalAmount: newTotalAmount,
     })
-  }, [details])
+  }, [details, itemCoupons])
 
   // Update prices when details change
   useEffect(() => {
@@ -830,8 +954,60 @@ function RenderAccordianDetails({
   // Replace calculateAmount with a simple getter
   const calculateAmount = () => priceDetails.totalAmount
 
-  // Add a function to get individual item price
-  const getItemPrice = itemId => priceDetails.itemPrices[itemId] || 0
+  // Update discounted amount when coupon or prices change
+  useEffect(() => {
+    setDiscountedAmount(calculateDiscountedAmount(selectedCoupon))
+  }, [selectedCoupon, priceDetails.totalAmount, itemCoupons])
+
+  // Add a function to get individual item price (with coupon discount applied)
+  const getItemPrice = (itemId) => {
+    const basePrice = priceDetails.itemPrices[itemId] || 0
+    // Apply coupon discount if coupon is applied for this item
+    if (itemCoupons[itemId]?.applied && itemCoupons[itemId]?.discount === 100) {
+      return 0 // 100% discount means free
+    }
+    return basePrice
+  }
+
+  // Handle coupon menu open
+  const handleCouponMenuOpen = (event, itemId) => {
+    setCouponMenuAnchor(event.currentTarget)
+    setSelectedItemForCoupon(itemId)
+  }
+
+  // Handle coupon menu close
+  const handleCouponMenuClose = () => {
+    setCouponMenuAnchor(null)
+    setSelectedItemForCoupon(null)
+  }
+
+  // Handle applying 100% discount coupon
+  const handleApplyCoupon = (itemId) => {
+    setItemCoupons((prev) => ({
+      ...prev,
+      [itemId]: {
+        applied: true,
+        discount: 100,
+      },
+    }))
+
+    // Update the details to reflect the discount in totalCost
+    setDetails((prevDetails) =>
+      prevDetails.map((med) => {
+        if (med.id === itemId) {
+          return {
+            ...med,
+            totalCost: 0, // Set totalCost to 0 for this item
+          }
+        }
+        return med
+      }),
+    )
+
+    handleCouponMenuClose()
+    toast.success('100% Discount coupon applied!', toastconfig)
+  }
+
   const handleEdit = (med, index) => {
     getGrnInfo.mutate(med?.id)
     dispatch(openModal(`pack-modal-${med?.id}`))
@@ -843,9 +1019,9 @@ function RenderAccordianDetails({
         : med.itemPurchaseInformation
     console.log('existingGrns', existingGrns)
     // Set GRN rows with all three quantities
-    setGrnRows(prev => ({
+    setGrnRows((prev) => ({
       ...prev,
-      [med.id]: existingGrns.map(info => ({
+      [med.id]: existingGrns.map((info) => ({
         grnId: {
           grnId: info.grnId,
           expiryDate: info.expiryDate,
@@ -934,6 +1110,28 @@ function RenderAccordianDetails({
                     align="center"
                     className="font-bold border-0 rounder-lg"
                   >
+                    <Tooltip
+                      title={'Remaining = Prescribed - Dispensed'}
+                      placement="top"
+                    >
+                      Balance
+                    </Tooltip>
+                  </TableCell>
+                  <TableCell
+                    align="center"
+                    className="font-bold border-0 rounder-lg"
+                  >
+                    <Tooltip
+                      title={'Price = Prescribed × Price per unit'}
+                      placement="top"
+                    >
+                      Price
+                    </Tooltip>
+                  </TableCell>
+                  <TableCell
+                    align="center"
+                    className="font-bold border-0 rounder-lg"
+                  >
                     Action
                   </TableCell>
                 </>
@@ -952,6 +1150,14 @@ function RenderAccordianDetails({
                   >
                     <Tooltip title={'Edit GRNs'} placement="top">
                       GRNs
+                    </Tooltip>
+                  </TableCell>
+                  <TableCell
+                    align="center"
+                    className="font-bold border-0 rounder-lg"
+                  >
+                    <Tooltip title={'Apply Coupon'} placement="top">
+                      Coupon
                     </Tooltip>
                   </TableCell>
                   <TableCell
@@ -1025,7 +1231,7 @@ function RenderAccordianDetails({
                         }}
                         // InputProps={{ inputProps: { min: 1, max: med?.prescribedQuantity } }}
                         error={med?.prescribedQuantity > med?.availableQuantity}
-                        onChange={e => {
+                        onChange={(e) => {
                           setQuantity(med?.id, e.target.value, column.label)
                         }}
                         disabled={
@@ -1036,6 +1242,21 @@ function RenderAccordianDetails({
                       <Tooltip title={`${getInfo(med)}`} placement="top">
                         <Info className="w-4 h-4" />
                       </Tooltip>
+                    </TableCell>
+                    <TableCell align="center" className="border-0">
+                      {Math.max(
+                        0,
+                        Number(med?.prescribedQuantity || 0) -
+                          Number(
+                            (grnRows[med.id] || []).reduce(
+                              (sum, row) => sum + Number(row.usedQuantity || 0),
+                              0,
+                            ),
+                          ),
+                      )}
+                    </TableCell>
+                    <TableCell align="center" className="border-0 font-medium">
+                      ₹{calculateMedicinePrice(med).toFixed(2)}
                     </TableCell>
                     <TableCell align="center" className="border-0">
                       <Button
@@ -1062,9 +1283,9 @@ function RenderAccordianDetails({
                         {grnRows[med.id]?.reduce(
                           (sum, row) => sum + Number(row.usedQuantity || 0),
                           0,
-                        ) === Number(med.prescribedQuantity)
-                          ? 'Selected'
-                          : 'Select GRN'}
+                        ) === Number(med?.prescribedQuantity)
+                          ? 'Packed'
+                          : 'Pack'}
                       </Button>
                     </TableCell>
                   </>
@@ -1086,7 +1307,90 @@ function RenderAccordianDetails({
                       </IconButton>
                     </TableCell>
                     <TableCell align="center" className="border-0">
-                      {getItemPrice(med?.id).toFixed(2)}
+                      <div className="flex flex-col items-center gap-1">
+                        <IconButton
+                          size="small"
+                          onClick={(e) => handleCouponMenuOpen(e, med.id)}
+                          disabled={itemCoupons[med.id]?.applied}
+                          color={
+                            itemCoupons[med.id]?.applied ? 'success' : 'primary'
+                          }
+                        >
+                          <LocalOffer />
+                        </IconButton>
+                        {itemCoupons[med.id]?.applied && (
+                          <Chip
+                            label="100% OFF"
+                            size="small"
+                            color="success"
+                            className="text-xs"
+                          />
+                        )}
+                      </div>
+                      <Menu
+                        anchorEl={couponMenuAnchor}
+                        open={
+                          Boolean(couponMenuAnchor) &&
+                          selectedItemForCoupon === med.id
+                        }
+                        onClose={handleCouponMenuClose}
+                      >
+                        <MenuItem onClick={() => handleApplyCoupon(med.id)}>
+                          100% Discount
+                        </MenuItem>
+                      </Menu>
+                    </TableCell>
+                    <TableCell align="center" className="border-0">
+                      <div className="flex flex-col items-center gap-1">
+                        {itemCoupons[med.id]?.applied ? (
+                          <>
+                            <Typography
+                              variant="body2"
+                              className="line-through text-gray-400"
+                            >
+                              {(() => {
+                                // Calculate original price from itemPurchaseInformation
+                                let itemPurchaseInformation =
+                                  med?.itemPurchaseInformation
+                                    ? typeof med.itemPurchaseInformation ===
+                                      'string'
+                                      ? JSON.parse(med.itemPurchaseInformation)
+                                      : med.itemPurchaseInformation
+                                    : []
+                                const originalPrice =
+                                  itemPurchaseInformation.reduce((sum, row) => {
+                                    const mrpPerTablet =
+                                      Number(row.mrpPerTablet) || 0
+                                    const usedQuantity = Number(
+                                      row.initialUsedQuantity ||
+                                        row.usedQuantity ||
+                                        0,
+                                    )
+                                    const returnedQuantity = Number(
+                                      row.returnedQuantity || 0,
+                                    )
+                                    const finalQuantity =
+                                      usedQuantity - returnedQuantity
+                                    return sum + finalQuantity * mrpPerTablet
+                                  }, 0)
+                                return originalPrice > 0
+                                  ? originalPrice.toFixed(2)
+                                  : (med.totalCost || 0).toFixed(2)
+                              })()}
+                            </Typography>
+                            <Typography
+                              variant="body2"
+                              className="text-green-600 font-bold"
+                            >
+                              {getItemPrice(med?.id).toFixed(2)}
+                            </Typography>
+                          </>
+                        ) : (
+                          <Typography variant="body2">
+                            {getItemPrice(med?.id).toFixed(2)}
+                          </Typography>
+                        )}
+                      </div>
                     </TableCell>
                   </>
                 )}
@@ -1096,6 +1400,23 @@ function RenderAccordianDetails({
               <Button onClick={handleInvoicePrint}>Print Invoice</Button>
             )}
           </TableBody>
+          {column.label === 'PRESCRIBED' && details?.length > 0 && (
+            <TableFooter>
+              <TableRow>
+                <TableCell
+                  colSpan={4}
+                  align="right"
+                  className="font-bold border-t-2"
+                >
+                  Grand Total:
+                </TableCell>
+                <TableCell align="center" className="font-bold border-t-2">
+                  ₹{calculateGrandTotal().toFixed(2)}
+                </TableCell>
+                <TableCell className="border-t-2"></TableCell>
+              </TableRow>
+            </TableFooter>
+          )}
         </Table>
       </TableContainer>
       {column.label == 'PRESCRIBED' && (
@@ -1114,7 +1435,9 @@ function RenderAccordianDetails({
       )}
       {column.label == 'PACKED' && (
         <div className="flex justify-between items-center">
-          <span className=" font-medium">Tot. Amount: {calculateAmount()}</span>
+          <span className=" font-medium">
+            Tot. Amount: ₹{calculateAmount().toFixed(2)}
+          </span>
           {/* <Button variant="contained" className="self-end h-10 text-white"
             onClick={(e) => handlePayment(e)}
           >
@@ -1180,14 +1503,14 @@ function RenderAccordianDetails({
           <div className="mt-4">
             <Autocomplete
               options={coupons}
-              getOptionLabel={option =>
+              getOptionLabel={(option) =>
                 `${option.couponCode} (${option.discountPercentage}% off)`
               }
               value={selectedCoupon}
               onChange={(event, newValue) => {
                 setSelectedCoupon(newValue)
               }}
-              renderInput={params => (
+              renderInput={(params) => (
                 <TextField
                   {...params}
                   label="Apply Coupon"
@@ -1215,47 +1538,106 @@ function RenderAccordianDetails({
               </div>
             )}
           </div>
-          <div className="flex gap-2 items-center justify-between pt-5">
-            <span className=" font-bold">
-              Tot. Amount: ₹{discountedAmount?.toFixed(2)}
-            </span>
-            <div className="flex gap-2">
+          <div className="flex flex-col gap-4 pt-5">
+            <div className="flex justify-between items-center">
+              <span className="font-bold text-lg">
+                Total Amount: ₹{discountedAmount?.toFixed(2)}
+              </span>
+            </div>
+            <div className="flex gap-3 justify-center">
               <Button
-                variant="outlined"
-                className="self-end h-10"
-                size="small"
-                onClick={() => {
-                  handlePaymentClicked('Online')
+                variant={
+                  selectedPaymentMode === 'ONLINE' ? 'contained' : 'outlined'
+                }
+                color="primary"
+                className="capitalize py-3 px-6"
+                onClick={() => handlePaymentModeSelect('ONLINE')}
+                disabled={isProcessingPayment}
+                sx={{
+                  backgroundColor:
+                    selectedPaymentMode === 'ONLINE'
+                      ? '#1976d2'
+                      : 'transparent',
+                  color: selectedPaymentMode === 'ONLINE' ? '#fff' : '#1976d2',
+                  '&:hover': {
+                    backgroundColor:
+                      selectedPaymentMode === 'ONLINE'
+                        ? '#1565c0'
+                        : 'rgba(25, 118, 210, 0.04)',
+                  },
                 }}
               >
-                Online
+                ONLINE
               </Button>
               <Button
-                variant="outlined"
-                className="self-end h-10"
-                size="small"
-                onClick={() => {
-                  handlePaymentClicked('UPI')
+                variant={
+                  selectedPaymentMode === 'UPI' ? 'contained' : 'outlined'
+                }
+                color="primary"
+                className="capitalize py-3 px-6"
+                onClick={() => handlePaymentModeSelect('UPI')}
+                disabled={isProcessingPayment}
+                sx={{
+                  backgroundColor:
+                    selectedPaymentMode === 'UPI' ? '#1976d2' : 'transparent',
+                  color: selectedPaymentMode === 'UPI' ? '#fff' : '#1976d2',
+                  '&:hover': {
+                    backgroundColor:
+                      selectedPaymentMode === 'UPI'
+                        ? '#1565c0'
+                        : 'rgba(25, 118, 210, 0.04)',
+                  },
                 }}
               >
                 UPI
               </Button>
               <Button
-                variant="outlined"
-                className="self-end h-10"
-                size="small"
-                onClick={() => {
-                  handlePaymentClicked('Cash')
+                variant={
+                  selectedPaymentMode === 'CASH' ? 'contained' : 'outlined'
+                }
+                color="primary"
+                className="capitalize py-3 px-6"
+                onClick={() => handlePaymentModeSelect('CASH')}
+                disabled={isProcessingPayment}
+                sx={{
+                  backgroundColor:
+                    selectedPaymentMode === 'CASH' ? '#1976d2' : 'transparent',
+                  color: selectedPaymentMode === 'CASH' ? '#fff' : '#1976d2',
+                  '&:hover': {
+                    backgroundColor:
+                      selectedPaymentMode === 'CASH'
+                        ? '#1565c0'
+                        : 'rgba(25, 118, 210, 0.04)',
+                  },
                 }}
               >
-                Cash
+                CASH
               </Button>
             </div>
+            {selectedPaymentMode && (
+              <div className="flex justify-center pt-2">
+                <Button
+                  variant="contained"
+                  color="success"
+                  className="capitalize py-3 px-8 text-lg font-bold"
+                  onClick={handlePay}
+                  disabled={isProcessingPayment}
+                  sx={{
+                    backgroundColor: '#4caf50',
+                    '&:hover': {
+                      backgroundColor: '#45a049',
+                    },
+                  }}
+                >
+                  {isProcessingPayment ? 'Processing...' : 'PAY'}
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </Modal>
       {/* )} */}
-      {details?.map(med => (
+      {details?.map((med) => (
         <Modal
           key={`pack-modal-${med.id}`}
           uniqueKey={`pack-modal-${med.id}`}
@@ -1391,7 +1773,7 @@ function RenderAccordianDetails({
                     onChange={(_, newValue) =>
                       handleGrnRowChange(med.id, index, 'grnId', newValue)
                     }
-                    getOptionLabel={option => {
+                    getOptionLabel={(option) => {
                       console.log('option', option)
                       return `Expiry: ${dayjs(option.expiryDate).format(
                         'DD/MM/YYYY',
@@ -1400,7 +1782,7 @@ function RenderAccordianDetails({
                       }| Batch No: ${option.batchNo}
                     `
                     }}
-                    renderInput={params => (
+                    renderInput={(params) => (
                       <TextField {...params} label="Select GRN" size="small" />
                     )}
                   />
@@ -1425,7 +1807,7 @@ function RenderAccordianDetails({
                           <span className="font-medium">Available:</span>{' '}
                           {
                             availableGrns.find(
-                              grn => grn.grnId === row.grnId.grnId,
+                              (grn) => grn.grnId === row.grnId.grnId,
                             )?.totalQuantity
                           }
                         </div>
@@ -1442,7 +1824,7 @@ function RenderAccordianDetails({
                   label="Quantity"
                   size="small"
                   value={row.initialUsedQuantity || row.usedQuantity}
-                  onChange={e =>
+                  onChange={(e) =>
                     handleGrnRowChange(
                       med.id,
                       index,
@@ -1478,7 +1860,7 @@ function RenderAccordianDetails({
                       label="Return Qty"
                       size="small"
                       value={row.returnedQuantity || 0}
-                      onChange={e =>
+                      onChange={(e) =>
                         handleGrnRowChange(
                           med.id,
                           index,
@@ -1522,7 +1904,7 @@ function RenderAccordianDetails({
 
                 <IconButton
                   onClick={() => {
-                    setGrnRows(prev => ({
+                    setGrnRows((prev) => ({
                       ...prev,
                       [med.id]: prev[med.id].filter((_, i) => i !== index),
                     }))
@@ -1597,18 +1979,19 @@ function RenderAccordianComponent({
   expandedId,
   setClickeId,
   selectedbranch,
+  date,
 }) {
   const [activeTab, setActiveTab] = useState('patient')
 
   const getFilteredItems = (details, isSpouse) => {
     return details
-      .map(patient => {
+      .map((patient) => {
         const key = Object.keys(patient)[0]
         const filteredItems = {
           ...patient,
           [key]: {
             ...patient[key],
-            itemDetails: patient[key].itemDetails.filter(item =>
+            itemDetails: patient[key].itemDetails.filter((item) =>
               isSpouse ? item.isSpouse === 1 : item.isSpouse === 0,
             ),
           },
@@ -1653,7 +2036,7 @@ function RenderAccordianComponent({
       <div className="flex flex-col gap-2">
         {activeTab === 'patient' ? (
           patientItems.length > 0 ? (
-            patientItems.map(patient => {
+            patientItems.map((patient) => {
               const key = Object.keys(patient)[0]
               const appointmentID = patient[key].header?.appointmentId
               const photo = patient[key].header?.photoPath
@@ -1725,6 +2108,7 @@ function RenderAccordianComponent({
                           hdrKey={patient[key].header?.appointmentId}
                           header={patient[key].header}
                           selectedbranch={selectedbranch}
+                          date={date}
                         />
                       )}
                   </AccordionDetails>
@@ -1737,7 +2121,7 @@ function RenderAccordianComponent({
             </span>
           )
         ) : spouseItems.length > 0 ? (
-          spouseItems.map(patient => {
+          spouseItems.map((patient) => {
             const key = Object.keys(patient)[0]
             const appointmentID = patient[key].header?.appointmentId
             const photo = patient[key].header?.photoPath
@@ -1807,6 +2191,7 @@ function RenderAccordianComponent({
                         hdrKey={patient[key].header?.appointmentId}
                         header={patient[key].header}
                         selectedbranch={selectedbranch}
+                        date={date}
                       />
                     )}
                 </AccordionDetails>
@@ -1824,8 +2209,8 @@ function RenderAccordianComponent({
 }
 
 function Index() {
-  const user = useSelector(store => store.user)
-  const dropDown = useSelector(store => store.dropdowns)
+  const user = useSelector((store) => store.user)
+  const dropDown = useSelector((store) => store.dropdowns)
   const router = useRouter()
   const [date, setDate] = useState()
   const [expandedId, setExpandedId] = useState()
@@ -1835,7 +2220,7 @@ function Index() {
   const dispatch = useDispatch()
   // let obj = []
   let branch = dropDown['branches']
-  branch = branch.map(item => {
+  branch = branch.map((item) => {
     return { ...item, label: item.name }
   })
 
@@ -1886,8 +2271,8 @@ function Index() {
       const obj = {}
       const fetchedData = res.data
 
-      fetchedData?.forEach(patientHeader => {
-        patientHeader?.itemDetails?.forEach(itemDetails => {
+      fetchedData?.forEach((patientHeader) => {
+        patientHeader?.itemDetails?.forEach((itemDetails) => {
           const stage = itemDetails?.itemStage
           const appointmentId = patientHeader?.appointmentId
 
@@ -1896,7 +2281,7 @@ function Index() {
           }
 
           const existingPatientIndex = obj[stage].findIndex(
-            item => item[appointmentId],
+            (item) => item[appointmentId],
           )
 
           if (existingPatientIndex !== -1) {
@@ -2022,9 +2407,9 @@ function Index() {
             id="demo-simple-select"
             value={selectedbranch}
             label="Branch"
-            onChange={e => handleBranchChange(e.target.value)}
+            onChange={(e) => handleBranchChange(e.target.value)}
           >
-            {branch.map(branchinfo => {
+            {branch.map((branchinfo) => {
               return (
                 <MenuItem value={branchinfo?.id} key={branchinfo.label}>
                   {branchinfo?.label}
@@ -2036,7 +2421,7 @@ function Index() {
       </div>
       <div className="bg-white rounded-lg border shadow">
         <Box className="flex gap-3 p-3">
-          {columns?.map(column => (
+          {columns?.map((column) => (
             <Box
               className="flex flex-col h-[80vh] rounded transition-colors bg-primary p-2 w-full"
               key={column?.label + 'IndexBox'}
@@ -2048,14 +2433,15 @@ function Index() {
                 </Typography>
               </Box>
               <Stack spacing={2} style={{ overflowY: 'auto', height: '100%' }}>
-                {patientData && patientData[(column?.label)] ? (
+                {patientData && patientData[column?.label] ? (
                   <RenderAccordianComponent
                     key={column?.label + 'indexAccordion'}
-                    patientDetails={patientData[(column?.label)]}
+                    patientDetails={patientData[column?.label]}
                     column={column}
                     expandedId={expandedId}
                     setClickeId={setExpandedId}
                     selectedbranch={selectedbranch}
+                    date={date}
                   />
                 ) : (
                   <div className="w-full h-full flex justify-center items-center">

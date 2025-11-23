@@ -38,6 +38,8 @@ import {
   getSavedLabTestResult,
   getAppointmentsByPatient,
   getAllPatients,
+  closeVisit,
+  closeVisitInConsultation,
   applyMarkAsSeenForDoctorAppointment,
   downloadOPDSheet,
   downloadPDF,
@@ -330,49 +332,45 @@ function ConsultationsAndTreatments({
   checklistData,
   isChecklistDataLoading,
 }) {
-  const user = useSelector(store => store.user)
-  const { billTypes } = useSelector(store => store.dropdowns)
+  const user = useSelector((store) => store.user)
+  const { billTypes } = useSelector((store) => store.dropdowns)
   const dispatch = useDispatch()
 
   const [horizontalTabInModal, setHorizontalTabInModal] = useState('')
-  const [
-    clickedConsultationOrTreatment,
-    setClickedConsultationOrTreatment,
-  ] = useState({
-    type: '', // Consultation | Treatment
-    id: '', // consultationId | treatmentId
-  })
+  const [clickedConsultationOrTreatment, setClickedConsultationOrTreatment] =
+    useState({
+      type: '', // Consultation | Treatment
+      id: '', // consultationId | treatmentId
+    })
 
   const [clickedAppointment, setclickedAppointment] = useState({
     type: '', // Consultation | Treatment
     appointmentId: '',
   })
 
-  const {
-    data: appointmentHistory,
-    isLoading: isAppointmentHistoryLoading,
-  } = useQuery({
-    queryKey: ['appointmentHistory', clickedConsultationOrTreatment],
-    enabled: !!(
-      clickedConsultationOrTreatment.id && clickedConsultationOrTreatment.type
-    ),
-    queryFn: async () => {
-      const responsejson = await getAppointmentsHistory(
-        user.accessToken,
-        clickedConsultationOrTreatment.type,
-        clickedConsultationOrTreatment.id,
-        date.format('YYYY-MM-DD'),
-      )
-      console.log(date)
-      if (responsejson.status == 200) {
-        return responsejson.data
-      } else {
-        throw new Error(
-          'Error occurred while fetching patient information for doctor',
+  const { data: appointmentHistory, isLoading: isAppointmentHistoryLoading } =
+    useQuery({
+      queryKey: ['appointmentHistory', clickedConsultationOrTreatment],
+      enabled: !!(
+        clickedConsultationOrTreatment.id && clickedConsultationOrTreatment.type
+      ),
+      queryFn: async () => {
+        const responsejson = await getAppointmentsHistory(
+          user.accessToken,
+          clickedConsultationOrTreatment.type,
+          clickedConsultationOrTreatment.id,
+          date.format('YYYY-MM-DD'),
         )
-      }
-    },
-  })
+        console.log(date)
+        if (responsejson.status == 200) {
+          return responsejson.data
+        } else {
+          throw new Error(
+            'Error occurred while fetching patient information for doctor',
+          )
+        }
+      },
+    })
 
   const {
     data: lineBillsAndNotesData,
@@ -534,7 +532,7 @@ function ConsultationsAndTreatments({
                           }}
                           aria-label="line bills and notes"
                         >
-                          {lineBillsAndNotesData?.lineBillsData?.map(bill => (
+                          {lineBillsAndNotesData?.lineBillsData?.map((bill) => (
                             <Tab
                               key={bill.billType.id}
                               label={bill.billType.name}
@@ -543,7 +541,7 @@ function ConsultationsAndTreatments({
                           ))}
                         </TabList>
                       </Box>
-                      {lineBillsAndNotesData?.lineBillsData?.map(bill => (
+                      {lineBillsAndNotesData?.lineBillsData?.map((bill) => (
                         <TabPanel
                           className="p-3"
                           key={bill.billType.id}
@@ -564,7 +562,7 @@ function ConsultationsAndTreatments({
                                   </TableRow>
                                 </TableHead>
                                 <TableBody>
-                                  {bill.billTypeValues?.map(value => (
+                                  {bill.billTypeValues?.map((value) => (
                                     <TableRow key={value.id}>
                                       <TableCell>{value.name}</TableCell>
                                       {bill.billType?.id == 3 && (
@@ -681,7 +679,7 @@ function ConsultationsAndTreatments({
                     <div className="flex justify-between w-full">
                       <span className="text-xs text-gray-500">
                         {billTypes.find(
-                          billType => billType.id == test.billTypeId,
+                          (billType) => billType.id == test.billTypeId,
                         )?.name || ''}
                       </span>
                       <span className="text-xs text-gray-500">
@@ -856,82 +854,84 @@ function ConsultationsAndTreatments({
                     </i>
                   </span>
                   <Divider className="my-2" />
-                  {// <VitalsInformation
-                  //   vitals={checklistData[0]?.latestVitals}
-                  // />
-                  // .map((vitals, index) => (
-                  //   <div key={index}>
-                  //     <span>{vitals.vitalsName}</span>
-                  //     <span>{vitals.vitalsValue}</span>
-                  //   </div>
-                  // ))
-                  checklistData[0]?.latestVitals ? (
-                    <div className="grid grid-cols-2 gap-2">
-                      {[
-                        'bp',
-                        'bmi',
-                        'height',
-                        'weight',
-                        'initials',
-                        'vitalsTakenTime',
-                        'notes',
-                      ].map((key, index) => (
-                        <div key={index} className="flex flex-col">
-                          <span className="text-sm font-medium capitalize">
-                            {key}
-                          </span>
-                          {(() => {
-                            switch (key) {
-                              case 'bp':
-                                return (
-                                  <span className="text-sm opacity-75">
-                                    {checklistData[0].latestVitals[key]} mmHg
-                                  </span>
-                                )
-                              case 'bmi':
-                                return (
-                                  <span className="text-sm opacity-75">
-                                    {checklistData[0].latestVitals[key]} kg/m2
-                                  </span>
-                                )
-                              case 'height':
-                                return (
-                                  <span className="text-sm opacity-75">
-                                    {checklistData[0].latestVitals[key]}
-                                  </span>
-                                )
-                              case 'weight':
-                                return (
-                                  <span className="text-sm opacity-75">
-                                    {checklistData[0].latestVitals[key]} kg
-                                  </span>
-                                )
-                              case 'vitalsTakenTime':
-                                return (
-                                  <span className="text-sm opacity-75">
-                                    {dayjs(
-                                      checklistData[0].latestVitals[key],
-                                    ).format('DD-MM-YYYY')}
-                                  </span>
-                                )
-                              case 'notes':
-                                return (
-                                  <span className="text-sm col-span-2 opacity-75">
-                                    {checklistData[0].latestVitals[key]}
-                                  </span>
-                                )
-                              default:
-                                return (
-                                  <span className="text-sm opacity-75">
-                                    {checklistData[0].latestVitals[key]}
-                                  </span>
-                                )
-                            }
-                          })()}
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
+                  {
+                    // <VitalsInformation
+                    //   vitals={checklistData[0]?.latestVitals}
+                    // />
+                    // .map((vitals, index) => (
+                    //   <div key={index}>
+                    //     <span>{vitals.vitalsName}</span>
+                    //     <span>{vitals.vitalsValue}</span>
+                    //   </div>
+                    // ))
+                    checklistData[0]?.latestVitals ? (
+                      <div className="grid grid-cols-2 gap-2">
+                        {[
+                          'bp',
+                          'bmi',
+                          'height',
+                          'weight',
+                          'initials',
+                          'vitalsTakenTime',
+                          'notes',
+                        ].map((key, index) => (
+                          <div key={index} className="flex flex-col">
+                            <span className="text-sm font-medium capitalize">
+                              {key}
+                            </span>
+                            {(() => {
+                              switch (key) {
+                                case 'bp':
+                                  return (
+                                    <span className="text-sm opacity-75">
+                                      {checklistData[0].latestVitals[key]} mmHg
+                                    </span>
+                                  )
+                                case 'bmi':
+                                  return (
+                                    <span className="text-sm opacity-75">
+                                      {checklistData[0].latestVitals[key]} kg/m2
+                                    </span>
+                                  )
+                                case 'height':
+                                  return (
+                                    <span className="text-sm opacity-75">
+                                      {checklistData[0].latestVitals[key]}
+                                    </span>
+                                  )
+                                case 'weight':
+                                  return (
+                                    <span className="text-sm opacity-75">
+                                      {checklistData[0].latestVitals[key]} kg
+                                    </span>
+                                  )
+                                case 'vitalsTakenTime':
+                                  return (
+                                    <span className="text-sm opacity-75">
+                                      {dayjs(
+                                        checklistData[0].latestVitals[key],
+                                      ).format('DD-MM-YYYY')}
+                                    </span>
+                                  )
+                                case 'notes':
+                                  return (
+                                    <span className="text-sm col-span-2 opacity-75">
+                                      {checklistData[0].latestVitals[key]}
+                                    </span>
+                                  )
+                                default:
+                                  return (
+                                    <span className="text-sm opacity-75">
+                                      {checklistData[0].latestVitals[key]}
+                                    </span>
+                                  )
+                              }
+                            })()}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null
+                  }
                 </div>
               </div>
               <div className="col-span-3">
@@ -956,7 +956,7 @@ function ConsultationsAndTreatments({
 export default function Appointments() {
   const dispatch = useDispatch()
   const router = useRouter()
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const [date, setDate] = useState(dayjs())
   const [selectedPatient, setSelectedPatient] = useState({
     patientId: '',
@@ -990,7 +990,7 @@ export default function Appointments() {
             let { appointmentId, type } = router.query
             if (appointmentId && type) {
               let findPatient = responsejson.data.find(
-                each =>
+                (each) =>
                   each.appointmentId == appointmentId && each.type == type,
               )
               setSelectedPatient(findPatient)
@@ -1152,6 +1152,59 @@ export default function Appointments() {
       { shallow: true },
     )
   }
+  const handleCloseVisit = async (appointmentId) => {
+    try {
+      dispatch(showLoader())
+      // find the appointment object to determine its type (Consultation or Treatment)
+      const appointment =
+        appointmentsData?.find((a) => a.appointmentId == appointmentId) ||
+        patientAppointments?.find((a) => a.appointmentId == appointmentId)
+
+      // If appointment is a consultation, use the consultation-specific API
+      if (appointment && appointment.type === 'Consultation') {
+        // confirmation popup
+        if (!confirm('Are you sure you want to close this visit?')) {
+          return
+        }
+
+        const payload = {
+          patientId: appointment.patientId,
+          type: 'Consultation',
+          appointmentId: appointment.appointmentId,
+          consultationId: appointment.consultationId,
+          visitClosedStatus: 'Completed',
+          visitClosedReason: 'Closed from Appointments',
+        }
+
+        const res = await closeVisitInConsultation(
+          user.accessToken,
+          payload,
+          appointment.consultationId || appointment.appointmentId,
+        )
+
+        if (res && (res.status === 200 || res.status === 'success')) {
+          toast.success(res.message || 'Visit closed successfully')
+          queryClient.invalidateQueries(['appointmentsForDoctor', date])
+        } else {
+          toast.error(res.message || 'Failed to close visit')
+        }
+      } else {
+        // fallback / existing treatment close
+        const result = await closeVisit(user.accessToken, appointmentId)
+        if (result && (result.status === 'success' || result.status === 200)) {
+          toast.success(result.message || 'Visit closed successfully')
+          queryClient.invalidateQueries(['appointmentsForDoctor', date])
+        } else {
+          toast.error(result.message || 'Failed to close visit')
+        }
+      }
+    } catch (error) {
+      toast.error('Error closing visit: ' + error.message)
+    } finally {
+      dispatch(hideLoader())
+    }
+  }
+
   useEffect(() => {
     const { date, searchBy } = router.query
 
@@ -1235,7 +1288,7 @@ export default function Appointments() {
   // }, [router.query])
 
   // Update the PatientHistory button click handler
-  const handlePatientHistoryClick = patientInfo => {
+  const handlePatientHistoryClick = (patientInfo) => {
     router.push(
       {
         pathname: router.pathname,
@@ -1321,17 +1374,17 @@ export default function Appointments() {
               <Autocomplete
                 fullWidth
                 options={patientsList || []}
-                getOptionLabel={option =>
+                getOptionLabel={(option) =>
                   `${option.Name} (ID: ${option.patientId})`
                 }
                 onChange={(event, newValue) => {
                   setSelectedSearchPatient(newValue?.id || null)
                 }}
-                renderInput={params => (
+                renderInput={(params) => (
                   <TextField
                     {...params}
                     label="Search Patient"
-                    onChange={e => {
+                    onChange={(e) => {
                       setPatientSearchQuery(e.target.value)
                       if (e.target.value.trim()) {
                         setShouldFetchPatients(true)
@@ -1379,9 +1432,11 @@ export default function Appointments() {
             ? // Show date-based appointments
               appointmentsData?.map((eachAppointment, i) => (
                 <button
-                  className={`p-2 w-full flex justify-between items-center gap-2 rounded-lg text-left outline-none ${selectedPatient?.appointmentId ==
-                    eachAppointment.appointmentId &&
-                    '  border-2 border-secondary shadow-md shadow-secondary/20  '}`}
+                  className={`p-2 w-full flex justify-between items-center gap-2 rounded-lg text-left outline-none ${
+                    selectedPatient?.appointmentId ==
+                      eachAppointment.appointmentId &&
+                    '  border-2 border-secondary shadow-md shadow-secondary/20  '
+                  }`}
                   key={eachAppointment.appointmentId}
                   onClick={() => {
                     onAppointmentClick(
@@ -1411,15 +1466,37 @@ export default function Appointments() {
                   )}
                   <span
                     title={eachAppointment.patientName}
-                    className={`max-w-28 text-nowrap text-ellipsis overflow-hidden font-medium ${selectedPatient?.appointmentId ==
-                      eachAppointment.appointmentId && ' text-secondary '}`}
+                    className={`max-w-28 text-nowrap text-ellipsis overflow-hidden font-medium ${
+                      selectedPatient?.appointmentId ==
+                        eachAppointment.appointmentId && ' text-secondary '
+                    }`}
                   >
                     {eachAppointment.firstName}
                   </span>
                   <div className="flex gap-3 items-center">
                     <span className="text-xs">{eachAppointment.type}</span>
+                    {(eachAppointment.appointmentReason === 'Gynec' ||
+                      eachAppointment.appointmentReason === 'Antenatal' ||
+                      eachAppointment.appointmentReason === 'ANC/ZYN') && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleCloseVisit(eachAppointment.appointmentId)
+                        }}
+                        disabled={eachAppointment.status === 'CLOSED'}
+                        className={`px-2 py-1 rounded text-xs ${
+                          eachAppointment.status === 'CLOSED'
+                            ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
+                            : 'bg-secondary text-white hover:bg-secondary/80'
+                        }`}
+                      >
+                        {eachAppointment.status === 'CLOSED'
+                          ? 'Visit Closed'
+                          : 'Close Visit'}
+                      </button>
+                    )}
                     <div
-                      className={`size-12 flex justify-center items-center rounded-full  text-secondary font-semibold ${
+                      className={`size-12 flex justify-center items-center rounded-full text-secondary font-semibold ${
                         eachAppointment.isCompleted
                           ? 'bg-green-100'
                           : 'bg-primary'
@@ -1437,9 +1514,11 @@ export default function Appointments() {
             : // Show patient-based appointments
               patientAppointments?.map((eachAppointment, i) => (
                 <button
-                  className={`p-2 w-full flex  items-center gap-2 rounded-lg text-left outline-none ${selectedPatient?.appointmentId ===
-                    eachAppointment.appointmentId &&
-                    'border-2 border-secondary shadow'}`}
+                  className={`p-2 w-full flex  items-center gap-2 rounded-lg text-left outline-none ${
+                    selectedPatient?.appointmentId ===
+                      eachAppointment.appointmentId &&
+                    'border-2 border-secondary shadow'
+                  }`}
                   key={eachAppointment.appointmentId}
                   onClick={() => {
                     onAppointmentClick(
@@ -1551,11 +1630,8 @@ export default function Appointments() {
                   <PatientHistory
                     patient={patientDetails?.patientInfo}
                     onClose={() => {
-                      const {
-                        patientHistoryId,
-                        activeVisitId,
-                        ...restQuery
-                      } = router.query
+                      const { patientHistoryId, activeVisitId, ...restQuery } =
+                        router.query
                       router.push(
                         {
                           pathname: router.pathname,
@@ -1594,7 +1670,9 @@ export default function Appointments() {
                         }
                       >
                         <div className="line-clamp-2">
-                          <strong>{selectedPatient?.appointmentReason}</strong>{' '}
+                          <strong>
+                            {selectedPatient?.appointmentReason}
+                          </strong>{' '}
                         </div>
                       </Tooltip>
                     </Alert>
@@ -1659,6 +1737,28 @@ export default function Appointments() {
                         startIcon={<Close />}
                       >
                         Close Visit
+                      </Button>
+                    )}
+                  </div>
+                )}
+                {selectedPatient?.type === 'Consultation' && (
+                  <div className="flex gap-3">
+                    {patientDetails?.patientInfo?.activeVisitId && (
+                      <Button
+                        variant="outlined"
+                        color="error"
+                        size="small"
+                        className="capitalize"
+                        onClick={() =>
+                          handleCloseVisit(selectedPatient?.appointmentId)
+                        }
+                        name="Close Visit"
+                        startIcon={<Close />}
+                        disabled={selectedPatient?.status === 'CLOSED'}
+                      >
+                        {selectedPatient?.status === 'CLOSED'
+                          ? 'Visit Closed'
+                          : 'Close Visit'}
                       </Button>
                     )}
                   </div>

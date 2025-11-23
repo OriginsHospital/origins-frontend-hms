@@ -11,12 +11,14 @@ This document outlines the changes made to the Reports section of the HMS web ap
 **File Modified:** `src/pages/reports/expenses/index.js`
 
 **Changes Made:**
+
 - Added a new "Branch" column after the "Payment Date" column
 - Copied the structure and styling from the Orders report
 - Added proper tooltip support for long branch names
 - Maintained consistent alignment and responsiveness
 
 **Code Added:**
+
 ```javascript
 // Added Branch column - copied from Orders report structure
 {
@@ -41,6 +43,7 @@ This document outlines the changes made to the Reports section of the HMS web ap
 **File Modified:** `src/pages/reports/expenses/index.js`
 
 **Changes Made:**
+
 - Increased column width from 200px to 300px
 - Increased flex value from 2 to 3
 - Added minimum width of 250px
@@ -48,6 +51,7 @@ This document outlines the changes made to the Reports section of the HMS web ap
 - Added proper styling for better readability
 
 **Code Updated:**
+
 ```javascript
 {
   field: 'description',
@@ -78,11 +82,13 @@ This document outlines the changes made to the Reports section of the HMS web ap
 ### 3. Automatic Report File Naming
 
 **New Files Created:**
+
 - `src/utils/reportExport.js` - Core export utilities
 - `src/components/ReportExportToolbar.js` - Custom export toolbar
 - `src/components/ExportTestComponent.js` - Test component
 
 **Key Features:**
+
 - Dynamic file naming based on report type and date
 - Support for CSV, Excel, and PDF formats
 - Browser-compatible download functionality
@@ -90,11 +96,13 @@ This document outlines the changes made to the Reports section of the HMS web ap
 - Timestamp and unique ID support to prevent conflicts
 
 **File Naming Pattern:**
+
 ```
 {ReportName}_{BranchName}_{Date}_{Time}.{Extension}
 ```
 
 **Examples:**
+
 - `Expenses_Report_All_Branches_2025-01-27_1430.csv`
 - `Orders_Report_Warehouse_Branch_2025-01-27_1430.xlsx`
 - `Revenue_Report_Main_Branch_2025-01-27_1430.pdf`
@@ -102,16 +110,19 @@ This document outlines the changes made to the Reports section of the HMS web ap
 ### 4. Updated Export Functionality
 
 **Files Modified:**
+
 - `src/pages/reports/expenses/index.js` - Added export toolbar
 - `src/pages/reports/orders/index.js` - Added export toolbar
 
 **Changes Made:**
+
 - Replaced default export with custom export toolbar
 - Added dynamic file naming for all export formats
 - Integrated with existing filter system
 - Added row count display in export button
 
 **Code Added:**
+
 ```javascript
 slots={{
   toolbar: ReportExportToolbar,
@@ -135,6 +146,7 @@ slotProps={{
 **File:** `src/utils/reportExport.js`
 
 **Key Functions:**
+
 - `sanitizeFileName(str)` - Cleans file names for safe use
 - `generateReportFileName(options)` - Creates dynamic file names
 - `convertToCSV(data, columns)` - Converts data to CSV format
@@ -146,6 +158,7 @@ slotProps={{
 **File:** `src/components/ReportExportToolbar.js`
 
 **Features:**
+
 - Dropdown menu with format options (CSV, Excel, PDF)
 - Dynamic file naming based on report context
 - Error handling and user feedback
@@ -155,12 +168,14 @@ slotProps={{
 ### Browser Compatibility
 
 **Tested Browsers:**
+
 - ✅ Chrome (Latest)
 - ✅ Edge (Latest)
 - ✅ Firefox (Latest)
 - ✅ Safari (Latest)
 
 **Download Method:**
+
 - Uses `Blob` API for file creation
 - Creates temporary download links
 - Proper cleanup of object URLs
@@ -171,9 +186,10 @@ slotProps={{
 ### For Developers
 
 1. **Adding Export to New Reports:**
+
    ```javascript
    import ReportExportToolbar from '@/components/ReportExportToolbar'
-   
+
    // In your DataGrid component
    slots={{
      toolbar: ReportExportToolbar,
@@ -191,9 +207,10 @@ slotProps={{
    ```
 
 2. **Customizing File Names:**
+
    ```javascript
    import { generateReportFileName } from '@/utils/reportExport'
-   
+
    const fileName = generateReportFileName({
      reportName: 'Custom_Report',
      reportType: 'custom',
@@ -201,7 +218,7 @@ slotProps={{
      date: new Date(),
      branchName: 'Main_Branch',
      includeTimestamp: true,
-     includeUniqueId: false
+     includeUniqueId: false,
    })
    ```
 
@@ -224,17 +241,19 @@ slotProps={{
 **File:** `src/components/ExportTestComponent.js`
 
 **Features:**
+
 - Test export functionality with sample data
 - Verify file name generation
 - Test all export formats
 - Console logging for debugging
 
 **Usage:**
+
 ```javascript
 import ExportTestComponent from '@/components/ExportTestComponent'
 
 // Add to any page for testing
-<ExportTestComponent />
+;<ExportTestComponent />
 ```
 
 ### Manual Testing Steps
@@ -315,6 +334,7 @@ Potential improvements for future versions:
 ### Debug Mode
 
 Enable console logging:
+
 ```javascript
 // In browser console
 localStorage.setItem('debug', 'export')

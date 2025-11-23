@@ -1,11 +1,6 @@
 import React, { useState } from 'react'
 import { GridToolbarContainer } from '@mui/x-data-grid'
-import {
-  Button,
-  Menu,
-  MenuItem,
-  Box,
-} from '@mui/material'
+import { Button, Menu, MenuItem, Box } from '@mui/material'
 import { Download } from '@mui/icons-material'
 import { exportReport } from '@/utils/reportExport'
 
@@ -37,18 +32,18 @@ const ReportExportToolbar = ({
         reportName,
         reportType,
         branchName,
-        filters
+        filters,
       }
 
       // Export the data
       exportReport(data, columns, format, exportOptions)
-      
+
       console.log(`Exporting ${format} with ${data.length} rows`)
     } catch (error) {
       console.error('Export failed:', error)
       alert('Export failed. Please try again.')
     }
-    
+
     handleExportClose()
   }
 
@@ -63,7 +58,7 @@ const ReportExportToolbar = ({
       >
         Export ({data.length} rows)
       </Button>
-      
+
       <Menu
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}

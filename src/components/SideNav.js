@@ -28,8 +28,9 @@ import {
   TbCheckupList,
   TbFileAnalytics,
 } from 'react-icons/tb'
+import { LuCalendarDays } from 'react-icons/lu'
 import { FiUser, FiUsers } from 'react-icons/fi'
-import { LuLayoutDashboard } from 'react-icons/lu'
+import { LuLayoutDashboard, LuBedDouble } from 'react-icons/lu'
 
 import Image from 'next/image'
 import originslogo from '../../public/origins-new-logo.png'
@@ -46,7 +47,7 @@ function NavItem({
 }) {
   const router = useRouter()
   const buttonRef = useRef('')
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
 
   const [anchorEl, setAnchorEl] = useState(null)
   function handleClick() {
@@ -190,7 +191,7 @@ function LogoutNavButton({
   }
 
   const { mutate } = useMutation({
-    mutationFn: token => logout(token),
+    mutationFn: (token) => logout(token),
     onSuccess: () => {
       //remove userdetails in store
       localStorage.clear()
@@ -198,7 +199,7 @@ function LogoutNavButton({
       toast.success('Logged-out successfully', toastconfig)
       router.push('/login')
     },
-    onError: error => {
+    onError: (error) => {
       console.log(error)
       toast.error('Failed to logout', toastconfig)
     },
@@ -271,7 +272,7 @@ const SubNavItem = ({ eachSubRouteObj, i }) => {
   )
 }
 function SideNav(props) {
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const [expanded, setExpanded] = useState(false)
   const [clickedNavItem, setClickedNavItem] = useState('')
   const router = useRouter()
@@ -367,6 +368,11 @@ function SideNav(props) {
             relatedModule: 'grnStockExpiryDate',
             name: 'Stock Expiry',
           },
+          {
+            path: '/pharmacy/pendingsales',
+            relatedModule: 'pharmacy',
+            name: 'Pending Sales',
+          },
         ],
       },
 
@@ -438,6 +444,13 @@ function SideNav(props) {
         ],
       },
       {
+        path: '/layouts',
+        name: 'Layouts',
+        relatedModule: 'layouts',
+        Iconn: LuBedDouble,
+        subRoutes: [],
+      },
+      {
         path: '/indent',
         name: 'IP Indent',
         relatedModule: 'indent',
@@ -476,6 +489,13 @@ function SideNav(props) {
         name: 'Reports',
         relatedModule: 'reportsModule',
         Iconn: TbFileAnalytics,
+        subRoutes: [],
+      },
+      {
+        path: '/dailyreport',
+        name: 'Daily Report',
+        relatedModule: 'reportsModule',
+        Iconn: LuCalendarDays,
         subRoutes: [],
       },
       // {

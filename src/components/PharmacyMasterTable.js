@@ -37,7 +37,7 @@ function PharmacyMasterTable({
   //     taxPercent: 0
   // });
   const dispatch = useDispatch()
-  const dropdowns = useSelector(store => store.dropdowns)
+  const dropdowns = useSelector((store) => store.dropdowns)
 
   // // Avoid a layout jump when reaching the last page with empty rows.
   // const emptyRows =
@@ -55,24 +55,27 @@ function PharmacyMasterTable({
 
   // Custom filters configuration
   const customFilters =
-    fields?.map(field => ({
+    fields?.map((field) => ({
       field: field.field,
       label: field.headerName,
       type:
         field.type === 'boolean'
           ? 'select'
           : field.type === 'email'
-          ? 'text'
-          : field.type,
+            ? 'text'
+            : field.type,
       options:
         field.type === 'boolean'
-          ? [{ value: '1', label: 'Yes' }, { value: '0', label: 'No' }]
+          ? [
+              { value: '1', label: 'Yes' },
+              { value: '0', label: 'No' },
+            ]
           : undefined,
     })) || []
 
   // Filter logic function
   const filterData = (data, filters) => {
-    return data.filter(row => {
+    return data.filter((row) => {
       return Object.entries(filters).every(([field, filterConfig]) => {
         if (!filterConfig || !filterConfig.value) return true
 
@@ -112,17 +115,17 @@ function PharmacyMasterTable({
   }
 
   // Get unique values for select filters
-  const getUniqueValues = field => {
+  const getUniqueValues = (field) => {
     const uniqueValues = [
-      ...new Set(rows?.map(row => row[field])?.filter(Boolean)),
+      ...new Set(rows?.map((row) => row[field])?.filter(Boolean)),
     ]
-    return uniqueValues.map(value => ({
+    return uniqueValues.map((value) => ({
       value: value.toString(),
       label: value.toString(),
     }))
   }
 
-  const handleEditChange = event => {
+  const handleEditChange = (event) => {
     console.log('handleEditChange', event.target, selectedRow)
     // if (event.target.name === 'incidentDate') {
     //   setSelectedRow(prevSelectedRow => ({
@@ -130,7 +133,7 @@ function PharmacyMasterTable({
     //     [event.target.name]: dayjs(event.target.value),
     //   }))
     // } else {
-    setSelectedRow(prevSelectedRow => ({
+    setSelectedRow((prevSelectedRow) => ({
       ...prevSelectedRow,
       [event.target.name]: event.target.value,
     }))
@@ -143,12 +146,12 @@ function PharmacyMasterTable({
     let selectedClone = { ...selectedRow }
     if (selectedClone?.personsList) {
       selectedClone.personId = selectedClone.personsList
-        .map(each => each.value)
+        .map((each) => each.value)
         .join(',')
     }
     console.log('selectedClone', selectedClone)
     // Add each field from createFields to the payload
-    createFields.forEach(field => {
+    createFields.forEach((field) => {
       payload[field.name || field.id] = selectedClone?.[field.name || field.id]
     })
 
@@ -226,14 +229,14 @@ function PharmacyMasterTable({
         console.log('options', selectedRow?.[eachField.id])
         const selectedValue =
           options?.find(
-            option => option.value === selectedRow?.[eachField.id],
+            (option) => option.value === selectedRow?.[eachField.id],
           ) || null
         console.log('selectedValue', selectedValue)
         return (
           <Autocomplete
             value={selectedValue}
             options={options}
-            getOptionLabel={option => option.label || ''}
+            getOptionLabel={(option) => option.label || ''}
             onChange={(event, newValue) => {
               handleEditChange({
                 target: {
@@ -242,7 +245,7 @@ function PharmacyMasterTable({
                 },
               })
             }}
-            renderInput={params => (
+            renderInput={(params) => (
               <TextField
                 {...params}
                 label={eachField.label}
@@ -309,11 +312,11 @@ function PharmacyMasterTable({
         options = getDynamicOptions(eachField)
         console.log('eachField', eachField, selectedRow, options)
         let selectedIds = selectedRow?.[eachField?.id]?.map(
-          each => each.id || each.value,
+          (each) => each.id || each.value,
         )
         console.log('selectedIds', selectedIds)
         const selectedValues =
-          options?.filter(option => selectedIds?.includes(option.value)) || []
+          options?.filter((option) => selectedIds?.includes(option.value)) || []
         console.log('selectedValues', selectedValues)
         return (
           <FormControl>
@@ -321,7 +324,7 @@ function PharmacyMasterTable({
             <Autocomplete
               multiple
               value={selectedValues}
-              getOptionLabel={option => {
+              getOptionLabel={(option) => {
                 // console.log('option', option, selectedValues)
                 return option.label || ''
               }}
@@ -333,7 +336,7 @@ function PharmacyMasterTable({
               options={options}
               labelId={eachField.id}
               label={eachField.label}
-              renderInput={params => (
+              renderInput={(params) => (
                 <TextField
                   {...params}
                   label={eachField.label}
@@ -355,7 +358,7 @@ function PharmacyMasterTable({
   }
 
   return (
-    <div className="h-full max-w-[calc(100vw-550px)] ">
+    <div className="h-full max-w-[calc(100vw-550px)] overflow-y-auto ">
       <FilteredDataGrid
         columns={
           fields && [
@@ -364,14 +367,14 @@ function PharmacyMasterTable({
               field: 'actionField',
               headerName: 'Action',
               width: 100,
-              renderCell: params => {
+              renderCell: (params) => {
                 return (
                   <Button
                     variant="outlined"
                     color="primary"
                     size="small"
                     startIcon={<EditNote />}
-                    onClick={e => handleRowEdit(e, params.row)}
+                    onClick={(e) => handleRowEdit(e, params.row)}
                   >
                     Edit
                   </Button>
@@ -384,10 +387,10 @@ function PharmacyMasterTable({
         customFilters={customFilters}
         filterData={filterData}
         getUniqueValues={getUniqueValues}
-        getRowId={row => row.id}
-        pageSizeOptions={[5, 7, 10, 25]}
+        getRowId={(row) => row.id}
+        pageSizeOptions={[5, 7, 10, 25, 50, 100]}
         initialState={{
-          pagination: { paginationModel: { page: 1, pageSize: 7 } },
+          pagination: { paginationModel: { page: 1, pageSize: 100 } },
           filter: {
             filterModel: {
               items: [],
@@ -395,7 +398,6 @@ function PharmacyMasterTable({
             },
           },
         }}
-        autoHeight
         sx={{
           '& .MuiDataGrid-main': { height: '60vh' },
           '& .MuiDataGrid-virtualScroller': {
@@ -426,10 +428,12 @@ function PharmacyMasterTable({
           </IconButton>
         </div>
         <div className="flex flex-col gap-5 p-3">
-          {// selectedRow
-          createFields?.map((eachField, index) => {
-            return getEachFieldBasedOnType(eachField, index)
-          })}
+          {
+            // selectedRow
+            createFields?.map((eachField, index) => {
+              return getEachFieldBasedOnType(eachField, index)
+            })
+          }
           <Button className="" onClick={handleEditSave}>
             Save{' '}
           </Button>

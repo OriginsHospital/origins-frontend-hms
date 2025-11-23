@@ -10,33 +10,33 @@
  */
 export const getBranchName = (row, branches = []) => {
   if (!row) return 'N/A'
-  
+
   // Try different possible branch field structures
   if (row.branch?.name) {
     return row.branch.name
   }
-  
+
   if (row.branch?.branchName) {
     return row.branch.branchName
   }
-  
+
   if (row.branchName) {
     return row.branchName
   }
-  
+
   if (typeof row.branch === 'string') {
     return row.branch
   }
-  
+
   if (row.branchId) {
     // Try to find branch name from dropdowns
-    const branch = branches.find(b => b.id === row.branchId)
+    const branch = branches.find((b) => b.id === row.branchId)
     if (branch?.name) {
       return branch.name
     }
     return `Branch ID: ${row.branchId}`
   }
-  
+
   // If no branch data found, return N/A
   return 'N/A'
 }
@@ -49,7 +49,7 @@ export const getBranchName = (row, branches = []) => {
  */
 export const getBranchNameWithDebug = (row, branches = []) => {
   const branchName = getBranchName(row, branches)
-  
+
   return {
     branchName,
     debug: {
@@ -58,8 +58,8 @@ export const getBranchNameWithDebug = (row, branches = []) => {
       hasBranchName: !!row.branchName,
       branchType: typeof row.branch,
       availableBranches: branches.length,
-      rowKeys: Object.keys(row || {})
-    }
+      rowKeys: Object.keys(row || {}),
+    },
   }
 }
 
@@ -70,14 +70,14 @@ export const getBranchNameWithDebug = (row, branches = []) => {
  * @returns {Array} - Array with mapped branch names
  */
 export const mapBranchData = (rows, branches = []) => {
-  return rows.map(row => ({
+  return rows.map((row) => ({
     ...row,
-    branchName: getBranchName(row, branches)
+    branchName: getBranchName(row, branches),
   }))
 }
 
 export default {
   getBranchName,
   getBranchNameWithDebug,
-  mapBranchData
+  mapBranchData,
 }

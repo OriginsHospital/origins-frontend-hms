@@ -3,10 +3,10 @@ import { DataGrid } from '@mui/x-data-grid'
 import { useRouter } from 'next/router'
 import { useSelector } from 'react-redux'
 import FilteredDataGrid from './FilteredDataGrid'
-import { 
-  generateReportFileName, 
-  detectReportContext, 
-  generateEnhancedReportFileName 
+import {
+  generateReportFileName,
+  detectReportContext,
+  generateEnhancedReportFileName,
 } from '@/utils/fileNamingUtils'
 
 /**
@@ -25,10 +25,10 @@ const ReportWithDynamicExport = ({
   ...props
 }) => {
   const router = useRouter()
-  const dropdowns = useSelector(store => store.dropdowns)
+  const dropdowns = useSelector((store) => store.dropdowns)
   const [exportOptions, setExportOptions] = useState({
     includeTimestamp: true,
-    includeUniqueId: false
+    includeUniqueId: false,
   })
 
   // Generate dynamic file name based on context
@@ -36,12 +36,13 @@ const ReportWithDynamicExport = ({
     // Detect report context from router path
     const reportContext = detectReportContext(router.pathname, {
       branchId: branchName,
-      branchName: branchName
+      branchName: branchName,
     })
 
     // Get branch name from dropdowns if not provided
-    const currentBranchName = branchName || 
-      (dropdowns?.branches?.find(branch => branch.id === branchName)?.name) ||
+    const currentBranchName =
+      branchName ||
+      dropdowns?.branches?.find((branch) => branch.id === branchName)?.name ||
       'All_Branches'
 
     // Use enhanced file naming with filters
@@ -53,7 +54,7 @@ const ReportWithDynamicExport = ({
       branchName: currentBranchName,
       filters: { ...filters },
       includeTimestamp: exportOptions.includeTimestamp,
-      includeUniqueId: exportOptions.includeUniqueId
+      includeUniqueId: exportOptions.includeUniqueId,
     })
   }
 
@@ -61,7 +62,7 @@ const ReportWithDynamicExport = ({
   const handleExport = (format) => {
     const fileName = generateDynamicFileName(format)
     console.log(`Exporting ${format} with filename: ${fileName}`)
-    
+
     // Here you would implement the actual export logic
     // This is just an example of how to use the dynamic naming
   }
@@ -86,11 +87,11 @@ const ReportWithDynamicExport = ({
         filters: {
           dateRange: {
             start: '2025-01-01',
-            end: '2025-01-31'
-          }
+            end: '2025-01-31',
+          },
         },
         includeTimestamp: true,
-        includeUniqueId: false
+        includeUniqueId: false,
       })
       console.log('Date range export filename:', fileName)
       // Example: "Monthly_Revenue_Report_Main_Branch_2025-01-01_to_2025-01-31_1430.xlsx"
@@ -106,11 +107,11 @@ const ReportWithDynamicExport = ({
         branchName: 'All_Branches',
         filters: {},
         includeTimestamp: true,
-        includeUniqueId: true
+        includeUniqueId: true,
       })
       console.log('Unique export filename:', fileName)
       // Example: "Daily_Sales_Report_All_Branches_2025-01-27_1430_A1B2C3.pdf"
-    }
+    },
   }
 
   return (
@@ -127,13 +128,11 @@ const ReportWithDynamicExport = ({
         filters={filters}
         {...props}
       />
-      
+
       {/* Example usage buttons */}
       <div style={{ marginTop: '20px', padding: '10px' }}>
         <h4>Dynamic File Naming Examples:</h4>
-        <button onClick={examples.basicExport}>
-          Test Basic Export Naming
-        </button>
+        <button onClick={examples.basicExport}>Test Basic Export Naming</button>
         <button onClick={examples.dateRangeExport}>
           Test Date Range Export Naming
         </button>

@@ -13,22 +13,22 @@ const ExportTestComponent = () => {
       name: 'Test Item 1',
       amount: 100,
       date: '2025-01-27',
-      category: 'Office Supplies'
+      category: 'Office Supplies',
     },
     {
       id: 2,
       name: 'Test Item 2',
       amount: 250,
       date: '2025-01-27',
-      category: 'Equipment'
+      category: 'Equipment',
     },
     {
       id: 3,
       name: 'Test Item 3',
       amount: 75,
       date: '2025-01-27',
-      category: 'Utilities'
-    }
+      category: 'Utilities',
+    },
   ])
 
   const testColumns = [
@@ -36,7 +36,7 @@ const ExportTestComponent = () => {
     { field: 'name', headerName: 'Name', width: 150 },
     { field: 'amount', headerName: 'Amount', width: 100 },
     { field: 'date', headerName: 'Date', width: 120 },
-    { field: 'category', headerName: 'Category', width: 150 }
+    { field: 'category', headerName: 'Category', width: 150 },
   ]
 
   const handleTestExport = (format) => {
@@ -44,7 +44,7 @@ const ExportTestComponent = () => {
       reportName: 'Test_Report',
       reportType: 'test',
       branchName: 'Test_Branch',
-      filters: {}
+      filters: {},
     }
 
     try {
@@ -62,20 +62,20 @@ const ExportTestComponent = () => {
         reportName: 'Expense_Report',
         reportType: 'expenses',
         branchName: 'Main_Branch',
-        format: 'csv'
+        format: 'csv',
       },
       {
         reportName: 'Orders_Report',
         reportType: 'orders',
         branchName: 'Warehouse_Branch',
-        format: 'xlsx'
+        format: 'xlsx',
       },
       {
         reportName: 'Revenue_Report',
         reportType: 'revenue',
         branchName: 'All_Branches',
-        format: 'pdf'
-      }
+        format: 'pdf',
+      },
     ]
 
     console.log('=== File Name Generation Test ===')
@@ -84,7 +84,7 @@ const ExportTestComponent = () => {
         ...testCase,
         date: new Date(),
         includeTimestamp: true,
-        includeUniqueId: false
+        includeUniqueId: false,
       })
       console.log(`Test ${index + 1}: ${fileName}`)
     })
@@ -95,7 +95,7 @@ const ExportTestComponent = () => {
       <Typography variant="h6" gutterBottom>
         Export Functionality Test
       </Typography>
-      
+
       <Box sx={{ mb: 2 }}>
         <Typography variant="body2" color="text.secondary">
           Test data: {testData.length} rows
@@ -127,10 +127,7 @@ const ExportTestComponent = () => {
       </Box>
 
       <Box sx={{ display: 'flex', gap: 2 }}>
-        <Button
-          variant="outlined"
-          onClick={testFileNameGeneration}
-        >
+        <Button variant="outlined" onClick={testFileNameGeneration}>
           Test File Name Generation
         </Button>
       </Box>

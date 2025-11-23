@@ -13,7 +13,7 @@ import { useSelector } from 'react-redux'
 import { toast } from 'react-toastify'
 
 function ConsentsCheck({ consentType, patientInfo, reviewConsents }) {
-  const userDetails = useSelector(state => state.user)
+  const userDetails = useSelector((state) => state.user)
   // const [signedConsents, setSignedConsents] = useState([])
   const [checkedConsents, setCheckedConsents] = useState({})
   const { data: consentsData } = useQuery({
@@ -54,10 +54,10 @@ function ConsentsCheck({ consentType, patientInfo, reviewConsents }) {
     }
   }, [consentsData])
 
-  const convertToNormalCase = str => {
+  const convertToNormalCase = (str) => {
     let words = str.split('_')
     let capitalizedWords = words.map(
-      word => word.charAt(0).toUpperCase() + word.slice(1),
+      (word) => word.charAt(0).toUpperCase() + word.slice(1),
     )
     return capitalizedWords
       .join(' ')
@@ -66,8 +66,15 @@ function ConsentsCheck({ consentType, patientInfo, reviewConsents }) {
       .trim()
   }
 
+  const { isConsentOptional } = require('../constants/optionalConsents')
+
   const areAllConsentsChecked = () => {
-    return Object.values(checkedConsents).every(value => value === true)
+    // If this is an optional consent type and no consents are uploaded, return true
+    if (isConsentOptional(consentType) && consentsData?.data?.length === 0) {
+      return true
+    }
+    // Otherwise check if all uploaded consents are checked
+    return Object.values(checkedConsents).every((value) => value === true)
   }
 
   const handleReviewConsents = () => {
@@ -75,32 +82,35 @@ function ConsentsCheck({ consentType, patientInfo, reviewConsents }) {
       'treatment type',
       patientInfo?.treatmentDetails?.treatmentTypeId,
     )
-    if (
-      areAllConsentsChecked() &&
-      confirm('Are you sure you want to review consents?')
-    ) {
+    if (confirm('Are you sure you want to review consents?')) {
       reviewConsents.mutate(patientInfo?.activeVisitId)
-    } else {
+    } else if (!isConsentOptional(consentType)) {
       toast.error('Please review all consents')
     }
   }
 
   return (
     <div className="flex flex-col gap-3 w-fit">
-      <span className="text-lg font-semibold">Review Consent Forms</span>
+      <span className="text-lg font-semibold">
+        Review Consent Forms {isConsentOptional(consentType) && '(Optional)'}
+      </span>
       {consentsData?.data?.length == 0 && (
-        <span className="text-sm text-secondary">No consents found</span>
+        <span className="text-sm text-secondary">
+          {isConsentOptional(consentType)
+            ? 'No consents uploaded (optional)'
+            : 'No consents found'}
+        </span>
       )}
       {consentsData?.data?.length > 0 &&
-        consentsData?.data?.map(consent => (
+        consentsData?.data?.map((consent) => (
           <div
             key={consent?.id}
             className="flex items-center justify-start gap-3 p-2 border rounded-md"
           >
             <Checkbox
               checked={checkedConsents[consent.id] || false}
-              onChange={e => {
-                setCheckedConsents(prev => ({
+              onChange={(e) => {
+                setCheckedConsents((prev) => ({
                   ...prev,
                   [consent.id]: e.target.checked,
                 }))

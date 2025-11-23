@@ -41,7 +41,7 @@ function MedicationSheet({
   // Add state for custom intake
   const [customIntake, setCustomIntake] = useState('')
 
-  const getQuantityFromIntake = intake => {
+  const getQuantityFromIntake = (intake) => {
     switch (intake) {
       case 'OD':
         return 1
@@ -81,23 +81,24 @@ function MedicationSheet({
     const quantity =
       medicationIntake === 'Other' ? customIntake : medicationIntake
     const selectedMedicationName = medicationOptions?.find(
-      med => med.itemName === selectedMedication,
+      (med) => med.itemName === selectedMedication,
     )?.itemName
 
     // Add new medication row if it doesn't exist
-    setMedicationFormData(prevData => {
-      const medicationExists = prevData.rows.some(
-        row => row.label === selectedMedicationName,
+    setMedicationFormData((prevData) => {
+      const safeRows = Array.isArray(prevData?.rows) ? prevData.rows : []
+      const medicationExists = safeRows.some(
+        (row) => row.label === selectedMedicationName,
       )
 
       const newRows = medicationExists
-        ? prevData.rows
+        ? safeRows
         : [
-            ...prevData.rows,
+            ...safeRows,
             { label: selectedMedicationName, value: selectedMedicationName },
           ]
 
-      const newData = { ...prevData, rows: newRows }
+      const newData = { ...(prevData || {}), rows: newRows }
 
       // Fill in quantities for the specified days
       for (let i = 0; i < parseInt(medicationDays); i++) {
@@ -123,16 +124,19 @@ function MedicationSheet({
   ])
 
   const handleAddMedication = () => {
-    setMedicationFormData(prevData => ({
-      ...prevData,
-      rows: [...prevData.rows, { label: '' }],
-    }))
+    setMedicationFormData((prevData) => {
+      const safeRows = Array.isArray(prevData?.rows) ? prevData.rows : []
+      return {
+        ...(prevData || {}),
+        rows: [...safeRows, { label: '' }],
+      }
+    })
   }
   const [medications, setMedications] = useState([])
   useEffect(() => {
     console.log(medicationOptions)
     if (medicationOptions) {
-      setMedications(medicationOptions.map(item => item.itemName))
+      setMedications(medicationOptions.map((item) => item.itemName))
     }
   }, [medicationOptions])
 
@@ -143,26 +147,32 @@ function MedicationSheet({
     console.log(day, medication, value, medicationFormData)
     if (value.length > 5) return
 
-    setMedicationFormData(prevData => ({
+    setMedicationFormData((prevData) => ({
       ...prevData,
       [`${day}-${medication}`]: value,
     }))
   }
 
   const handleMedicationChange = (index, newValue) => {
-    setMedicationFormData(prevData => ({
-      ...prevData,
-      rows: prevData.rows.map((row, i) =>
-        i === index ? { ...row, label: newValue, value: newValue } : row,
-      ),
-    }))
+    setMedicationFormData((prevData) => {
+      const safeRows = Array.isArray(prevData?.rows) ? prevData.rows : []
+      return {
+        ...(prevData || {}),
+        rows: safeRows.map((row, i) =>
+          i === index ? { ...row, label: newValue, value: newValue } : row,
+        ),
+      }
+    })
   }
 
-  const handleDeleteMedication = index => {
-    setMedicationFormData(prevData => ({
-      ...prevData,
-      rows: prevData.rows.filter((_, i) => i !== index),
-    }))
+  const handleDeleteMedication = (index) => {
+    setMedicationFormData((prevData) => {
+      const safeRows = Array.isArray(prevData?.rows) ? prevData.rows : []
+      return {
+        ...(prevData || {}),
+        rows: safeRows.filter((_, i) => i !== index),
+      }
+    })
   }
 
   return (
@@ -176,7 +186,7 @@ function MedicationSheet({
             setSelectedMedication(v)
             console.log(v)
           }}
-          renderInput={params => (
+          renderInput={(params) => (
             <TextField
               {...params}
               variant="outlined"
@@ -213,7 +223,7 @@ function MedicationSheet({
           type="number"
           label="Days"
           value={medicationDays}
-          onChange={e => setMedicationDays(e.target.value)}
+          onChange={(e) => setMedicationDays(e.target.value)}
         />
 
         <div className="flex gap-2 items-center">
@@ -223,7 +233,7 @@ function MedicationSheet({
             options={intakeOptions}
             value={medicationIntake}
             onChange={(e, v) => setMedicationIntake(v)}
-            renderInput={params => (
+            renderInput={(params) => (
               <TextField {...params} size="small" label="Intake" />
             )}
           />
@@ -233,7 +243,7 @@ function MedicationSheet({
               size="small"
               label="Custom Intake"
               value={customIntake}
-              onChange={e => setCustomIntake(e.target.value)}
+              onChange={(e) => setCustomIntake(e.target.value)}
             />
           )}
         </div>
@@ -290,7 +300,7 @@ function MedicationSheet({
                   onChange={(event, newValue) =>
                     handleMedicationChange(index, newValue)
                   }
-                  renderInput={params => (
+                  renderInput={(params) => (
                     <TextField {...params} variant="outlined" size="small" />
                   )}
                   className="w-32 h-8 text-center "
@@ -313,7 +323,7 @@ function MedicationSheet({
                     value={
                       medicationFormData[`${day}-${medication.value}`] || ''
                     }
-                    onChange={e =>
+                    onChange={(e) =>
                       handleInputChange(day, medication.value, e.target.value)
                     }
                     className="w-20 h-8 text-center border m-2"

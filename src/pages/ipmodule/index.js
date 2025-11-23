@@ -56,12 +56,12 @@ import FilteredDataGrid from '@/components/FilteredDataGrid'
 const steps = ['Patient Details', 'Building', 'Floor', 'Room', 'Bed']
 
 function IPModule() {
-  const dropdowns = useSelector(store => store.dropdowns)
+  const dropdowns = useSelector((store) => store.dropdowns)
   const { branches, otProcedureList } = dropdowns
   const dispatch = useDispatch()
   const router = useRouter()
   const queryClient = useQueryClient()
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
 
   const [activeStep, setActiveStep] = useState(0)
   const [activeTab, setActiveTab] = useState(0)
@@ -79,7 +79,7 @@ function IPModule() {
   const [searchQuery, setSearchQuery] = useState('')
   const [errors, setErrors] = useState({})
 
-  const validateStep = step => {
+  const validateStep = (step) => {
     const newErrors = {}
     switch (step) {
       case 0:
@@ -132,7 +132,7 @@ function IPModule() {
   }
 
   const searchPatients = useCallback(
-    debounce(async searchValue => {
+    debounce(async (searchValue) => {
       if (!searchValue) {
         setPatients([])
         setIsSearching(false)
@@ -188,12 +188,12 @@ function IPModule() {
   useEffect(() => {
     if (selectedBranch && activeStep === 1) {
       getBuildings(user.accessToken, selectedBranch)
-        .then(response => {
+        .then((response) => {
           if (response.status === 200) {
             setBuildings(response.data)
           }
         })
-        .catch(error => {
+        .catch((error) => {
           console.error('Error fetching buildings:', error)
         })
     }
@@ -231,10 +231,10 @@ function IPModule() {
   }
 
   const handleNext = () => {
-    setActiveStep(prevStep => prevStep + 1)
+    setActiveStep((prevStep) => prevStep + 1)
   }
 
-  const handleStepClick = step => {
+  const handleStepClick = (step) => {
     if (step < activeStep) {
       // Clean up states after the selected step
       if (step < 4) setSelectedBed('')
@@ -262,7 +262,7 @@ function IPModule() {
     handleStepClick(activeStep - 1)
   }
 
-  const handleBuildingChange = async event => {
+  const handleBuildingChange = async (event) => {
     const buildingId = event.target.value
     setSelectedBuilding(buildingId)
     try {
@@ -276,7 +276,7 @@ function IPModule() {
     }
   }
 
-  const handleFloorChange = async event => {
+  const handleFloorChange = async (event) => {
     const floorId = event.target.value
     setSelectedFloor(floorId)
     try {
@@ -290,7 +290,7 @@ function IPModule() {
     }
   }
 
-  const handleRoomChange = async event => {
+  const handleRoomChange = async (event) => {
     const roomId = event.target.value
     setSelectedRoom(roomId)
     try {
@@ -304,17 +304,17 @@ function IPModule() {
     }
   }
 
-  const handleBedChange = event => {
+  const handleBedChange = (event) => {
     setSelectedBed(event.target.value)
   }
   const createIPMutation = useMutation({
-    mutationFn: payload => createIPRegistration(user.accessToken, payload),
+    mutationFn: (payload) => createIPRegistration(user.accessToken, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['activeIP', selectedBranch] })
       queryClient.invalidateQueries({ queryKey: ['closedIP', selectedBranch] })
       handleClose()
     },
-    onError: error => {
+    onError: (error) => {
       console.error('Error creating IP registration:', error)
     },
   })
@@ -328,7 +328,7 @@ function IPModule() {
     }
   }
 
-  const handleBranchChange = e => {
+  const handleBranchChange = (e) => {
     setSelectedBranch(e.target.value)
     router.push(`/ipmodule?branch=${e.target.value}`)
   }
@@ -376,7 +376,7 @@ function IPModule() {
     },
   ]
 
-  const getStepContent = step => {
+  const getStepContent = (step) => {
     const renderNextButton = (disabled = false) => (
       <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
         <Button
@@ -398,20 +398,20 @@ function IPModule() {
                 <Autocomplete
                   fullWidth
                   options={patients || []}
-                  getOptionLabel={option =>
+                  getOptionLabel={(option) =>
                     `${option.Name} (ID: ${option.patientId})`
                   }
                   onChange={(event, newValue) => {
                     setSelectedPatient(newValue?.id || null)
                     setErrors({ ...errors, patient: null })
                   }}
-                  renderInput={params => (
+                  renderInput={(params) => (
                     <TextField
                       {...params}
                       label="Search Patient"
                       error={!!errors.patient}
                       helperText={errors.patient}
-                      onChange={e => {
+                      onChange={(e) => {
                         setSearchQuery(e.target.value)
                         if (e.target.value.trim()) {
                           setIsSearching(true)
@@ -448,14 +448,14 @@ function IPModule() {
                   <InputLabel>Procedure</InputLabel>
                   <Select
                     value={selectedProcedure}
-                    onChange={e => {
+                    onChange={(e) => {
                       setSelectedProcedure(e.target.value)
                       setErrors({ ...errors, procedure: null })
                     }}
                     label="Procedure"
                     required
                   >
-                    {otProcedureList?.map(procedure => (
+                    {otProcedureList?.map((procedure) => (
                       <MenuItem key={procedure.id} value={procedure.id}>
                         {procedure.name}
                       </MenuItem>
@@ -471,11 +471,11 @@ function IPModule() {
                   label="Date of Admission"
                   value={dateOfAdmission}
                   format="DD/MM/YYYY"
-                  onChange={newValue => {
+                  onChange={(newValue) => {
                     setDateOfAdmission(newValue)
                     setErrors({ ...errors, dateOfAdmission: null })
                   }}
-                  renderInput={params => (
+                  renderInput={(params) => (
                     <TextField
                       {...params}
                       fullWidth
@@ -491,11 +491,11 @@ function IPModule() {
                   label="Time of Admission"
                   value={timeOfAdmission}
                   ampm={false}
-                  onChange={newValue => {
+                  onChange={(newValue) => {
                     setTimeOfAdmission(newValue)
                     setErrors({ ...errors, timeOfAdmission: null })
                   }}
-                  renderInput={params => (
+                  renderInput={(params) => (
                     <TextField
                       {...params}
                       fullWidth
@@ -511,8 +511,8 @@ function IPModule() {
                   label="Date of Discharge"
                   value={dateOfDischarge}
                   format="DD/MM/YYYY"
-                  onChange={newValue => setDateOfDischarge(newValue)}
-                  renderInput={params => <TextField {...params} fullWidth />}
+                  onChange={(newValue) => setDateOfDischarge(newValue)}
+                  renderInput={(params) => <TextField {...params} fullWidth />}
                 />
               </Grid>
               <Grid item xs={12} md={6}>
@@ -521,7 +521,7 @@ function IPModule() {
                   label="Package Amount"
                   type="number"
                   value={packageAmount}
-                  onChange={e => setPackageAmount(e.target.value)}
+                  onChange={(e) => setPackageAmount(e.target.value)}
                   InputProps={{
                     startAdornment: <span>₹</span>,
                   }}
@@ -535,7 +535,7 @@ function IPModule() {
         return (
           <>
             <Grid container spacing={2} justifyContent="center">
-              {buildings.map(building => (
+              {buildings.map((building) => (
                 <Grid item key={building.id}>
                   <SelectionTile
                     icon={<BuildingIcon sx={{ fontSize: 40 }} />}
@@ -561,7 +561,7 @@ function IPModule() {
         return (
           <>
             <Grid container spacing={2} justifyContent="center">
-              {floors.map(floor => (
+              {floors.map((floor) => (
                 <Grid item key={floor.id}>
                   <SelectionTile
                     icon={<FloorIcon sx={{ fontSize: 40 }} />}
@@ -587,7 +587,7 @@ function IPModule() {
         return (
           <>
             <Grid container spacing={2} justifyContent="center">
-              {rooms.map(room => (
+              {rooms.map((room) => (
                 <Grid item key={room.id}>
                   <SelectionTile
                     icon={<RoomIcon sx={{ fontSize: 40 }} />}
@@ -613,7 +613,7 @@ function IPModule() {
         return (
           <>
             <Grid container spacing={2} justifyContent="center">
-              {beds.map(bed => (
+              {beds.map((bed) => (
                 <Grid item key={bed.id}>
                   <SelectionTile
                     icon={<BedIcon sx={{ fontSize: 40 }} />}
@@ -678,6 +678,13 @@ function IPModule() {
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-semibold">IP Module</h1>
         <div className="flex items-center gap-4">
+          <Button
+            variant="contained"
+            color="primary"
+            onClick={() => router.push('/ipmodule/layouts')}
+          >
+            Layouts
+          </Button>
           <FormControl sx={{ minWidth: 200 }}>
             <InputLabel>Branch</InputLabel>
             <Select
@@ -685,7 +692,7 @@ function IPModule() {
               onChange={handleBranchChange}
               label="Branch"
             >
-              {branches?.map(branch => (
+              {branches?.map((branch) => (
                 <MenuItem key={branch.id} value={branch.id}>
                   {branch.name}
                 </MenuItem>
@@ -714,7 +721,7 @@ function IPModule() {
         <FilteredDataGrid
           rows={activeIPData?.data || []}
           columns={columns}
-          getRowId={row => row.id}
+          getRowId={(row) => row.id}
           className="h-[calc(100vh-250px)]"
         />
       )}
@@ -723,7 +730,7 @@ function IPModule() {
         <FilteredDataGrid
           rows={closedIPData?.data || []}
           columns={columns}
-          getRowId={row => row.id}
+          getRowId={(row) => row.id}
           className="h-[calc(100vh-250px)]"
         />
       )}

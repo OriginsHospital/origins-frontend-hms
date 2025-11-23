@@ -43,9 +43,9 @@ import { patientFilterData } from '@/constants/filters'
 
 // Create a helper function to check permissions
 const usePermissionCheck = (moduleName, requiredPermissions) => {
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const userModule = user.moduleList?.find(
-    eachModuleObj => eachModuleObj.enum === moduleName,
+    (eachModuleObj) => eachModuleObj.enum === moduleName,
   )
   const userPermission = userModule?.accessType
 
@@ -79,7 +79,7 @@ const PermissionedViewButton = withPermission(ViewButton, false, 'patient', [
 ])
 
 function PatientRegistration() {
-  const userDetails = useSelector(store => store.user)
+  const userDetails = useSelector((store) => store.user)
   const dispatch = useDispatch()
   const router = useRouter()
   const [searchValue, setSearchValue] = useState('')
@@ -93,7 +93,7 @@ function PatientRegistration() {
   ])
   const hasWriteAccess = usePermissionCheck('allPatients', [ACCESS_TYPES.WRITE])
 
-  const handleOpenPatientHistory = patientInfo => {
+  const handleOpenPatientHistory = (patientInfo) => {
     setSelectedPatient(patientInfo)
     router.push(
       {
@@ -127,7 +127,7 @@ function PatientRegistration() {
       field: 'Name',
       headerName: 'Name',
       width: 250,
-      renderCell: params => (
+      renderCell: (params) => (
         <div className="flex items-center gap-2">
           <Avatar
             src={params.row.photoPath}
@@ -176,7 +176,7 @@ function PatientRegistration() {
             {row?.referralSource?.referralSource
               ?.split(' ')
               ?.map(
-                word =>
+                (word) =>
                   word?.charAt(0)?.toUpperCase() +
                   word?.slice(1)?.toLowerCase(),
               )
@@ -195,7 +195,7 @@ function PatientRegistration() {
             {row?.referralName
               ?.split(' ')
               ?.map(
-                word =>
+                (word) =>
                   word?.charAt(0)?.toUpperCase() +
                   word?.slice(1)?.toLowerCase(),
               )
@@ -300,7 +300,7 @@ function PatientRegistration() {
       label: 'City',
       type: 'select',
       options: allPatients?.data?.data
-        ? [...new Set(allPatients.data.data.map(row => row.city.name))]
+        ? [...new Set(allPatients.data.data.map((row) => row.city.name))]
         : [],
     },
     {
@@ -308,7 +308,7 @@ function PatientRegistration() {
       label: 'Patient Type',
       type: 'select',
       options: allPatients?.data?.data
-        ? [...new Set(allPatients.data.data.map(row => row.patientType.name))]
+        ? [...new Set(allPatients.data.data.map((row) => row.patientType.name))]
         : [],
     },
     {
@@ -319,7 +319,7 @@ function PatientRegistration() {
         ? [
             ...new Set(
               allPatients?.data?.data.map(
-                row => row.referralSource.referralSource,
+                (row) => row.referralSource.referralSource,
               ),
             ),
           ]
@@ -327,23 +327,25 @@ function PatientRegistration() {
     },
   ]
 
-  const getUniqueValues = field => {
+  const getUniqueValues = (field) => {
     if (!allPatients?.data?.data) return []
 
     if (field === 'city.name') {
-      return [...new Set(allPatients?.data?.data.map(row => row.city.name))]
+      return [...new Set(allPatients?.data?.data.map((row) => row.city.name))]
     }
 
     if (field === 'patientType.name') {
       return [
-        ...new Set(allPatients?.data?.data.map(row => row.patientType.name)),
+        ...new Set(allPatients?.data?.data.map((row) => row.patientType.name)),
       ]
     }
 
     if (field === 'referralSource.referralSource') {
       return [
         ...new Set(
-          allPatients?.data?.data.map(row => row.referralSource.referralSource),
+          allPatients?.data?.data.map(
+            (row) => row.referralSource.referralSource,
+          ),
         ),
       ]
     }
@@ -359,15 +361,23 @@ function PatientRegistration() {
         } */}
         <div className="px-3 py-2 flex items-center justify-center gap-5">
           <TextField
-            placeholder="Search by Name / Aadhaar / Mobile"
+            placeholder="Search by Spouse Name"
             className="w-[350px] md:w-[450px] lg:w-[500px] bg-white"
             type="search"
             value={searchValue}
-            onChange={e => setSearchValue(e.target.value)}
-            onKeyDown={e => {
+            onChange={(e) => {
+              // Only allow alphabets and spaces
+              const value = e.target.value.replace(/[^a-zA-Z\s]/g, '')
+              setSearchValue(value)
+            }}
+            onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 setButtonSearchValue(searchValue)
               }
+            }}
+            inputProps={{
+              pattern: '[a-zA-Z\\s]*',
+              title: 'Only alphabets and spaces are allowed',
             }}
           />
           <Button
@@ -397,7 +407,7 @@ function PatientRegistration() {
                   ? allPatients?.data?.data
                   : []
               }
-              getRowId={row => row.patientId}
+              getRowId={(row) => row.patientId}
               columns={columns}
               className="m-5 p-3 bg-white"
               loading={allPatients.isLoading}

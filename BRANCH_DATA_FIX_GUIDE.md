@@ -1,6 +1,7 @@
 # Branch Data Fix Guide
 
 ## Problem
+
 The Branch column in the Expenses report is showing "N/A" instead of actual branch names from the database.
 
 ## Root Cause Analysis
@@ -14,12 +15,14 @@ The issue occurs because the backend API might not be returning branch data in t
 **File:** `src/pages/reports/expenses/index.js`
 
 **Changes Made:**
+
 - Added comprehensive branch data handling
 - Created utility function for branch mapping
 - Added data transformation in API call
 - Added debug logging to identify data structure
 
 **Code Added:**
+
 ```javascript
 // Enhanced branch column with multiple fallback options
 {
@@ -45,11 +48,13 @@ The issue occurs because the backend API might not be returning branch data in t
 **File:** `src/pages/reports/expenses/index.js`
 
 **Changes Made:**
+
 - Added data transformation to ensure branch data is properly structured
 - Maps branchId to branch name using dropdowns data
 - Creates fallback branch object if not present
 
 **Code Added:**
+
 ```javascript
 const { data: expencesData } = useQuery({
   queryKey: ['expenses'],
@@ -57,13 +62,15 @@ const { data: expencesData } = useQuery({
     const res = await getExpenses(user?.accessToken)
     if (res.status === 200) {
       // Transform data to ensure branch information is properly mapped
-      const transformedData = res.data?.map(expense => ({
+      const transformedData = res.data?.map((expense) => ({
         ...expense,
         // Ensure branch data is properly structured
         branch: expense.branch || {
           id: expense.branchId,
-          name: dropdowns?.branches?.find(b => b.id === expense.branchId)?.name || 'Unknown Branch'
-        }
+          name:
+            dropdowns?.branches?.find((b) => b.id === expense.branchId)?.name ||
+            'Unknown Branch',
+        },
       }))
       return transformedData
     } else {
@@ -78,12 +85,14 @@ const { data: expencesData } = useQuery({
 **File:** `src/utils/branchMapping.js`
 
 **Features:**
+
 - Handles multiple possible branch data structures
 - Maps branchId to branch name using dropdowns
 - Provides debug information
 - Fallback handling for missing data
 
 **Key Functions:**
+
 - `getBranchName(row, branches)` - Gets branch name from various data structures
 - `getBranchNameWithDebug(row, branches)` - Gets branch name with debug info
 - `mapBranchData(rows, branches)` - Maps branch data for multiple rows
@@ -93,6 +102,7 @@ const { data: expencesData } = useQuery({
 **File:** `src/components/BranchDataTest.js`
 
 **Features:**
+
 - Tests branch data mapping
 - Provides console logging for debugging
 - Shows available branches and data structure
@@ -128,18 +138,21 @@ The logs will show you the actual data structure. Look for:
 ### Step 3: Fix Based on Data Structure
 
 #### If branch data is missing entirely:
+
 ```javascript
 // Backend needs to include branch data in API response
 // Or frontend needs to fetch branch data separately
 ```
 
 #### If branchId exists but no branch name:
+
 ```javascript
 // The mapping should work automatically
 // Check if dropdowns.branches has the correct data
 ```
 
 #### If branch data exists but in different format:
+
 ```javascript
 // Update the getBranchName function to handle the specific format
 ```
@@ -153,11 +166,13 @@ If the backend is not returning branch data, update the API to include it:
 ```javascript
 // In the backend controller
 const expenses = await Expense.findAll({
-  include: [{
-    model: Branch,
-    as: 'branch',
-    attributes: ['id', 'name']
-  }]
+  include: [
+    {
+      model: Branch,
+      as: 'branch',
+      attributes: ['id', 'name'],
+    },
+  ],
 })
 ```
 
@@ -169,14 +184,14 @@ If backend can't be changed, fetch branch data separately:
 // Fetch branches and map them to expenses
 const { data: branches } = useQuery({
   queryKey: ['branches'],
-  queryFn: () => getBranches(user?.accessToken)
+  queryFn: () => getBranches(user?.accessToken),
 })
 
 // Map branch data to expenses
 const expensesWithBranches = useMemo(() => {
-  return expencesData?.map(expense => ({
+  return expencesData?.map((expense) => ({
     ...expense,
-    branch: branches?.find(b => b.id === expense.branchId)
+    branch: branches?.find((b) => b.id === expense.branchId),
   }))
 }, [expencesData, branches])
 ```
@@ -208,7 +223,8 @@ const expensesWithBranches = useMemo(() => {
 ### Issue 1: "N/A" still showing
 
 **Cause:** Branch data not available in API response
-**Solution:** 
+**Solution:**
+
 - Check if `dropdowns.branches` has data
 - Verify API response includes branch information
 - Update backend to include branch data
@@ -217,6 +233,7 @@ const expensesWithBranches = useMemo(() => {
 
 **Cause:** BranchId doesn't match between expenses and branches
 **Solution:**
+
 - Check if branchId values are consistent
 - Verify branch data is up to date
 - Check for data type mismatches (string vs number)
@@ -225,6 +242,7 @@ const expensesWithBranches = useMemo(() => {
 
 **Cause:** Too many console logs or inefficient mapping
 **Solution:**
+
 - Remove debug logs in production
 - Optimize branch mapping logic
 - Use memoization for expensive operations

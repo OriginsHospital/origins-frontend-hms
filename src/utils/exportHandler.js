@@ -1,8 +1,8 @@
-import { 
-  generateReportFileName, 
-  detectReportContext, 
+import {
+  generateReportFileName,
+  detectReportContext,
   generateEnhancedReportFileName,
-  downloadFile 
+  downloadFile,
 } from './fileNamingUtils'
 
 /**
@@ -17,7 +17,7 @@ export class ExportHandler {
       filters: {},
       includeTimestamp: true,
       includeUniqueId: false,
-      ...options
+      ...options,
     }
   }
 
@@ -35,7 +35,7 @@ export class ExportHandler {
       branchName: this.options.branchName,
       filters: this.options.filters,
       includeTimestamp: this.options.includeTimestamp,
-      includeUniqueId: this.options.includeUniqueId
+      includeUniqueId: this.options.includeUniqueId,
     })
   }
 
@@ -47,14 +47,14 @@ export class ExportHandler {
    */
   exportCSV(data, columns, format = 'csv') {
     const fileName = this.generateFileName(format)
-    
+
     // Convert data to CSV format
     const csvContent = this.convertToCSV(data, columns)
-    
+
     // Add BOM for proper UTF-8 encoding
     const BOM = '\uFEFF'
     const csvWithBOM = BOM + csvContent
-    
+
     // Create blob and download
     const blob = new Blob([csvWithBOM], { type: 'text/csv;charset=utf-8;' })
     this.downloadBlob(blob, fileName)
@@ -67,12 +67,12 @@ export class ExportHandler {
    */
   exportExcel(data, columns) {
     const fileName = this.generateFileName('xlsx')
-    
+
     // For Excel export, we'll use a simple CSV approach
     // In a real implementation, you'd use a library like xlsx
     const csvContent = this.convertToCSV(data, columns)
-    const blob = new Blob([csvContent], { 
-      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+    const blob = new Blob([csvContent], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     })
     downloadFile(blob, fileName)
   }
@@ -84,7 +84,7 @@ export class ExportHandler {
    */
   exportPDF(data, columns) {
     const fileName = this.generateFileName('pdf')
-    
+
     // For PDF export, we'll create a simple text-based PDF
     // In a real implementation, you'd use a library like jsPDF
     const textContent = this.convertToText(data, columns)
@@ -100,25 +100,30 @@ export class ExportHandler {
    */
   convertToCSV(data, columns) {
     if (!data || data.length === 0) return ''
-    
+
     // Get visible columns
-    const visibleColumns = columns.filter(col => col.field && col.headerName)
-    
+    const visibleColumns = columns.filter((col) => col.field && col.headerName)
+
     // Create header row
-    const headers = visibleColumns.map(col => col.headerName).join(',')
-    
+    const headers = visibleColumns.map((col) => col.headerName).join(',')
+
     // Create data rows
-    const rows = data.map(row => {
-      return visibleColumns.map(col => {
-        const value = row[col.field]
-        // Escape commas and quotes in CSV
-        if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
-          return `"${value.replace(/"/g, '""')}"`
-        }
-        return value || ''
-      }).join(',')
+    const rows = data.map((row) => {
+      return visibleColumns
+        .map((col) => {
+          const value = row[col.field]
+          // Escape commas and quotes in CSV
+          if (
+            typeof value === 'string' &&
+            (value.includes(',') || value.includes('"'))
+          ) {
+            return `"${value.replace(/"/g, '""')}"`
+          }
+          return value || ''
+        })
+        .join(',')
     })
-    
+
     return [headers, ...rows].join('\n')
   }
 
@@ -130,19 +135,21 @@ export class ExportHandler {
    */
   convertToText(data, columns) {
     if (!data || data.length === 0) return ''
-    
-    const visibleColumns = columns.filter(col => col.field && col.headerName)
-    
+
+    const visibleColumns = columns.filter((col) => col.field && col.headerName)
+
     // Create header
-    const headers = visibleColumns.map(col => col.headerName).join('\t')
-    
+    const headers = visibleColumns.map((col) => col.headerName).join('\t')
+
     // Create data rows
-    const rows = data.map(row => {
-      return visibleColumns.map(col => {
-        return row[col.field] || ''
-      }).join('\t')
+    const rows = data.map((row) => {
+      return visibleColumns
+        .map((col) => {
+          return row[col.field] || ''
+        })
+        .join('\t')
     })
-    
+
     return [headers, ...rows].join('\n')
   }
 
@@ -159,15 +166,15 @@ export class ExportHandler {
       link.href = url
       link.download = fileName
       link.style.display = 'none'
-      
+
       // Add to DOM, click, and remove
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-      
+
       // Clean up
       window.URL.revokeObjectURL(url)
-      
+
       console.log(`File downloaded: ${fileName}`)
     } catch (error) {
       console.error('Download failed:', error)
@@ -202,13 +209,13 @@ export const createExportHandler = (options = {}) => {
  */
 export const useExportHandler = (options = {}) => {
   const handler = new ExportHandler(options)
-  
+
   return {
     exportCSV: (data, columns) => handler.exportCSV(data, columns, 'csv'),
     exportExcel: (data, columns) => handler.exportExcel(data, columns),
     exportPDF: (data, columns) => handler.exportPDF(data, columns),
     generateFileName: (format) => handler.generateFileName(format),
-    updateOptions: (newOptions) => handler.updateOptions(newOptions)
+    updateOptions: (newOptions) => handler.updateOptions(newOptions),
   }
 }
 

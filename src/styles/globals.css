@@ -269,3 +269,67 @@ main {
 .zoom-out-iframe::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
+
+.chart-legend {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem 1.5rem;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.chart-legend__column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.chart-legend__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+.chart-legend__indicator {
+  margin-top: 0.25rem;
+  inline-size: 0.6rem;
+  block-size: 0.6rem;
+  border-radius: 0.125rem;
+  flex-shrink: 0;
+}
+
+.chart-legend__content {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.4;
+}
+
+.chart-legend__label {
+  font-size: 12px;
+  color: #374151;
+  font-weight: 500;
+}
+
+.chart-legend__value {
+  font-size: 11px;
+  color: #666666;
+}
+
+@media (max-width: 768px) {
+  .chart-legend {
+    grid-template-columns: 1fr;
+    font-size: 11px;
+  }
+
+  .chart-legend__column {
+    gap: 0.4rem;
+  }
+
+  .chart-legend__label {
+    font-size: 11px;
+  }
+
+  .chart-legend__value {
+    font-size: 10.5px;
+  }
+}

@@ -36,6 +36,8 @@ import { toast } from 'react-toastify'
 import { toastconfig } from '@/utils/toastconfig'
 import { PrintPreview } from './PrintPreview'
 import TextDisableJoeditor from './TextDisableJoeditor'
+import { useDispatch } from 'react-redux'
+import { openModal } from '@/redux/modalSlice'
 // Dynamic import of JoditEditor for client-side rendering
 const JoditEditor = dynamic(() => import('jodit-react'), { ssr: false })
 
@@ -58,7 +60,7 @@ function EmbryologyModalContentNew({
   embryologyTypes,
   setEmbryologyTypes,
 }) {
-  const user = useSelector(state => state.user)
+  const user = useSelector((state) => state.user)
   const queryClient = useQueryClient()
   // States
 
@@ -105,17 +107,17 @@ function EmbryologyModalContentNew({
     setActiveDayTab(newValue)
   }
 
-  const handleImageUpload = e => {
+  const handleImageUpload = (e) => {
     const files = Array.from(e.target.files)
     const isEdit = e.target.getAttribute('data-is-edit') === 'true'
 
     if (files.length > 0) {
       if (isEdit) {
         // For edit mode, append new files to existing editSelectedImages
-        setEditSelectedImages(prev => [...prev, ...files])
+        setEditSelectedImages((prev) => [...prev, ...files])
       } else {
         // For new mode, append new files to existing selectedImages
-        setSelectedImages(prev => [...prev, ...files])
+        setSelectedImages((prev) => [...prev, ...files])
       }
     }
   }
@@ -124,6 +126,33 @@ function EmbryologyModalContentNew({
     setEditData({ ...data })
     setEditSelectedImages([]) // Clear edit selected images when entering edit mode
   }
+  const handlePreviewReport = async () => {
+    try {
+      // Get report template with correct name swapping
+      const reportResponse = await downloadEmbryologyReport(user.accessToken, {
+        categoryType: activeEmbryologyType,
+        id: selectedRow?.id,
+        type: selectedRow?.type,
+      })
+
+      // Show preview modal
+      dispatch(
+        openModal({
+          uniqueKey: 'print-preview-embryology',
+          component: (
+            <PrintPreview
+              htmlContent={reportResponse.data}
+              uniqueKey="embryology"
+            />
+          ),
+        }),
+      )
+    } catch (error) {
+      console.error('Error previewing report:', error)
+      toast.error('Failed to preview report', toastconfig)
+    }
+  }
+
   const handleSaveChanges = () => {
     console.log('save changes', editData)
     let data = {
@@ -149,11 +178,11 @@ function EmbryologyModalContentNew({
   }
   const handleEditInputChange = (field, value) => {
     // console.log(field, value)
-    setEditData(prev => ({ ...prev, [field]: value }))
+    setEditData((prev) => ({ ...prev, [field]: value }))
   }
   const downloadMutate = useMutation({
     mutationKey: ['downloadEmbryologyImages'],
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       console.log('payload', payload)
       const response = await downloadEmbryologyImagesReport(
         user.accessToken,
@@ -172,7 +201,7 @@ function EmbryologyModalContentNew({
     },
   })
   const saveEmbryologyMutation = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       console.log('saveEmbryologyMutation payload', payload)
       let res
       if (selectedRow?.type === 'Consultation') {
@@ -196,7 +225,7 @@ function EmbryologyModalContentNew({
       })
       setSelectedImages([])
     },
-    onError: error => {
+    onError: (error) => {
       console.error('Error saving treatment:', error)
       toast.error('Failed to save embryology record', toastconfig)
     },
@@ -204,13 +233,13 @@ function EmbryologyModalContentNew({
   // Image upload mutation
   const uploadImagesMutation = useMutation({
     mutationKey: ['uploadEmbryologyImages'],
-    mutationFn: async formData => {
+    mutationFn: async (formData) => {
       console.log('Mutation called with formData:', formData)
       const response = await uploadEmbryologyImage(user.accessToken, formData)
       console.log('Upload response:', response)
       return response
     },
-    onSuccess: data => {
+    onSuccess: (data) => {
       console.log('Upload success:', data)
       if (data.status === 200) {
         toast.success('Images uploaded successfully', toastconfig)
@@ -224,7 +253,7 @@ function EmbryologyModalContentNew({
         setUploadingImages(false)
       }
     },
-    onError: error => {
+    onError: (error) => {
       console.error('Upload error:', error)
       toast.error('Failed to upload images', toastconfig)
       setUploadingImages(false)
@@ -234,16 +263,16 @@ function EmbryologyModalContentNew({
   // Image delete mutation
   const deleteImageMutation = useMutation({
     mutationKey: ['deleteEmbryologyImage'],
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const response = await deleteEmbryologyImage(user.accessToken, payload)
       return response
     },
-    onSuccess: data => {
+    onSuccess: (data) => {
       toast.success('Image deleted successfully', toastconfig)
       // Refresh embryology data
       queryClient.invalidateQueries(['embryologyPatientsList'])
     },
-    onError: error => {
+    onError: (error) => {
       toast.error('Failed to delete image', toastconfig)
     },
   })
@@ -263,7 +292,7 @@ function EmbryologyModalContentNew({
   }
 
   const handleInputChange = (field, value) => {
-    setNewData(prev => ({ ...prev, [field]: value }))
+    setNewData((prev) => ({ ...prev, [field]: value }))
   }
   const handlePhotoUpload = (isEdit = false) => {
     imgInputRef.current.click()
@@ -311,7 +340,7 @@ function EmbryologyModalContentNew({
     }
   }
 
-  const handleDeleteImage = async imageId => {
+  const handleDeleteImage = async (imageId) => {
     if (window.confirm('Are you sure you want to delete this image?')) {
       const payload = {
         embryologyImageId: imageId,
@@ -503,7 +532,7 @@ function EmbryologyModalContentNew({
                                     size="small"
                                     className="absolute -top-1 -right-1"
                                     onClick={() => {
-                                      setEditSelectedImages(prev =>
+                                      setEditSelectedImages((prev) =>
                                         prev.filter((_, i) => i !== index),
                                       )
                                     }}
@@ -554,7 +583,7 @@ function EmbryologyModalContentNew({
                       <TextField
                         label="Category Type"
                         value={editData?.categoryType || ''}
-                        onChange={e =>
+                        onChange={(e) =>
                           handleEditInputChange('categoryType', e.target.value)
                         }
                       />
@@ -596,7 +625,7 @@ function EmbryologyModalContentNew({
                           ref={editorEdit}
                           value={editData?.template}
                           tabIndex={1}
-                          onBlur={content => {
+                          onBlur={(content) => {
                             handleEditInputChange('template', content)
                           }}
                           config={{
@@ -705,7 +734,7 @@ function EmbryologyModalContentNew({
             >
               <Box
                 component="form"
-                onSubmit={e => {
+                onSubmit={(e) => {
                   e.preventDefault()
                   handleSubmit()
                 }}
@@ -715,7 +744,7 @@ function EmbryologyModalContentNew({
                   <TextField
                     label="Category Type"
                     value={newData?.categoryType || ''}
-                    onChange={e =>
+                    onChange={(e) =>
                       handleInputChange('categoryType', e.target.value)
                     }
                   />
@@ -774,7 +803,7 @@ function EmbryologyModalContentNew({
                               size="small"
                               className="absolute -top-1 -right-1"
                               onClick={() => {
-                                setSelectedImages(prev =>
+                                setSelectedImages((prev) =>
                                   prev.filter((_, i) => i !== index),
                                 )
                               }}
@@ -815,7 +844,7 @@ function EmbryologyModalContentNew({
                   ref={editorNew}
                   value={newData?.template}
                   tabIndex={1}
-                  onBlur={content => handleInputChange('template', content)}
+                  onBlur={(content) => handleInputChange('template', content)}
                   config={{
                     readonly: false,
                     removeButtons: [

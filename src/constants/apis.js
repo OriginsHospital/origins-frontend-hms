@@ -1905,7 +1905,20 @@ export const SalesReportDashboard = async (
     redirect: 'follow',
     credentials: 'include',
   })
-  return response.json()
+
+  const data = await response.json()
+
+  // Handle 403 Forbidden response (unauthorized access)
+  if (response.status === 403) {
+    throw new Error('Access restricted. Authorized users only.')
+  }
+
+  // Handle other error statuses
+  if (!response.ok && response.status !== 403) {
+    throw new Error(data.message || 'Failed to fetch revenue data')
+  }
+
+  return data
 }
 export const ReturnItems = async (token, payload) => {
   const myHeaders = new Headers()

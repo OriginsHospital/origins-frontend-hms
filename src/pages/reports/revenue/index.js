@@ -19,7 +19,13 @@ import { useQuery } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import React, { useContext, useEffect, useState } from 'react'
 import { useSelector } from 'react-redux'
+import { useRouter } from 'next/router'
+import { toast } from 'react-toastify'
+import { toastconfig } from '@/utils/toastconfig'
+import { hasRevenueAccess } from '@/utils/revenueAccess'
+
 function Sales() {
+  const router = useRouter()
   const userDetails = useSelector((store) => store.user)
   const dropdowns = useSelector((store) => store.dropdowns)
   const [fromDate, setFromDate] = useState(new Date())
@@ -33,6 +39,18 @@ function Sales() {
   const [appliedFromDate, setAppliedFromDate] = useState(null)
   const [appliedToDate, setAppliedToDate] = useState(null)
   const [appliedBranchId, setAppliedBranchId] = useState('')
+
+  // Access control: Check if user has revenue access
+  useEffect(() => {
+    if (userDetails?.email && !hasRevenueAccess(userDetails.email)) {
+      toast.error(
+        'You do not have permission to access Revenue Reports.',
+        toastconfig,
+      )
+      router.replace('/home')
+      return
+    }
+  }, [userDetails?.email, router])
 
   useEffect(() => {
     if (dropdowns?.branches?.length > 0) {
@@ -74,14 +92,30 @@ function Sales() {
           : 'Missing',
         branchId: appliedBranchId || 'Missing',
       })
-      const response = await SalesReportDashboard(
-        userDetails?.accessToken,
-        dayjs(appliedFromDate).format('YYYY-MM-DD'),
-        dayjs(appliedToDate).format('YYYY-MM-DD'),
-        appliedBranchId,
-      )
-      console.log('Revenue API Response:', response)
-      return response.data
+      try {
+        const response = await SalesReportDashboard(
+          userDetails?.accessToken,
+          dayjs(appliedFromDate).format('YYYY-MM-DD'),
+          dayjs(appliedToDate).format('YYYY-MM-DD'),
+          appliedBranchId,
+        )
+        console.log('Revenue API Response:', response)
+        return response.data
+      } catch (error) {
+        // Handle 403 Forbidden (unauthorized access)
+        if (
+          error?.message?.includes('Access restricted') ||
+          error?.response?.status === 403
+        ) {
+          toast.error(
+            'You do not have permission to access Revenue Reports.',
+            toastconfig,
+          )
+          router.replace('/home')
+          throw error
+        }
+        throw error
+      }
     },
     enabled:
       userDetails.accessToken &&
@@ -152,6 +186,11 @@ function Sales() {
     setAppliedFromDate(defaultFrom)
     setAppliedToDate(defaultTo)
     setAppliedBranchId(defaultBranch)
+  }
+
+  // Don't render if user doesn't have access
+  if (userDetails?.email && !hasRevenueAccess(userDetails.email)) {
+    return null
   }
 
   return (

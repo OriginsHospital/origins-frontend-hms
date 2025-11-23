@@ -2,6 +2,7 @@ import { Add } from '@mui/icons-material'
 import { PAGE_TYPES } from 'next/dist/lib/page-types'
 
 export const API_ROUTES = {
+  CLOSE_VISIT: '/visits/close',
   LOGIN: '/auth/loginWithEmail',
   FORGOT_PASSWORD: '/auth/forgotPassword',
   CHANGE_PASSWORD: '/auth/changePassword',
@@ -159,6 +160,7 @@ export const API_ROUTES = {
   GET_PURCHASE_RETURN: '/payment/getPurchaseReturnInformation',
   RETURN_PURCHASED_ITEMS: '/payment/returnPurchasedItems',
   SALES_REPORT_DASHBOARD: '/reports/salesReport',
+  GET_DAILY_REPORT_SUMMARY: '/reports/dailyReportSummary',
   RETURN_PHARMACY_ITEMS: '/payment/returnPharmacyItems',
   //Sacn module
   GET_SCAN_BY_DATE: '/scan/getScansByDate/',
@@ -404,6 +406,10 @@ export const API_ROUTES = {
   GET_ACTIVE_IP: '/ip/getActiveIP',
   GET_CLOSED_IP: '/ip/getClosedIP',
   CREATE_IP_REGISTRATION: '/ip/createIPRegistration',
+  CLOSE_IP_REGISTRATION: '/ip/closeIpRegistration',
+  REGISTER_BUILDING: '/ip/registerBuilding',
+  GET_LAYOUT_OVERVIEW: '/ip/layouts/overview',
+  GET_BED_DETAILS: '/ip/layouts/bedDetails',
 }
 
 export const ACCESS_TYPES = {

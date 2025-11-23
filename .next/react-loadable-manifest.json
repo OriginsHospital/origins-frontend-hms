@@ -48,5 +48,11 @@
     "files": [
       "static/chunks/node_modules_react-quill-new_lib_index_js.js"
     ]
+  },
+  "pages\\pharmacy\\medicinestages\\index.js -> html2pdf.js": {
+    "id": "pages\\pharmacy\\medicinestages\\index.js -> html2pdf.js",
+    "files": [
+      "static/chunks/node_modules_html2pdf_js_dist_html2pdf_js.js"
+    ]
   }
 }

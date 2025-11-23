@@ -4,6 +4,8 @@ import React, {
   useState,
   forwardRef,
   useImperativeHandle,
+  useMemo,
+  useCallback,
 } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import Image from 'next/image'
@@ -61,11 +63,14 @@ const PatientForm = forwardRef(
       setPhoto,
       setImagePreview,
       bloodGroupOptions,
+      onAgeValidationChange,
     },
     ref,
   ) => {
-    const dropdowns = useSelector(store => store.dropdowns)
+    const dropdowns = useSelector((store) => store.dropdowns)
     const [errors, setErrors] = useState({})
+    const [ageValidationMessage, setAgeValidationMessage] = useState('')
+    const [isAgeValid, setIsAgeValid] = useState(true)
     const imgInput = useRef()
     const dispatch = useDispatch()
     const docAadhaarRef = useRef()
@@ -78,6 +83,71 @@ const PatientForm = forwardRef(
         setErrors({})
       }
     }, [formData?.id, isEdit])
+
+    const patientTypeLookup = useMemo(() => {
+      if (!dropdowns?.patientTypeList) return {}
+      return dropdowns.patientTypeList.reduce((acc, type) => {
+        acc[type.id] = type.name?.toUpperCase() || ''
+        return acc
+      }, {})
+    }, [dropdowns?.patientTypeList])
+
+    const calculateAge = useCallback((dob) => {
+      if (!dob) return null
+      const birthDate = dayjs(dob)
+      if (!birthDate.isValid()) return null
+      return dayjs().diff(birthDate, 'year')
+    }, [])
+
+    const requiresAdultAge = useMemo(() => {
+      if (!formData?.patientTypeId) return false
+      const typeName = patientTypeLookup[formData.patientTypeId]
+      return typeName === 'FER' || typeName === 'ANC'
+    }, [formData?.patientTypeId, patientTypeLookup])
+
+    const validateAgeRestriction = useCallback(
+      ({ nextDob, nextPatientTypeId }) => {
+        const dob = nextDob ?? formData?.dateOfBirth
+        const patientTypeId = nextPatientTypeId ?? formData?.patientTypeId
+
+        if (!dob || !patientTypeId) {
+          setAgeValidationMessage('')
+          setIsAgeValid(true)
+          return
+        }
+
+        const typeName = patientTypeLookup[patientTypeId]
+        const age = calculateAge(dob)
+
+        if (!typeName || age === null) {
+          setAgeValidationMessage('')
+          setIsAgeValid(true)
+          return
+        }
+
+        const adultRestricted = typeName === 'FER' || typeName === 'ANC'
+
+        if (adultRestricted && age < 18) {
+          setAgeValidationMessage(
+            'Patient must be at least 18 years old for the selected type.',
+          )
+          setIsAgeValid(false)
+        } else {
+          setAgeValidationMessage('')
+          setIsAgeValid(true)
+        }
+      },
+      [
+        calculateAge,
+        formData?.dateOfBirth,
+        formData?.patientTypeId,
+        patientTypeLookup,
+      ],
+    )
+
+    useEffect(() => {
+      validateAgeRestriction({})
+    }, [formData?.dateOfBirth, formData?.patientTypeId, validateAgeRestriction])
 
     const validateForm = () => {
       const newErrors = {}
@@ -100,7 +170,7 @@ const PatientForm = forwardRef(
         'patientTypeId',
       ]
 
-      requiredFields.forEach(field => {
+      requiredFields.forEach((field) => {
         if (
           !formData[field] ||
           (typeof formData[field] === 'string' && !formData[field].trim())
@@ -126,9 +196,10 @@ const PatientForm = forwardRef(
       if (formData.aadhaarNo && !/^\d{12}$/.test(formData.aadhaarNo)) {
         newErrors.aadhaarNo = 'Aadhaar Number must be 12 digits'
       }
-      // age numst me greater than 18
-      if (dayjs().diff(dayjs(formData.dateOfBirth), 'year') < 18) {
-        newErrors.dateOfBirth = 'Age must be greater than 18'
+      if (!isAgeValid) {
+        newErrors.dateOfBirth =
+          ageValidationMessage ||
+          'Patient must be at least 18 years old for the selected type.'
       }
 
       if (formData.pincode && !/^\d{6}$/.test(formData.pincode)) {
@@ -139,16 +210,43 @@ const PatientForm = forwardRef(
       return Object.keys(newErrors).length === 0
     }
 
+    useEffect(() => {
+      if (typeof onAgeValidationChange === 'function') {
+        onAgeValidationChange({
+          isValid: isAgeValid,
+          message: ageValidationMessage,
+          requiresAdult: requiresAdultAge,
+        })
+      }
+    }, [
+      isAgeValid,
+      ageValidationMessage,
+      requiresAdultAge,
+      onAgeValidationChange,
+    ])
+
     const handleChange = (name, value) => {
-      setErrors(prev => ({ ...prev, [name]: '' }))
-      if (name == 'maritalStatus') {
-        setFormData({
-          ...formData,
+      setErrors((prev) => ({ ...prev, [name]: '' }))
+
+      let updatedForm = { ...formData }
+      if (name === 'maritalStatus') {
+        updatedForm = {
+          ...updatedForm,
           [name]: value,
           hasGuardianInfo: value == 'Married',
-        })
+        }
       } else {
-        setFormData({ ...formData, [name]: value })
+        updatedForm = { ...updatedForm, [name]: value }
+      }
+
+      setFormData(updatedForm)
+
+      if (name === 'dateOfBirth') {
+        validateAgeRestriction({ nextDob: value })
+      }
+
+      if (name === 'patientTypeId') {
+        validateAgeRestriction({ nextPatientTypeId: value })
       }
     }
 
@@ -156,12 +254,12 @@ const PatientForm = forwardRef(
       dispatch(openModal('profilePicture'))
     }
 
-    const handleDocumentUpload = docRef => {
+    const handleDocumentUpload = (docRef) => {
       docRef.current.click()
       console.log('uploading')
     }
 
-    const handleDocumentChange = event => {
+    const handleDocumentChange = (event) => {
       const file = event.target.files[0]
       console.log(
         formData,
@@ -173,12 +271,12 @@ const PatientForm = forwardRef(
       setFormData({ ...formData, [event.target.name]: file })
     }
 
-    const handleRemoveDocument = docName => {
+    const handleRemoveDocument = (docName) => {
       // const updatedDocs = uploadedDocuments.filter((_, i) => i !== index)
       // setUploadedDocuments(updatedDocs)
       setFormData({ ...formData, [docName]: null })
-      setUploadedDocuments(prevDocs =>
-        prevDocs.filter(doc => doc.name !== docName),
+      setUploadedDocuments((prevDocs) =>
+        prevDocs.filter((doc) => doc.name !== docName),
       )
     }
     // useEffect(() => {
@@ -191,7 +289,7 @@ const PatientForm = forwardRef(
       },
     }))
 
-    const formatNames = value => {
+    const formatNames = (value) => {
       if (value)
         return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase()
       return ''
@@ -243,7 +341,7 @@ const PatientForm = forwardRef(
                 label="Last Name"
                 name="lastName"
                 value={formData.lastName}
-                onChange={e =>
+                onChange={(e) =>
                   handleChange('lastName', formatNames(e.target.value))
                 }
                 disabled={isEdit === 'noneditable'}
@@ -259,7 +357,7 @@ const PatientForm = forwardRef(
                 label="First Name"
                 name="firstName"
                 value={formData.firstName}
-                onChange={e =>
+                onChange={(e) =>
                   handleChange('firstName', formatNames(e.target.value))
                 }
                 disabled={isEdit === 'noneditable'}
@@ -274,26 +372,44 @@ const PatientForm = forwardRef(
               <LocalizationProvider dateAdapter={AdapterDayjs}>
                 <FormControl fullWidth variant="outlined" className="bg-white">
                   <DatePicker
-                    label={`DoB ${formData.dateOfBirth &&
-                      '(age:' +
-                        dayjs().diff(dayjs(formData.dateOfBirth), 'year') +
-                        ' years)'}`}
+                    label={`DoB ${
+                      formData.dateOfBirth
+                        ? '(age:' +
+                          dayjs().diff(dayjs(formData.dateOfBirth), 'year') +
+                          ' years)'
+                        : ''
+                    }`}
                     value={
                       formData.dateOfBirth ? dayjs(formData.dateOfBirth) : null
                     }
-                    onChange={date =>
-                      handleChange('dateOfBirth', date.format('YYYY-MM-DD'))
+                    onChange={(date) =>
+                      handleChange(
+                        'dateOfBirth',
+                        date ? date.format('YYYY-MM-DD') : '',
+                      )
                     }
                     format="DD-MM-YYYY"
                     disabled={isEdit === 'noneditable'}
                     slotProps={{
                       textField: {
-                        error: !!errors.dateOfBirth,
-                        helperText: errors.dateOfBirth,
+                        error: !!errors.dateOfBirth || !isAgeValid,
+                        helperText:
+                          errors.dateOfBirth ||
+                          (!isAgeValid && ageValidationMessage) ||
+                          '',
                         required: true,
                       },
                     }}
                   />
+                  {!isAgeValid && !errors.dateOfBirth && (
+                    <Typography
+                      variant="caption"
+                      color="error"
+                      className="mt-1"
+                    >
+                      {ageValidationMessage}
+                    </Typography>
+                  )}
                 </FormControl>
               </LocalizationProvider>
             </Grid>
@@ -303,7 +419,7 @@ const PatientForm = forwardRef(
                 options={bloodGroupOptions}
                 value={formData.bloodGroup || null}
                 onChange={(_, newValue) => handleChange('bloodGroup', newValue)}
-                renderInput={params => (
+                renderInput={(params) => (
                   <TextField
                     {...params}
                     label="Blood Group"
@@ -323,7 +439,7 @@ const PatientForm = forwardRef(
                 name="mobileNo"
                 value={formData.mobileNo}
                 type="number"
-                onChange={e => handleChange('mobileNo', e.target.value)}
+                onChange={(e) => handleChange('mobileNo', e.target.value)}
                 disabled={isEdit === 'noneditable'}
                 error={!!errors.mobileNo}
                 helperText={errors.mobileNo}
@@ -338,7 +454,7 @@ const PatientForm = forwardRef(
                 name="email"
                 type="email"
                 value={formData.email}
-                onChange={e => handleChange('email', e.target.value)}
+                onChange={(e) => handleChange('email', e.target.value)}
                 disabled={isEdit === 'noneditable'}
                 error={!!errors.email}
                 helperText={errors.email}
@@ -352,7 +468,7 @@ const PatientForm = forwardRef(
                 label="Aadhaar Number"
                 name="aadhaarNo"
                 value={formData.aadhaarNo}
-                onChange={e => handleChange('aadhaarNo', e.target.value)}
+                onChange={(e) => handleChange('aadhaarNo', e.target.value)}
                 disabled={isEdit === 'noneditable'}
                 error={!!errors.aadhaarNo}
                 helperText={errors.aadhaarNo}
@@ -366,7 +482,7 @@ const PatientForm = forwardRef(
                 label="Address Line 1"
                 name="addressLine1"
                 value={formData.addressLine1}
-                onChange={e => handleChange('addressLine1', e.target.value)}
+                onChange={(e) => handleChange('addressLine1', e.target.value)}
                 disabled={isEdit === 'noneditable'}
                 error={!!errors.addressLine1}
                 helperText={errors.addressLine1}
@@ -384,7 +500,7 @@ const PatientForm = forwardRef(
                 // multiline={true}
                 // minRows={2}
                 value={formData.addressLine2}
-                onChange={e => handleChange('addressLine2', e.target.value)}
+                onChange={(e) => handleChange('addressLine2', e.target.value)}
                 disabled={isEdit === 'noneditable'}
                 error={!!errors.addressLine2}
                 helperText={errors.addressLine2}
@@ -399,12 +515,12 @@ const PatientForm = forwardRef(
                   label="State"
                   name="stateId"
                   value={formData.stateId}
-                  onChange={e => handleChange('stateId', e.target.value)}
+                  onChange={(e) => handleChange('stateId', e.target.value)}
                   disabled={isEdit === 'noneditable'}
                   error={!!errors.stateId}
                   helperText={errors.stateId}
                 >
-                  {dropdowns?.states?.map(state => (
+                  {dropdowns?.states?.map((state) => (
                     <MenuItem key={state.id} value={state.id}>
                       {state.name}
                     </MenuItem>
@@ -419,12 +535,12 @@ const PatientForm = forwardRef(
                   label="City"
                   name="cityId"
                   value={formData.cityId}
-                  onChange={e => handleChange('cityId', e.target.value)}
+                  onChange={(e) => handleChange('cityId', e.target.value)}
                   disabled={isEdit === 'noneditable'}
                   error={!!errors.cityId}
                   helperText={errors.cityId}
                 >
-                  {cities?.data?.map(city => (
+                  {cities?.data?.map((city) => (
                     <MenuItem key={city.id} value={city.id}>
                       {city.name}
                     </MenuItem>
@@ -438,7 +554,7 @@ const PatientForm = forwardRef(
                 label="Pincode"
                 name="pincode"
                 value={formData.pincode}
-                onChange={e => handleChange('pincode', e.target.value)}
+                onChange={(e) => handleChange('pincode', e.target.value)}
                 disabled={isEdit === 'noneditable'}
                 error={!!errors.pincode}
                 helperText={errors.pincode}
@@ -453,12 +569,14 @@ const PatientForm = forwardRef(
                   label="Marital Status"
                   name="maritalStatus"
                   value={formData.maritalStatus}
-                  onChange={e => handleChange('maritalStatus', e.target.value)}
+                  onChange={(e) =>
+                    handleChange('maritalStatus', e.target.value)
+                  }
                   disabled={isEdit === 'noneditable'}
                   error={!!errors.maritalStatus}
                   helperText={errors.maritalStatus}
                 >
-                  {dropdowns?.maritalStatus?.map(status => (
+                  {dropdowns?.maritalStatus?.map((status) => (
                     <MenuItem key={status} value={status}>
                       {status}
                     </MenuItem>
@@ -473,12 +591,12 @@ const PatientForm = forwardRef(
                   label="Referral"
                   name="referralId"
                   value={formData.referralId}
-                  onChange={e => handleChange('referralId', e.target.value)}
+                  onChange={(e) => handleChange('referralId', e.target.value)}
                   disabled={isEdit === 'noneditable'}
                   error={!!errors.referralId}
                   helperText={errors.referralId}
                 >
-                  {dropdowns?.referralTypes?.map(referral => (
+                  {dropdowns?.referralTypes?.map((referral) => (
                     <MenuItem key={referral.id} value={referral.id}>
                       {referral.name}
                     </MenuItem>
@@ -494,7 +612,7 @@ const PatientForm = forwardRef(
                   label="Referral Name"
                   name="referralName"
                   value={formData.referralName}
-                  onChange={e => handleChange('referralName', e.target.value)}
+                  onChange={(e) => handleChange('referralName', e.target.value)}
                   disabled={isEdit === 'noneditable'}
                   variant="outlined"
                   className="bg-white"
@@ -508,12 +626,12 @@ const PatientForm = forwardRef(
                   label="Branch"
                   name="branchId"
                   value={formData.branchId}
-                  onChange={e => handleChange('branchId', e.target.value)}
+                  onChange={(e) => handleChange('branchId', e.target.value)}
                   disabled={isEdit === 'noneditable'}
                   error={!!errors.branchId}
                   helperText={errors.branchId}
                 >
-                  {dropdowns?.branches?.map(branch => (
+                  {dropdowns?.branches?.map((branch) => (
                     <MenuItem key={branch.id} value={branch.id}>
                       {branch.name}
                     </MenuItem>
@@ -528,12 +646,14 @@ const PatientForm = forwardRef(
                   label="Patient Type"
                   name="patientTypeId"
                   value={formData.patientTypeId}
-                  onChange={e => handleChange('patientTypeId', e.target.value)}
+                  onChange={(e) =>
+                    handleChange('patientTypeId', e.target.value)
+                  }
                   disabled={isEdit === 'noneditable'}
                   error={!!errors.patientTypeId}
                   helperText={errors.patientTypeId}
                 >
-                  {dropdowns?.patientTypeList?.map(patientType => (
+                  {dropdowns?.patientTypeList?.map((patientType) => (
                     <MenuItem key={patientType.id} value={patientType.id}>
                       {patientType.name}
                     </MenuItem>
@@ -654,19 +774,20 @@ const PatientForm = forwardRef(
                       <OpenInNew />
                     </Button>
                   )}
-                  {formData?.marriageCertificate && isEdit !== 'noneditable' && (
-                    <IconButton
-                      edge="end"
-                      aria-label="delete"
-                      color="error"
-                      // className=""
-                      onClick={() =>
-                        handleRemoveDocument('marriageCertificate')
-                      }
-                    >
-                      <Delete />
-                    </IconButton>
-                  )}
+                  {formData?.marriageCertificate &&
+                    isEdit !== 'noneditable' && (
+                      <IconButton
+                        edge="end"
+                        aria-label="delete"
+                        color="error"
+                        // className=""
+                        onClick={() =>
+                          handleRemoveDocument('marriageCertificate')
+                        }
+                      >
+                        <Delete />
+                      </IconButton>
+                    )}
                 </div>
               )}
             </Grid>
@@ -736,7 +857,7 @@ const PatientForm = forwardRef(
                   control={
                     <Checkbox
                       checked={formData?.createActiveVisit || false}
-                      onChange={e =>
+                      onChange={(e) =>
                         handleChange('createActiveVisit', e.target.checked)
                       }
                     />

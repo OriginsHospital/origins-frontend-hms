@@ -1313,7 +1313,9 @@ const tabs = {
         type: 'text',
         renderCell: ({ row }) => {
           return (
-            <>{row.personsList?.map(person => person.personName).join(', ')}</>
+            <>
+              {row.personsList?.map((person) => person.personName).join(', ')}
+            </>
           )
         },
       },
@@ -1365,9 +1367,14 @@ function Managefields() {
   const router = useRouter()
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTab, setSelectedTab] = useState(() => {
-    return router.query.tab || Object.keys(tabs)[0]
+    return (
+      router.query.tab ||
+      Object.keys(tabs).sort((a, b) =>
+        tabs[a].label.localeCompare(tabs[b].label),
+      )[0]
+    )
   })
-  const userDetails = useSelector(state => state.user)
+  const userDetails = useSelector((state) => state.user)
   const [subCategoryPayload, setSubCategoryPayload] = useState({
     name: '',
     categoryId: '',
@@ -1375,7 +1382,7 @@ function Managefields() {
   const [editingSubCategory, setEditingSubCategory] = useState(null)
   const queryClient = useQueryClient()
   const dispatch = useDispatch()
-  const dropdowns = useSelector(store => store.dropdowns)
+  const dropdowns = useSelector((store) => store.dropdowns)
 
   const { data: MasterData } = useQuery({
     queryKey: ['pharmacyMasterData', selectedTab],
@@ -1385,7 +1392,7 @@ function Managefields() {
 
   const createHandler = useMutation({
     mutationKey: ['createPharmacyMasterData'],
-    mutationFn: async data => {
+    mutationFn: async (data) => {
       if (data) {
         const response = await createPharmacyMasterData(
           userDetails?.accessToken,
@@ -1421,29 +1428,29 @@ function Managefields() {
     if (selectedTab === 'DefaultOTPersons') {
       payload.personId =
         payload.personId?.length > 0
-          ? payload.personId?.map(each => each.value).join(',')
+          ? payload.personId?.map((each) => each.value).join(',')
           : payload.personId
     }
     createHandler.mutate(payload)
   }
   const [formData, setFormData] = useState({})
-  const handleFormChange = event => {
+  const handleFormChange = (event) => {
     const { name, value } = event.target
 
     if (selectedRow) {
       // For edit mode
-      setSelectedRow(prev => ({ ...prev, [name]: value }))
-      setPayload(prev => ({ ...prev, [name]: value }))
+      setSelectedRow((prev) => ({ ...prev, [name]: value }))
+      setPayload((prev) => ({ ...prev, [name]: value }))
     } else {
       // For create mode
-      setFormData(prev => ({ ...prev, [name]: value }))
-      setPayload(prev => ({ ...prev, [name]: value }))
+      setFormData((prev) => ({ ...prev, [name]: value }))
+      setPayload((prev) => ({ ...prev, [name]: value }))
       // console.log('formData , paylaod', formData, payload)
     }
   }
   const editRowHandler = useMutation({
     mutationKey: ['editPharmacyMasterData'],
-    mutationFn: async data => {
+    mutationFn: async (data) => {
       const { createdBy, updatedBy, createdAt, updatedAt, ...paylaod } = data
       const response = await editPharmacyMasterData(
         userDetails?.accessToken,
@@ -1489,8 +1496,8 @@ function Managefields() {
   const optionsUrls = React.useMemo(() => {
     const fields = tabs[selectedTab]?.createFields || []
     return fields
-      .filter(field => field.optionsUrl)
-      .map(field => ({
+      .filter((field) => field.optionsUrl)
+      .map((field) => ({
         id: field.id,
         url: field.optionsUrl,
       }))
@@ -1522,27 +1529,27 @@ function Managefields() {
     cacheTime: 30 * 60 * 1000,
   })
 
-  const getDynamicOptions = field => {
+  const getDynamicOptions = (field) => {
     // console.log('field', field)
     // First check for static dropdowns from redux store
     switch (field.id) {
       case 'visit_type':
-        return dropdowns?.visitTypes?.map(each => ({
+        return dropdowns?.visitTypes?.map((each) => ({
           value: each.id,
           label: each.name,
         }))
       case 'designationId':
-        return dropdowns?.otPersonDesignation?.map(each => ({
+        return dropdowns?.otPersonDesignation?.map((each) => ({
           value: each.id,
           label: each.name,
         }))
       case 'labTestGroupId':
-        return dropdowns?.labTestGroupList?.map(each => ({
+        return dropdowns?.labTestGroupList?.map((each) => ({
           value: each.id,
           label: each.name,
         }))
       case 'sampleTypeId':
-        return dropdowns?.labTestSampleTypeList?.map(each => ({
+        return dropdowns?.labTestSampleTypeList?.map((each) => ({
           value: each.id,
           label: each.name,
         }))
@@ -1562,7 +1569,7 @@ function Managefields() {
       //     label: each.name,
       //   }))
       case 'stateId':
-        return dropdowns?.states?.map(each => ({
+        return dropdowns?.states?.map((each) => ({
           value: each.id,
           label: each.name,
         }))
@@ -1576,7 +1583,7 @@ function Managefields() {
       // console.log('field.selectedLabel', field.selectedLabel)
       // Ensure options is an array before mapping
       if (Array.isArray(options)) {
-        return options.map(option => ({
+        return options.map((option) => ({
           value: option.id,
           label: option[field.selectedLabel],
         }))
@@ -1588,31 +1595,29 @@ function Managefields() {
   }
 
   const [expandedAcc, setExpandedAcc] = useState()
-  const handleChangeAccordian = value => (event, isExpanded) => {
+  const handleChangeAccordian = (value) => (event, isExpanded) => {
     setExpandedAcc(isExpanded ? value : false)
   }
-  const {
-    data: subCategoriesData,
-    isLoading: issubCategoriesDataLoading,
-  } = useQuery({
-    queryKey: ['subCategoriesData', expandedAcc],
-    queryFn: async () => {
-      const res = await getSubCategoryListByCategoryId(
-        userDetails?.accessToken,
-        expandedAcc,
-      )
-      console.log(res)
-      return res.data
-    },
-    enabled: !!expandedAcc,
-  })
+  const { data: subCategoriesData, isLoading: issubCategoriesDataLoading } =
+    useQuery({
+      queryKey: ['subCategoriesData', expandedAcc],
+      queryFn: async () => {
+        const res = await getSubCategoryListByCategoryId(
+          userDetails?.accessToken,
+          expandedAcc,
+        )
+        console.log(res)
+        return res.data
+      },
+      enabled: !!expandedAcc,
+    })
   const handleAddSubcategory = () => {
     setEditingSubCategory()
     setSubCategoryPayload({ ledgerName: '', categoryId: expandedAcc })
     dispatch(openModal('addSubcategory'))
   }
 
-  const handleEditSubcategory = subcategory => {
+  const handleEditSubcategory = (subcategory) => {
     setEditingSubcategory(subcategory)
     setSubCategoryPayload({
       ledgerName: subcategory.ledgerName,
@@ -1623,7 +1628,7 @@ function Managefields() {
   }
   const editSubCategoryMutation = useMutation({
     mutationKey: ['editSubCategory'],
-    mutationFn: async data => {
+    mutationFn: async (data) => {
       const response = await editSubCategoryByCategoryId(
         userDetails?.accessToken,
         data,
@@ -1641,7 +1646,7 @@ function Managefields() {
   })
   const addSubCategoryMutation = useMutation({
     mutationKey: ['addSubCategory'],
-    mutationFn: async data => {
+    mutationFn: async (data) => {
       const response = await addSubCategoryByCategoryId(
         userDetails?.accessToken,
         data,
@@ -1659,7 +1664,7 @@ function Managefields() {
   })
   const deleteSubCategoryMutation = useMutation({
     mutationKey: ['deleteSubCategory'],
-    mutationFn: async data => {
+    mutationFn: async (data) => {
       const response = await deleteSubCategoryByCategoryId(
         userDetails?.accessToken,
         data,
@@ -1682,7 +1687,7 @@ function Managefields() {
     dispatch(closeModal())
   }
 
-  const handleDeleteSubcategory = id => {
+  const handleDeleteSubcategory = (id) => {
     if (window.confirm('Are you sure you want to delete this subcategory?')) {
       let payload = {
         categoryId: expandedAcc,
@@ -1706,9 +1711,11 @@ function Managefields() {
 
   // Add this function to filter tabs based on search query
   const filteredTabs = React.useMemo(() => {
-    return Object.keys(tabs).filter(tab =>
-      tabs[tab].label.toLowerCase().includes(searchQuery.toLowerCase()),
-    )
+    return Object.keys(tabs)
+      .sort((a, b) => tabs[a].label.localeCompare(tabs[b].label))
+      .filter((tab) =>
+        tabs[tab].label.toLowerCase().includes(searchQuery.toLowerCase()),
+      )
   }, [searchQuery])
 
   const handleOpenCreateModal = () => {
@@ -1732,7 +1739,7 @@ function Managefields() {
               size="small"
               placeholder="Search..."
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
+              onChange={(e) => setSearchQuery(e.target.value)}
               InputProps={{
                 startAdornment: <SearchIcon className="mr-2 text-gray-400" />,
               }}
@@ -1770,7 +1777,7 @@ function Managefields() {
                 },
               }}
             >
-              {filteredTabs.map(tab => (
+              {filteredTabs.map((tab) => (
                 <Tab
                   key={tab + 'tab'}
                   value={tab}
@@ -1803,36 +1810,38 @@ function Managefields() {
           </div>
         </div>
         <div className="grow h-full rounded bg-white ">
-          {Object.keys(tabs).map(tab => (
-            <TabPanel value={tab} key={tab + 'tabPanel'}>
-              <div>
-                <div className="flex justify-end">
-                  <Button
-                    variant="outlined"
-                    className="mb-3"
-                    startIcon={<Add />}
-                    onClick={handleOpenCreateModal}
-                  >
-                    Add New
-                  </Button>
+          {Object.keys(tabs)
+            .sort((a, b) => tabs[a].label.localeCompare(tabs[b].label))
+            .map((tab) => (
+              <TabPanel value={tab} key={tab + 'tabPanel'}>
+                <div>
+                  <div className="flex justify-end">
+                    <Button
+                      variant="outlined"
+                      className="mb-3"
+                      startIcon={<Add />}
+                      onClick={handleOpenCreateModal}
+                    >
+                      Add New
+                    </Button>
+                  </div>
                 </div>
-              </div>
-              <PharmacyMasterTable
-                rows={MasterData?.data}
-                fields={tabs[selectedTab]?.fields}
-                createFields={tabs[selectedTab]?.createFields}
-                editRowHandler={editRowHandler}
-                selectedRow={selectedRow}
-                setSelectedRow={setSelectedRow}
-                handleRowEdit={handleRowEdit}
-                getDynamicOptions={getDynamicOptions}
-                // getEachFieldBasedOnType={getEachFieldBasedOnType}
-              />
-            </TabPanel>
-          ))}
+                <PharmacyMasterTable
+                  rows={MasterData?.data}
+                  fields={tabs[selectedTab]?.fields}
+                  createFields={tabs[selectedTab]?.createFields}
+                  editRowHandler={editRowHandler}
+                  selectedRow={selectedRow}
+                  setSelectedRow={setSelectedRow}
+                  handleRowEdit={handleRowEdit}
+                  getDynamicOptions={getDynamicOptions}
+                  // getEachFieldBasedOnType={getEachFieldBasedOnType}
+                />
+              </TabPanel>
+            ))}
           <TabPanel value={'categories'}>
             <div className="">
-              {dropdowns?.expenseCategories?.map(each => {
+              {dropdowns?.expenseCategories?.map((each) => {
                 return (
                   <Accordion
                     expanded={expandedAcc === each?.id}
@@ -1850,7 +1859,7 @@ function Managefields() {
                     </AccordionSummary>
                     <AccordionDetails className="flex flex-wrap gap-3 items-center">
                       {subCategoriesData?.length > 0 ? (
-                        subCategoriesData?.map(each => {
+                        subCategoriesData?.map((each) => {
                           return (
                             <span key={each.id + 'cat' + each.ledgerName}>
                               <span className="border  border-secondary bg-primary p-2 rounded-full flex  items-center gap-5">
@@ -1917,7 +1926,7 @@ function Managefields() {
           </IconButton>
         </div>
         <div className="flex flex-col gap-5 p-3">
-          {tabs[selectedTab]?.createFields.map(field =>
+          {tabs[selectedTab]?.createFields.map((field) =>
             getEachFieldBasedOnType(
               field,
               formData,
@@ -1951,7 +1960,7 @@ function Managefields() {
             label="Subcategory Name"
             fullWidth
             value={subCategoryPayload.name}
-            onChange={e =>
+            onChange={(e) =>
               setSubCategoryPayload({
                 ...subCategoryPayload,
                 ledgerName: e.target.value,
@@ -1979,7 +1988,7 @@ function Managefields() {
             label="Subcategory Name"
             fullWidth
             value={subCategoryPayload.ledgerName}
-            onChange={e =>
+            onChange={(e) =>
               setSubCategoryPayload({
                 ...subCategoryPayload,
                 ledgerName: e.target.value,
@@ -2029,14 +2038,14 @@ const getEachFieldBasedOnType = (
       const options = getDynamicOptions(field) || []
       const selectedValue = dataSource?.[field.id] || dataSource?.[field.name]
       const selectedOption =
-        options.find(option => option.value === selectedValue) || null
+        options.find((option) => option.value === selectedValue) || null
 
       return (
         <Autocomplete
           key={field.id}
           options={options}
           value={selectedOption}
-          getOptionLabel={option => option?.label || ''}
+          getOptionLabel={(option) => option?.label || ''}
           onChange={(event, newValue) => {
             handleFormChange({
               target: {
@@ -2045,7 +2054,7 @@ const getEachFieldBasedOnType = (
               },
             })
           }}
-          renderInput={params => (
+          renderInput={(params) => (
             <TextField
               {...params}
               label={field.label}
@@ -2081,7 +2090,7 @@ const getEachFieldBasedOnType = (
           value={
             dataSource?.[field.name] ? dayjs(dataSource[field.name]) : null
           }
-          onChange={newValue => {
+          onChange={(newValue) => {
             handleFormChange({
               target: {
                 name: field.name,
@@ -2102,13 +2111,13 @@ const getEachFieldBasedOnType = (
           <Autocomplete
             multiple
             options={getDynamicOptions(field)}
-            getOptionLabel={option => option.label || ''}
+            getOptionLabel={(option) => option.label || ''}
             onChange={(event, newValue) => {
               handleFormChange({
                 target: { name: field.name, value: newValue },
               })
             }}
-            renderInput={params => (
+            renderInput={(params) => (
               <TextField {...params} label={field.label} variant="outlined" />
             )}
           />

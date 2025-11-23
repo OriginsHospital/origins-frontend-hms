@@ -3,6 +3,7 @@ import Select from 'react-select'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useDispatch, useSelector } from 'react-redux'
 import { toast } from 'react-toastify'
+import StartERAConfirmation from './StartERAConfirmation'
 import { toastconfig } from '@/utils/toastconfig'
 import TextField from '@mui/material/TextField'
 import {
@@ -65,10 +66,10 @@ function Prescription({
   selectedPatient,
   // setSelectedPatient,
 }) {
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const dispatch = useDispatch()
-  const { billTypes } = useSelector(store => store.dropdowns)
-  const modal = useSelector(store => store.modal)
+  const { billTypes } = useSelector((store) => store.dropdowns)
+  const modal = useSelector((store) => store.modal)
 
   const queryClient = useQueryClient()
   // const [treatmentStartDate, setTreatmentStartDate] = useState(
@@ -91,7 +92,7 @@ function Prescription({
   })
 
   const { mutate: updateTreatmentStatusMutation } = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const res = await updateTreatmentStatus(user.accessToken, payload)
       if (res.status === 200) {
         queryClient.invalidateQueries('treatmentStatus')
@@ -115,7 +116,7 @@ function Prescription({
           user.accessToken,
           billTypes[i].id,
           selectedPatient?.branchId,
-        ).then(response => {
+        ).then((response) => {
           if (!response.ok)
             throw new Error(
               'error while fetching bill types for ' + billTypes[i].name,
@@ -125,7 +126,7 @@ function Prescription({
         promisesArray.push(responseJsonPromise)
       }
 
-      return Promise.all(promisesArray).then(responsesArray => {
+      return Promise.all(promisesArray).then((responsesArray) => {
         const allBillTypeValuesObject = {}
         for (let i = 0; i < billTypes.length; i++) {
           allBillTypeValuesObject[billTypes[i].name] = responsesArray[i].data
@@ -152,30 +153,28 @@ function Prescription({
   const [hysteroscopyTime, setHysteroscopyTime] = useState(null)
   const [hysteroscopyTemplate, setHysteroscopyTemplate] = useState(null)
 
-  const {
-    data: treatmentStatus,
-    isLoading: isTreatmentStatusLoading,
-  } = useQuery({
-    queryKey: [
-      'treatmentStatus',
-      patientInfo?.activeVisitId,
-      patientInfo?.treatmentDetails?.treatmentTypeId,
-    ],
-    queryFn: async () => {
-      // console.log(patientInfo)
-      const responsejson = await getTreatmentStatus(
-        user.accessToken,
+  const { data: treatmentStatus, isLoading: isTreatmentStatusLoading } =
+    useQuery({
+      queryKey: [
+        'treatmentStatus',
         patientInfo?.activeVisitId,
         patientInfo?.treatmentDetails?.treatmentTypeId,
-      )
-      if (responsejson.status == 200) {
-        return responsejson.data
-      } else {
-        throw new Error('Error occurred while fetching treatment status')
-      }
-    },
-    enabled: !!patientInfo?.treatmentDetails,
-  })
+      ],
+      queryFn: async () => {
+        // console.log(patientInfo)
+        const responsejson = await getTreatmentStatus(
+          user.accessToken,
+          patientInfo?.activeVisitId,
+          patientInfo?.treatmentDetails?.treatmentTypeId,
+        )
+        if (responsejson.status == 200) {
+          return responsejson.data
+        } else {
+          throw new Error('Error occurred while fetching treatment status')
+        }
+      },
+      enabled: !!patientInfo?.treatmentDetails,
+    })
   // const [folicularSheet, setFolicularSheet] = useState('')
   // const { data: defaultTreatmentTemplate } = useQuery({
   //   queryKey: ['defaultTemplate', treatmentStartDate],
@@ -208,7 +207,7 @@ function Prescription({
     enabled: !!treatmentCycleId,
   })
   const updateTreatmentSheetMutation = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const res = await updateTreatmentSheetByTreatmentCycleId(
         user.accessToken,
         payload,
@@ -222,12 +221,12 @@ function Prescription({
       toast.success('Updated Successfully', toastconfig)
       queryClient.invalidateQueries('treatmentSheet')
     },
-    onError: error => {
+    onError: (error) => {
       toast.error(error.message, toastconfig)
     },
   })
 
-  const handleUpdateTreatmentSheet = temp => {
+  const handleUpdateTreatmentSheet = (temp) => {
     // if (!treatmentCycleId || !folicularFormData || treatmentStatus?.START_ICSI !== 1) {
     //   return
     // }
@@ -276,15 +275,55 @@ function Prescription({
             rows: res?.scanRows,
             ...res?.scanSheet,
           })
+          // Fallback: ensure follicularTemplate always has sensible defaults
+          const hasValidColumns =
+            Array.isArray(res?.columns) && res?.columns.length > 0
+          const hasValidRows = Array.isArray(res?.rows) && res?.rows.length > 0
+          let columns = res?.columns
+          let rows = res?.rows
+          if (!hasValidColumns || !hasValidRows) {
+            // Build a minimal default template with one day and standard sizes
+            const defaultColumns = [dayjs().format('DD/MM')]
+            const standardSizes = [
+              2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34,
+              36, 38, 40,
+            ]
+            const defaultRows = [
+              ...standardSizes.map((size) => ({ value: size })),
+              { value: 'Notes' }, // index 20 (size === 21 row in UI logic)
+            ]
+            columns = hasValidColumns ? res?.columns : defaultColumns
+            rows = hasValidRows ? res?.rows : defaultRows
+          }
           setFolicularTemplate({
-            columns: res?.columns,
-            rows: res?.rows,
+            columns,
+            rows,
           })
         } else {
-          setFolicularFormData({})
-          setMedicationFormData({})
-          setScanFormData({})
-          setFolicularTemplate({})
+          // No template returned from API. If ICSI is started, create a safe default
+          if (treatmentStatus?.START_ICSI == 1) {
+            const defaultColumns = [dayjs().format('DD/MM')]
+            const standardSizes = [
+              2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34,
+              36, 38, 40,
+            ]
+            const defaultRows = [
+              ...standardSizes.map((size) => ({ value: size })),
+              { value: 'Notes' },
+            ]
+            setFolicularFormData({})
+            setMedicationFormData({})
+            setScanFormData({})
+            setFolicularTemplate({
+              columns: defaultColumns,
+              rows: defaultRows,
+            })
+          } else {
+            setFolicularFormData({})
+            setMedicationFormData({})
+            setScanFormData({})
+            setFolicularTemplate({})
+          }
         }
         return responsejson.data
       } else {
@@ -313,21 +352,47 @@ function Prescription({
         if (responsejson?.data?.template) {
           const res = JSON.parse(responsejson?.data?.template)
           console.log(res)
+          // Fallback guards for malformed templates
+          const hasValidColumns =
+            Array.isArray(res?.columns) && res?.columns.length > 0
+          const hasValidMedRows =
+            Array.isArray(res?.medicationRows) &&
+            res?.medicationRows.length >= 0
+          const hasValidScanRows =
+            Array.isArray(res?.scanRows) && res?.scanRows.length >= 0
+
+          const columns = hasValidColumns
+            ? res?.columns
+            : [dayjs().format('DD/MM')]
+          const medicationRows = hasValidMedRows ? res?.medicationRows : []
+          const scanRows = hasValidScanRows ? res?.scanRows : []
+
           setFETFormData({
-            rows: res?.medicationRows,
+            rows: medicationRows,
             ...res?.medicationSheet,
           })
           setFETTemplate({
-            columns: res?.columns,
-            rows: res?.medicationRows,
+            columns,
+            rows: medicationRows,
           })
           setScanFetFormData({
-            rows: res?.scanRows,
+            rows: scanRows,
             ...res?.scanSheet,
           })
         } else {
-          setFETFormData({})
-          setFETTemplate({})
+          // No template returned from API. If FET is started, create a safe default
+          if (treatmentStatus?.FET_START == 1) {
+            setFETFormData({ rows: [] })
+            setFETTemplate({
+              columns: [dayjs().format('DD/MM')],
+              rows: [],
+            })
+            setScanFetFormData({ rows: [] })
+          } else {
+            setFETFormData({})
+            setFETTemplate({})
+            setScanFetFormData({})
+          }
         }
       } else {
         throw new Error('Error occurred while fetching treatment sheet')
@@ -341,8 +406,14 @@ function Prescription({
       'treatmentERASheet',
       treatmentCycleId,
       patientInfo?.activeVisitId,
+      treatmentStatus?.START_ERA, // Add this to refetch when status changes
     ],
     queryFn: async () => {
+      // Only proceed if ERA is started and we have treatment cycle ID
+      if (!treatmentCycleId || !treatmentStatus?.START_ERA) {
+        return null
+      }
+
       const responsejson = await getTreatmentERASheetByTreatmentCycleId(
         user.accessToken,
         treatmentCycleId,
@@ -350,18 +421,21 @@ function Prescription({
       if (responsejson.status == 200) {
         if (responsejson?.data?.template) {
           const res = JSON.parse(responsejson?.data?.template)
-          setERAFormData({
-            rows: res?.medicationRows,
-            ...res?.medicationSheet,
-          })
-          setERATemplate({
-            columns: res?.columns,
-            rows: res?.medicationRows,
-          })
-          setScanEraFormData({
-            rows: res?.scanRows,
-            ...res?.scanSheet,
-          })
+          // Use timeout to ensure state updates after modal reopens
+          setTimeout(() => {
+            setERAFormData({
+              rows: res?.medicationRows,
+              ...res?.medicationSheet,
+            })
+            setERATemplate({
+              columns: res?.columns,
+              rows: res?.medicationRows,
+            })
+            setScanEraFormData({
+              rows: res?.scanRows,
+              ...res?.scanSheet,
+            })
+          }, 200)
         } else {
           setERAFormData({})
           setERATemplate({})
@@ -371,11 +445,11 @@ function Prescription({
       }
       return responsejson.data
     },
-    enabled: !!treatmentCycleId && treatmentStatus?.START_ERA == 1,
+    enabled: !!patientInfo?.activeVisitId, // Always enable the query
   })
 
   const createTreatment = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const res = await createConsultationOrTreatment(user.accessToken, payload)
       console.log('under mutation fn', res)
       if (res.status === 400) {
@@ -398,7 +472,7 @@ function Prescription({
 
   const [reviewAppointmentForm, setReviewAppointmentForm] = useState(null)
   const reviewConsentsICSI = useMutation({
-    mutationFn: async visitId => {
+    mutationFn: async (visitId) => {
       const res = await reviewIcsiConsents(user.accessToken, visitId, {
         visitId,
         stage: 'START_ICSI',
@@ -448,7 +522,7 @@ function Prescription({
   })
 
   const startIUIMutation = useMutation({
-    mutationFn: async visitId => {
+    mutationFn: async (visitId) => {
       const res = await updateTreatmentStatus(user.accessToken, {
         visitId,
         stage: 'START_IUI',
@@ -489,7 +563,7 @@ function Prescription({
     },
   })
   const startOITIMutation = useMutation({
-    mutationFn: async visitId => {
+    mutationFn: async (visitId) => {
       const res = await updateTreatmentStatus(user.accessToken, {
         visitId,
         stage: 'START_OITI',
@@ -530,7 +604,7 @@ function Prescription({
     },
   })
   const startHysteroscopyMutation = useMutation({
-    mutationFn: async visitId => {
+    mutationFn: async (visitId) => {
       const res = await updateTreatmentStatus(user.accessToken, {
         visitId,
         stage: 'START_HYSTEROSCOPY',
@@ -550,7 +624,7 @@ function Prescription({
     },
   })
   const updateTreatmentFETSheetMutation = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const res = await updateTreatmentFETSheetByTreatmentCycleId(
         user.accessToken,
         payload,
@@ -566,7 +640,7 @@ function Prescription({
     },
   })
   const updateHysteroscopySheetMutation = useMutation({
-    mutationFn: async visitId => {
+    mutationFn: async (visitId) => {
       const res = await updateHysteroscopySheetByVisitId(user.accessToken, {
         visitId,
         hysteroscopyTemplate: JSON.stringify(hysteroscopyTemplate),
@@ -601,7 +675,7 @@ function Prescription({
     },
     enabled: !!patientInfo?.activeVisitId,
   })
-  const handleUpdateTreatmentFETSheet = temp => {
+  const handleUpdateTreatmentFETSheet = (temp) => {
     console.log(temp, fetFormData)
     if (temp !== 'update') {
       updateTreatmentFETSheetMutation.mutate({
@@ -622,7 +696,7 @@ function Prescription({
     }
   }
   const reviewConsentsFET = useMutation({
-    mutationFn: async visitId => {
+    mutationFn: async (visitId) => {
       const res = await reviewFETConsents(user.accessToken, visitId, {
         visitId,
         stage: 'START_FET',
@@ -657,34 +731,68 @@ function Prescription({
     },
   })
   const reviewConsentsERA = useMutation({
-    mutationFn: async visitId => {
-      const res = await reviewEraConsents(user.accessToken, visitId, {
-        visitId,
-        stage: 'START_ERA',
-        treatmentType: patientInfo?.treatmentDetails?.treatmentTypeId,
-      })
-      if (res.status == 200) {
-        const defaultTreatmentTemplate = res.data
-        toast.success('Consents reviewed successfully')
-        if (defaultTreatmentTemplate) {
-          setERAFormData({
-            rows: defaultTreatmentTemplate?.medicationSheet,
-          })
-          setERATemplate({
-            columns: defaultTreatmentTemplate?.date,
-            rows: defaultTreatmentTemplate?.medicationSheet,
-          })
-          let temp = {
-            columns: defaultTreatmentTemplate?.date,
-            medicationRows: defaultTreatmentTemplate?.medicationSheet,
+    mutationFn: async (visitId) => {
+      try {
+        const res = await reviewEraConsents(user.accessToken, visitId, {
+          visitId,
+          stage: 'START_ERA',
+          treatmentType: patientInfo?.treatmentDetails?.treatmentTypeId,
+        })
+
+        if (res.status === 200) {
+          // Initialize empty ERA form data
+          const initialTemplate = res.data || {
+            date: [moment().format('YYYY-MM-DD')],
             medicationSheet: [],
-            scanRows: defaultTreatmentTemplate?.scanSheet,
             scanSheet: [],
           }
-          handleUpdateTreatmentERASheet(temp)
+
+          // Create treatment sheet template
+          const temp = {
+            medicationSheet: [],
+            scanRows: initialTemplate?.scanSheet || [],
+            scanSheet: [],
+          }
+
+          // Update treatment status and data
+          await Promise.all([
+            queryClient.invalidateQueries('treatmentStatus'),
+            queryClient.invalidateQueries([
+              'treatmentERASheet',
+              treatmentCycleId,
+            ]),
+          ])
+
+          // Set initial form data
+          setERAFormData({
+            rows: initialTemplate.medicationSheet || [],
+          })
+          setERATemplate({
+            columns: initialTemplate.date || [moment().format('YYYY-MM-DD')],
+            rows: initialTemplate.medicationSheet || [],
+          })
+          setScanEraFormData({
+            rows: initialTemplate.scanSheet || [],
+          })
+
+          // Update treatment sheet
+          await handleUpdateTreatmentERASheet(temp)
+
+          // Force modal refresh
+          dispatch(closeModal())
+          setTimeout(() => {
+            dispatch(openModal(`ERA${patientInfo?.activeVisitId}`))
+            toast.success('ERA treatment started successfully')
+          }, 100)
+
+          return res.data
         }
-      } else {
-        toast.error(res.message)
+
+        throw new Error(res.message || 'Failed to start ERA treatment')
+      } catch (error) {
+        console.error('Error starting ERA treatment:', error)
+        toast.error(error.message || 'Failed to start ERA treatment')
+        throw error
       }
     },
   })
@@ -722,7 +830,7 @@ function Prescription({
     }
 
     const { mutate: updateTreatmentStatusMutation } = useMutation({
-      mutationFn: async payload => {
+      mutationFn: async (payload) => {
         const res = await updateTreatmentStatus(user.accessToken, payload)
         if (res.status === 200) {
           queryClient.invalidateQueries('treatmentStatus')
@@ -791,7 +899,7 @@ function Prescription({
               setCustomReason('')
             }
           }}
-          renderInput={params => (
+          renderInput={(params) => (
             <TextField
               {...params}
               label="Select Reason"
@@ -808,7 +916,7 @@ function Prescription({
             multiline
             rows={3}
             value={customReason}
-            onChange={e => setCustomReason(e.target.value)}
+            onChange={(e) => setCustomReason(e.target.value)}
             className="bg-white"
           />
         )}
@@ -850,7 +958,7 @@ function Prescription({
     }
 
     const { mutate: updateVisitStatusMutation } = useMutation({
-      mutationFn: async payload => {
+      mutationFn: async (payload) => {
         let res
         if (type == 'Treatment') {
           console.log(payload, type)
@@ -939,7 +1047,7 @@ function Prescription({
           options={END_OPTIONS}
           value={selectedReason}
           onChange={handleReasonChange}
-          renderInput={params => (
+          renderInput={(params) => (
             <TextField
               {...params}
               label="Select Reason"
@@ -954,7 +1062,7 @@ function Prescription({
             options={UPT_OPTIONS}
             value={selectedSubReason}
             onChange={(_, newValue) => setSelectedSubReason(newValue)}
-            renderInput={params => (
+            renderInput={(params) => (
               <TextField
                 {...params}
                 label="Select UPT Status"
@@ -972,7 +1080,7 @@ function Prescription({
             multiline
             rows={3}
             value={customReason}
-            onChange={e => setCustomReason(e.target.value)}
+            onChange={(e) => setCustomReason(e.target.value)}
             className="bg-white"
           />
         )}
@@ -1025,7 +1133,7 @@ function Prescription({
   // console.log(activeVisitAppointments, patientInfo)
 
   const updateTreatmentERASheetMutation = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const res = await updateTreatmentERASheetByTreatmentCycleId(
         user.accessToken,
         payload,
@@ -1041,7 +1149,7 @@ function Prescription({
     },
   })
 
-  const handleUpdateTreatmentERASheet = temp => {
+  const handleUpdateTreatmentERASheet = (temp) => {
     if (temp !== 'update') {
       updateTreatmentERASheetMutation.mutate({
         id: treatmentCycleId,
@@ -1248,7 +1356,7 @@ function Prescription({
                 label="Trigger Time"
                 className="bg-white rounded-lg w-max-content"
                 name="triggerTime"
-                onChange={newValue =>
+                onChange={(newValue) =>
                   setTriggerTime(
                     dayjs(newValue).format('YYYY-MM-DDTHH:mm:00[Z]'),
                   )
@@ -1430,7 +1538,7 @@ function Prescription({
             <Button
               variant="outlined"
               className="capitalize"
-              onClick={e => dispatch(openModal('startTreatment'))}
+              onClick={(e) => dispatch(openModal('startTreatment'))}
               name="Treatment"
               // startIcon={<Start />}
             >
@@ -1439,7 +1547,7 @@ function Prescription({
             <Button
               variant="outlined"
               className="capitalize"
-              onClick={e => dispatch(openModal('reviewCall'))}
+              onClick={(e) => dispatch(openModal('reviewCall'))}
               name="Review Call"
               disabled={!!selectedPatient?.isReviewCall}
               startIcon={<Schedule />}
@@ -1735,11 +1843,11 @@ function Prescription({
         </div>
         {treatmentStatus?.START_ERA == 0 ? (
           <>
-            {/* collect consents from patient */}
-            <ConsentsCheck
-              consentType="ERA"
-              patientInfo={patientInfo}
-              reviewConsents={reviewConsentsERA}
+            <StartERAConfirmation
+              onConfirm={() =>
+                reviewConsentsERA.mutate(patientInfo?.activeVisitId)
+              }
+              isLoading={reviewConsentsERA.isLoading}
             />
           </>
         ) : (
@@ -1802,7 +1910,7 @@ function Prescription({
                 label="Hysteroscopy Time"
                 className="bg-white rounded-lg w-max-content mb-10"
                 name="hysteroscopyTime"
-                onChange={newValue =>
+                onChange={(newValue) =>
                   setHysteroscopyTime(
                     dayjs(newValue).format('YYYY-MM-DDTHH:mm:00[Z]'),
                   )
@@ -1888,7 +1996,7 @@ function Prescription({
             <TextField
               label="Package Amount"
               value={treatmentForm.packageAmount}
-              onChange={e =>
+              onChange={(e) =>
                 setTreatmentForm({
                   ...treatmentForm,
                   packageAmount: e.target.value,

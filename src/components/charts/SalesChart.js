@@ -81,6 +81,39 @@ const SalesChart = ({ dataset, isLoading, hasData }) => {
           </div>
         )}
       </div>
+      <hr className="w-full border-t border-gray-200" />
+      {legendColumns.length > 0 && (
+        <div className="w-full mt-2 flex justify-center">
+          <div className="chart-legend">
+            {legendColumns.map((column, columnIndex) => (
+              <div
+                key={`legend-column-${columnIndex}`}
+                className="chart-legend__column"
+              >
+                {column.map((item) => (
+                  <div key={item.label} className="chart-legend__item">
+                    <span
+                      className="chart-legend__indicator"
+                      style={{ backgroundColor: item.color }}
+                    />
+                    <div className="chart-legend__content">
+                      <span className="chart-legend__label">{item.label}</span>
+                      <span className="chart-legend__value">
+                        ₹
+                        {item.amount.toLocaleString('en-IN', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}{' '}
+                        ({item.percentage})
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

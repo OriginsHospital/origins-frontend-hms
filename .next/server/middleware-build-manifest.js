@@ -34,15 +34,10 @@ self.__BUILD_MANIFEST = {
       "static/chunks/main.js",
       "static/chunks/pages/login.js"
     ],
-    "/reports": [
+    "/pharmacy/medicinestages": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
-      "static/chunks/pages/reports.js"
-    ],
-    "/reports/revenueNew": [
-      "static/chunks/webpack.js",
-      "static/chunks/main.js",
-      "static/chunks/pages/reports/revenueNew.js"
+      "static/chunks/pages/pharmacy/medicinestages.js"
     ]
   },
   "ampFirstPages": []

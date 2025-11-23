@@ -100,17 +100,22 @@ export default function Register() {
   }
   const [isEdit, setIsEdit] = useState('create')
   const [uploadedDocuments, setUploadedDocuments] = useState([])
+  const [ageValidationState, setAgeValidationState] = useState({
+    isValid: true,
+    message: '',
+    requiresAdult: false,
+  })
 
   // initially it will be 'create' ---> actions : reset ,create
   // if patient already exists after search  'noneditable' ---> actions : edit
   // if user wants to edit patient record 'edit-patient' and if added or edited guardian 'edit-all' ---> actions : Save Changes
 
-  const userDetails = useSelector(store => store.user)
+  const userDetails = useSelector((store) => store.user)
   // const dropdowns = useSelector((store) => store.dropdowns)
   const dispatch = useDispatch()
   const QueryClient = useQueryClient()
   // console.log(dropdowns)
-  const fetchPatient = async aadhar => {
+  const fetchPatient = async (aadhar) => {
     // console.log(String(aadhar).length)
     if (
       String(aadhar).trim().length == 12
@@ -149,26 +154,24 @@ export default function Register() {
     }
   }
   //useMutateforFetchPatient
-  const {
-    mutate: fetchPatientMutate,
-    isLoading: fetchPatientLoading,
-  } = useMutation({
-    mutationFn: async aadhar => {
-      try {
-        console.log('fetchPatientMutate', aadhar)
-        dispatch(showLoader())
-        await fetchPatient(aadhar)
-        setTab('patientRecord')
-      } catch (error) {
-        console.log(error)
-      } finally {
-        dispatch(hideLoader())
-      }
-    },
-    onSuccess: () => {
-      QueryClient.invalidateQueries('visits', 'packageData')
-    },
-  })
+  const { mutate: fetchPatientMutate, isLoading: fetchPatientLoading } =
+    useMutation({
+      mutationFn: async (aadhar) => {
+        try {
+          console.log('fetchPatientMutate', aadhar)
+          dispatch(showLoader())
+          await fetchPatient(aadhar)
+          setTab('patientRecord')
+        } catch (error) {
+          console.log(error)
+        } finally {
+          dispatch(hideLoader())
+        }
+      },
+      onSuccess: () => {
+        QueryClient.invalidateQueries('visits', 'packageData')
+      },
+    })
   const resetForm = () => {
     setFormData({
       branchId: '',
@@ -196,6 +199,7 @@ export default function Register() {
     setImagePreview(null)
     setPhoto(defaultProfile)
     setUploadedDocuments([])
+    setAgeValidationState({ isValid: true, message: '', requiresAdult: false })
     router.push('/patient/register')
     setSearchValue('')
   }
@@ -219,7 +223,7 @@ export default function Register() {
   useEffect(() => {
     console.log(visits?.data)
     if (visits?.data?.length > 0) {
-      let activeVisit = visits?.data.filter(visit => visit.isActive === 1)
+      let activeVisit = visits?.data.filter((visit) => visit.isActive === 1)
       setSelectedVisit(activeVisit[0])
     } else {
       console.log('no vists')
@@ -242,6 +246,13 @@ export default function Register() {
   // }
 
   const handleCreatePatient = async () => {
+    if (!ageValidationState.isValid) {
+      toast.error(
+        ageValidationState.message ||
+          'Patient must be at least 18 years old for the selected type.',
+      )
+      return
+    }
     console.log('create patient', photo == defaultProfile)
     const createPatient = createPatientRecord(
       userDetails.accessToken,
@@ -249,7 +260,7 @@ export default function Register() {
       photo == defaultProfile ? null : photo,
       // uploadedDocuments,
     )
-    createPatient.then(res => {
+    createPatient.then((res) => {
       if (res.status == 200) {
         toast.success('Successfully Registered Patient', toastconfig)
         fetchPatientMutate(formData?.aadhaarNo)
@@ -260,6 +271,13 @@ export default function Register() {
   }
 
   const handleEditPatient = async () => {
+    if (!ageValidationState.isValid) {
+      toast.error(
+        ageValidationState.message ||
+          'Patient must be at least 18 years old for the selected type.',
+      )
+      return
+    }
     const {
       hasGuardianInfo,
       guardianDetails,
@@ -306,11 +324,8 @@ export default function Register() {
   }
 
   const handleEditGuardian = async () => {
-    const {
-      createdAt,
-      updatedAt,
-      ...editGuardianPayload
-    } = formData.guardianDetails
+    const { createdAt, updatedAt, ...editGuardianPayload } =
+      formData.guardianDetails
     const editGuardian = await editGuardianRecord(
       userDetails?.accessToken,
       editGuardianPayload,
@@ -349,7 +364,7 @@ export default function Register() {
   }
   const [imagePreview, setImagePreview] = useState(null)
 
-  const uploadProfile = event => {
+  const uploadProfile = (event) => {
     const file = event.target.files[0]
     console.log('uploadProfile', file)
     dispatch(showLoader())
@@ -405,7 +420,7 @@ export default function Register() {
     enabled: !!selectedVisit?.id,
   })
   const createPackageMutate = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const res = await createPackage(userDetails.accessToken, {
         ...payload,
         visitId: selectedVisit?.id,
@@ -423,7 +438,7 @@ export default function Register() {
     },
   })
   const editPackageMutate = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const { updatedAt, createdAt, ...newPayload } = payload
       const res = await editPackage(userDetails.accessToken, {
         ...newPayload,
@@ -441,12 +456,14 @@ export default function Register() {
       QueryClient.invalidateQueries('packageData')
     },
   })
-  const handleChangeVisit = e => {
+  const handleChangeVisit = (e) => {
     console.log(e.target.value, visits)
     if (e.target.value == 'createVisit') {
       dispatch(openModal('createVisit'))
     } else {
-      let selectVisit = visits.data.filter(visit => visit.id === e.target.value)
+      let selectVisit = visits.data.filter(
+        (visit) => visit.id === e.target.value,
+      )
       setSelectedVisit(selectVisit[0])
     }
   }
@@ -465,11 +482,11 @@ export default function Register() {
   }, [router.query])
 
   // Modify the search field handlers
-  const handleSearchChange = e => {
+  const handleSearchChange = (e) => {
     setSearchValue(e.target.value)
   }
 
-  const handleSearch = value => {
+  const handleSearch = (value) => {
     router.push(
       {
         pathname: router.pathname,
@@ -483,7 +500,7 @@ export default function Register() {
   const patientFormRef = useRef(null)
   const guardianFormRef = useRef(null)
 
-  const handleSubmit = async e => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
 
     // Validate both forms
@@ -545,7 +562,7 @@ export default function Register() {
           type="search"
           value={searchValue}
           onChange={handleSearchChange}
-          onKeyDown={e => {
+          onKeyDown={(e) => {
             if (e.key === 'Enter') {
               handleSearch(searchValue)
             }
@@ -603,7 +620,7 @@ export default function Register() {
               sx={{
                 color: 'white',
               }}
-              // disabled={!validation() || isEdit == 'create'}
+              disabled={isEdit !== 'noneditable' && !ageValidationState.isValid}
             >
               {!!formData.id
                 ? isEdit == 'noneditable'
@@ -655,6 +672,9 @@ export default function Register() {
                 setImagePreview={setImagePreview}
                 ref={patientFormRef}
                 bloodGroupOptions={bloodGroupOptions}
+                onAgeValidationChange={(data) =>
+                  setAgeValidationState((prev) => ({ ...prev, ...data }))
+                }
               />
             </div>
             {formData.hasGuardianInfo && (
@@ -760,8 +780,8 @@ export default function Register() {
 }
 
 function ConsentForms({ patientDetails, selectedVisit, visitInfo }) {
-  const userDetails = useSelector(store => store.user)
-  const filteredConsents = Object.values(CONSENT_TYPES).filter(type => {
+  const userDetails = useSelector((store) => store.user)
+  const filteredConsents = Object.values(CONSENT_TYPES).filter((type) => {
     const treatmentId =
       visitInfo?.Treatments?.length > 0
         ? visitInfo?.Treatments[0]?.treatmentTypeId
@@ -797,7 +817,7 @@ function ConsentForms({ patientDetails, selectedVisit, visitInfo }) {
     enabled: !!activeConsentType,
   })
   const downloadConsentFormMutate = useMutation({
-    mutationFn: async id => {
+    mutationFn: async (id) => {
       const res = await downloadConsentFormById(
         userDetails.accessToken,
         id,
@@ -806,7 +826,7 @@ function ConsentForms({ patientDetails, selectedVisit, visitInfo }) {
       console.log('res', res)
     },
   })
-  const useConsentOperations = consentType => {
+  const useConsentOperations = (consentType) => {
     const { apis } = CONSENT_TYPES[consentType]
     const { data: consents, isLoading } = useQuery({
       queryKey: [`${consentType.toLowerCase()}Consents`, selectedVisit?.id],
@@ -819,7 +839,7 @@ function ConsentForms({ patientDetails, selectedVisit, visitInfo }) {
       enabled: !!selectedVisit?.id,
     })
     const uploadMutation = useMutation({
-      mutationFn: async file => {
+      mutationFn: async (file) => {
         dispatch(showLoader())
         const res = await apis.upload(
           userDetails.accessToken,
@@ -840,7 +860,7 @@ function ConsentForms({ patientDetails, selectedVisit, visitInfo }) {
       },
     })
     const deleteMutation = useMutation({
-      mutationFn: async id => {
+      mutationFn: async (id) => {
         dispatch(showLoader())
         const res = await apis.delete(userDetails.accessToken, id)
         dispatch(hideLoader())
@@ -892,7 +912,7 @@ function ConsentForms({ patientDetails, selectedVisit, visitInfo }) {
                 },
               }}
             >
-              {filteredConsents.map(type => (
+              {filteredConsents.map((type) => (
                 <Tab
                   key={type.id}
                   label={
@@ -917,7 +937,7 @@ function ConsentForms({ patientDetails, selectedVisit, visitInfo }) {
 
           {/* Content Area */}
           <div className="col-span-9">
-            {filteredConsents.map(type => (
+            {filteredConsents.map((type) => (
               <TabPanel
                 key={type.id}
                 value={type.id}
@@ -942,7 +962,7 @@ function ConsentForms({ patientDetails, selectedVisit, visitInfo }) {
 }
 
 function PatientForms({ patientDetails, selectedVisit, visitInfo }) {
-  const userDetails = useSelector(store => store.user)
+  const userDetails = useSelector((store) => store.user)
   const patientFormsList = Object.values(PATIENT_FORMS_TYPES)
 
   const [activeFormType, setActiveFormType] = useState(patientFormsList[0].id)
@@ -987,7 +1007,7 @@ function PatientForms({ patientDetails, selectedVisit, visitInfo }) {
                 },
               }}
             >
-              {patientFormsList.map(type => (
+              {patientFormsList.map((type) => (
                 <Tab
                   key={type.id}
                   label={
@@ -1010,7 +1030,7 @@ function PatientForms({ patientDetails, selectedVisit, visitInfo }) {
           </div>
 
           <div className="col-span-9">
-            {patientFormsList.map(type => (
+            {patientFormsList.map((type) => (
               <TabPanel
                 key={type.id}
                 value={type.id}
@@ -1022,70 +1042,74 @@ function PatientForms({ patientDetails, selectedVisit, visitInfo }) {
                 <div className="space-y-6">
                   <div className="max-h-[500px] overflow-y-auto bg-gray-50 rounded-lg p-4 shadow-inner">
                     {getFormFHistoryByPatientId?.data?.length > 0 &&
-                      getFormFHistoryByPatientId?.data?.map(eachAppointment => (
-                        <div
-                          className="p-6 mb-2 flex flex-col gap-6 rounded-lg shadow-lg border border-gray-200 bg-white max-h-[500px] overflow-y-auto"
-                          key={eachAppointment.appointmentId}
-                        >
-                          <div className="flex justify-between items-center">
-                            <p className="text-md font-semibold text-gray-900 truncate">
-                              {dayjs(
-                                eachAppointment?.appointmentInfo
-                                  ?.appointmentDate,
-                              ).format('DD-MM-YYYY')}
-                            </p>
-                            <h2
-                              title={
-                                eachAppointment?.appointmentInfo?.doctorName
-                              }
-                              className="text-md font-semibold text-gray-900 truncate"
-                            >
-                              {eachAppointment?.appointmentInfo?.doctorName}
-                            </h2>
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {eachAppointment.formFTemplateDetails.map(form => (
-                              <div
-                                className="flex flex-col gap-3 p-4 border rounded-lg bg-white shadow-md hover:shadow-lg transition-shadow duration-300"
-                                key={form.scanId}
+                      getFormFHistoryByPatientId?.data?.map(
+                        (eachAppointment) => (
+                          <div
+                            className="p-6 mb-2 flex flex-col gap-6 rounded-lg shadow-lg border border-gray-200 bg-white max-h-[500px] overflow-y-auto"
+                            key={eachAppointment.appointmentId}
+                          >
+                            <div className="flex justify-between items-center">
+                              <p className="text-md font-semibold text-gray-900 truncate">
+                                {dayjs(
+                                  eachAppointment?.appointmentInfo
+                                    ?.appointmentDate,
+                                ).format('DD-MM-YYYY')}
+                              </p>
+                              <h2
+                                title={
+                                  eachAppointment?.appointmentInfo?.doctorName
+                                }
+                                className="text-md font-semibold text-gray-900 truncate"
                               >
-                                <div className="flex justify-between items-center">
-                                  <div>
-                                    <p className="font-semibold text-gray-800 truncate w-[1/2]">
-                                      {form.scanName}
-                                    </p>
-                                    <p className="text-sm text-gray-500 wrap">
-                                      Scan ID: {form.scanId}
-                                    </p>
-                                  </div>
-                                  <div className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs font-medium">
-                                    {form.type}
-                                  </div>
-                                </div>
+                                {eachAppointment?.appointmentInfo?.doctorName}
+                              </h2>
+                            </div>
 
-                                <div className="flex justify-end">
-                                  <Button
-                                    variant="contained"
-                                    className="bg-secondary text-white rounded-md px-5 py-2 hover:bg-secondary-dark transition duration-200"
-                                    onClick={() => {
-                                      setSelectedFormDetails({
-                                        ...form,
-                                        patientId: patientDetails.patientId,
-                                        appointmentId:
-                                          eachAppointment.appointmentId,
-                                      })
-                                      dispatch(openModal('uploadFormF'))
-                                    }}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                              {eachAppointment.formFTemplateDetails.map(
+                                (form) => (
+                                  <div
+                                    className="flex flex-col gap-3 p-4 border rounded-lg bg-white shadow-md hover:shadow-lg transition-shadow duration-300"
+                                    key={form.scanId}
                                   >
-                                    View Details
-                                  </Button>
-                                </div>
-                              </div>
-                            ))}
+                                    <div className="flex justify-between items-center">
+                                      <div>
+                                        <p className="font-semibold text-gray-800 truncate w-[1/2]">
+                                          {form.scanName}
+                                        </p>
+                                        <p className="text-sm text-gray-500 wrap">
+                                          Scan ID: {form.scanId}
+                                        </p>
+                                      </div>
+                                      <div className="bg-gray-100 text-gray-700 px-3 py-1 rounded-full text-xs font-medium">
+                                        {form.type}
+                                      </div>
+                                    </div>
+
+                                    <div className="flex justify-end">
+                                      <Button
+                                        variant="contained"
+                                        className="bg-secondary text-white rounded-md px-5 py-2 hover:bg-secondary-dark transition duration-200"
+                                        onClick={() => {
+                                          setSelectedFormDetails({
+                                            ...form,
+                                            patientId: patientDetails.patientId,
+                                            appointmentId:
+                                              eachAppointment.appointmentId,
+                                          })
+                                          dispatch(openModal('uploadFormF'))
+                                        }}
+                                      >
+                                        View Details
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ),
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ),
+                      )}
                     {(!getFormFHistoryByPatientId ||
                       getFormFHistoryByPatientId.data.length <= 0) && (
                       <div className="flex flex-col items-center justify-center p-6">

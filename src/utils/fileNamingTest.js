@@ -1,10 +1,10 @@
-import { 
-  generateReportFileName, 
-  detectReportContext, 
+import {
+  generateReportFileName,
+  detectReportContext,
   generateEnhancedReportFileName,
   sanitizeFileName,
   generateTimestamp,
-  getFileExtension 
+  getFileExtension,
 } from './fileNamingUtils'
 
 /**
@@ -22,8 +22,8 @@ const testScenarios = [
     branchName: 'Main_Branch',
     filters: {
       fromDate: '2025-01-01',
-      toDate: '2025-01-31'
-    }
+      toDate: '2025-01-31',
+    },
   },
   {
     name: 'Expenses Report',
@@ -32,8 +32,8 @@ const testScenarios = [
     reportType: 'expenses',
     branchName: 'All_Branches',
     filters: {
-      category: 'Office_Supplies'
-    }
+      category: 'Office_Supplies',
+    },
   },
   {
     name: 'Orders Report',
@@ -42,9 +42,9 @@ const testScenarios = [
     reportType: 'orders',
     branchName: 'Warehouse_Branch',
     filters: {
-      status: 'completed'
-    }
-  }
+      status: 'completed',
+    },
+  },
 ]
 
 // Test different file formats
@@ -55,11 +55,11 @@ const formats = ['csv', 'xlsx', 'pdf', 'json', 'txt']
  */
 export const testBasicFileNaming = () => {
   console.log('=== Testing Basic File Naming ===')
-  
-  testScenarios.forEach(scenario => {
+
+  testScenarios.forEach((scenario) => {
     console.log(`\n${scenario.name}:`)
-    
-    formats.forEach(format => {
+
+    formats.forEach((format) => {
       const fileName = generateReportFileName({
         reportName: scenario.reportName,
         reportType: scenario.reportType,
@@ -67,9 +67,9 @@ export const testBasicFileNaming = () => {
         date: new Date(),
         branchName: scenario.branchName,
         includeTimestamp: true,
-        includeUniqueId: false
+        includeUniqueId: false,
       })
-      
+
       console.log(`  ${format.toUpperCase()}: ${fileName}`)
     })
   })
@@ -80,11 +80,11 @@ export const testBasicFileNaming = () => {
  */
 export const testEnhancedFileNaming = () => {
   console.log('\n=== Testing Enhanced File Naming ===')
-  
-  testScenarios.forEach(scenario => {
+
+  testScenarios.forEach((scenario) => {
     console.log(`\n${scenario.name}:`)
-    
-    formats.forEach(format => {
+
+    formats.forEach((format) => {
       const fileName = generateEnhancedReportFileName({
         reportName: scenario.reportName,
         reportType: scenario.reportType,
@@ -93,9 +93,9 @@ export const testEnhancedFileNaming = () => {
         branchName: scenario.branchName,
         filters: scenario.filters,
         includeTimestamp: true,
-        includeUniqueId: false
+        includeUniqueId: false,
       })
-      
+
       console.log(`  ${format.toUpperCase()}: ${fileName}`)
     })
   })
@@ -106,17 +106,17 @@ export const testEnhancedFileNaming = () => {
  */
 export const testContextDetection = () => {
   console.log('\n=== Testing Context Detection ===')
-  
+
   const testPaths = [
     '/reports/revenue',
     '/reports/expenses',
     '/reports/orders',
     '/reports/stockReport',
     '/reports/treatmentCycles',
-    '/reports/unknown'
+    '/reports/unknown',
   ]
-  
-  testPaths.forEach(path => {
+
+  testPaths.forEach((path) => {
     const context = detectReportContext(path, {})
     console.log(`Path: ${path}`)
     console.log(`  Report Name: ${context.reportName}`)
@@ -131,7 +131,7 @@ export const testContextDetection = () => {
  */
 export const testFileNameSanitization = () => {
   console.log('\n=== Testing File Name Sanitization ===')
-  
+
   const testNames = [
     'Revenue Report 2025',
     'Expenses & Costs Report',
@@ -140,10 +140,10 @@ export const testFileNameSanitization = () => {
     'Report with spaces and special chars!@#$%',
     'Report_with_underscores',
     'Report-with-dashes',
-    'Report.with.dots'
+    'Report.with.dots',
   ]
-  
-  testNames.forEach(name => {
+
+  testNames.forEach((name) => {
     const sanitized = sanitizeFileName(name)
     console.log(`Original: "${name}"`)
     console.log(`Sanitized: "${sanitized}"`)
@@ -156,14 +156,14 @@ export const testFileNameSanitization = () => {
  */
 export const testTimestampGeneration = () => {
   console.log('\n=== Testing Timestamp Generation ===')
-  
+
   const dates = [
     new Date('2025-01-27T14:30:00'),
     new Date('2025-12-31T23:59:59'),
-    new Date('2025-01-01T00:00:00')
+    new Date('2025-01-01T00:00:00'),
   ]
-  
-  dates.forEach(date => {
+
+  dates.forEach((date) => {
     const timestamp = generateTimestamp(date)
     console.log(`Date: ${date.toISOString()}`)
     console.log(`Timestamp: ${timestamp}`)
@@ -176,10 +176,10 @@ export const testTimestampGeneration = () => {
  */
 export const testFileExtensionDetection = () => {
   console.log('\n=== Testing File Extension Detection ===')
-  
+
   const testFormats = ['csv', 'xlsx', 'xls', 'pdf', 'json', 'txt', 'unknown']
-  
-  testFormats.forEach(format => {
+
+  testFormats.forEach((format) => {
     const extension = getFileExtension(format)
     console.log(`Format: ${format} -> Extension: ${extension}`)
   })
@@ -190,34 +190,34 @@ export const testFileExtensionDetection = () => {
  */
 export const testEdgeCases = () => {
   console.log('\n=== Testing Edge Cases ===')
-  
+
   // Test with empty/null values
   console.log('Empty report name:')
   const emptyName = generateReportFileName({
     reportName: '',
     reportType: 'test',
-    format: 'csv'
+    format: 'csv',
   })
   console.log(`Result: "${emptyName}"`)
-  
+
   // Test with very long names
   console.log('\nLong report name:')
   const longName = generateReportFileName({
     reportName: 'Very Long Report Name That Should Be Handled Properly',
     reportType: 'test',
-    format: 'csv'
+    format: 'csv',
   })
   console.log(`Result: "${longName}"`)
-  
+
   // Test with special characters
   console.log('\nSpecial characters:')
   const specialChars = generateReportFileName({
     reportName: 'Report with Special Chars!@#$%^&*()',
     reportType: 'test',
-    format: 'csv'
+    format: 'csv',
   })
   console.log(`Result: "${specialChars}"`)
-  
+
   // Test with date range filters
   console.log('\nDate range filters:')
   const dateRange = generateEnhancedReportFileName({
@@ -227,9 +227,9 @@ export const testEdgeCases = () => {
     filters: {
       dateRange: {
         start: '2025-01-01',
-        end: '2025-01-31'
-      }
-    }
+        end: '2025-01-31',
+      },
+    },
   })
   console.log(`Result: "${dateRange}"`)
 }
@@ -239,7 +239,7 @@ export const testEdgeCases = () => {
  */
 export const runAllTests = () => {
   console.log('🧪 Running Dynamic File Naming Tests\n')
-  
+
   testBasicFileNaming()
   testEnhancedFileNaming()
   testContextDetection()
@@ -247,7 +247,7 @@ export const runAllTests = () => {
   testTimestampGeneration()
   testFileExtensionDetection()
   testEdgeCases()
-  
+
   console.log('\n✅ All tests completed!')
 }
 
@@ -261,13 +261,13 @@ export const useFileNamingInComponent = () => {
       date: new Date(),
       branchName: 'Current_Branch',
       filters: {
-        ...additionalFilters
+        ...additionalFilters,
       },
       includeTimestamp: true,
-      includeUniqueId: false
+      includeUniqueId: false,
     })
   }
-  
+
   return { generateExportFileName }
 }
 
@@ -280,5 +280,5 @@ export default {
   testFileExtensionDetection,
   testEdgeCases,
   runAllTests,
-  useFileNamingInComponent
+  useFileNamingInComponent,
 }

@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Card, CardContent } from '@mui/material'
 import dayjs from 'dayjs'
 import SalesChart from './charts/SalesChart'
-import RevenueLegendTable from './RevenueLegendTable'
 import FilteredDataGrid from './FilteredDataGrid'
 
 const SERVICE_COLORS = {
@@ -420,11 +419,9 @@ const SalesDashboard = ({
       return acc
     }, {})
 
-    // Sort labels alphabetically (case-insensitive, strict A→Z order)
-    const labels = Object.keys(totalsByService).sort((a, b) =>
-      a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true }),
-    )
+    const labels = Object.keys(totalsByService)
     const amounts = labels.map((label) => totalsByService[label])
+
     const assignedColors = labels.map((label, index) => {
       if (SERVICE_COLORS[label]) {
         return SERVICE_COLORS[label]
@@ -439,16 +436,6 @@ const SalesDashboard = ({
   const hasChartData =
     pieChartDataset.labels.length > 0 &&
     pieChartDataset.amounts.some((amount) => amount > 0)
-
-  // Prepare legend table items for revenueNew
-  const legendTableItems = pieChartDataset.labels.map((label, idx) => ({
-    label,
-    amount: pieChartDataset.amounts[idx],
-    color: pieChartDataset.colors[idx],
-    percentage: hasChartData
-      ? `${((pieChartDataset.amounts[idx] / (pieChartDataset.amounts.reduce((a, b) => a + b, 0) || 1)) * 100).toFixed(1)}%`
-      : '0%',
-  }))
 
   return (
     <div className="grid grid-cols-12 gap-5">
@@ -487,21 +474,14 @@ const SalesDashboard = ({
           />
         </div>
       )}
-      {/* Chart and Table Section */}
+      {/* Chart Section with null check */}
       <div className="col-span-12 lg:col-span-4">
         {activeView === 'sales' ? (
-          <div className="flex flex-col gap-4 h-full">
-            <div className="flex-1 flex items-center justify-center">
-              <SalesChart
-                dataset={pieChartDataset}
-                isLoading={isChartLoading}
-                hasData={hasChartData}
-              />
-            </div>
-            <div className="flex-1">
-              <RevenueLegendTable items={legendTableItems} />
-            </div>
-          </div>
+          <SalesChart
+            dataset={pieChartDataset}
+            isLoading={isChartLoading}
+            hasData={hasChartData}
+          />
         ) : (
           <div className="text-center p-4 text-gray-500">
             No chart available for the selected view

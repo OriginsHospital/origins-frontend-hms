@@ -12,7 +12,7 @@ This implementation provides a comprehensive solution for dynamic file naming in
 ✅ **Special Character Handling**: Safely handles spaces and special characters in file names  
 ✅ **Multiple Format Support**: Works with CSV, Excel, PDF, and other export formats  
 ✅ **Context Detection**: Automatically detects report type from page routes  
-✅ **Branch Integration**: Includes branch information in file names when applicable  
+✅ **Branch Integration**: Includes branch information in file names when applicable
 
 ## File Structure
 
@@ -59,10 +59,10 @@ const fileName = generateEnhancedReportFileName({
   branchName: 'Main_Branch',
   filters: {
     fromDate: '2025-01-01',
-    toDate: '2025-01-31'
+    toDate: '2025-01-31',
   },
   includeTimestamp: true,
-  includeUniqueId: false
+  includeUniqueId: false,
 })
 // Result: "Revenue_Report_Main_Branch_2025-01-01_to_2025-01-31_1430.csv"
 ```
@@ -70,11 +70,13 @@ const fileName = generateEnhancedReportFileName({
 ### 2. Updated Components
 
 #### EnhancedCustomToolbar.js
+
 - Added dynamic file naming to export functionality
 - Integrated with existing filter system
 - Supports multiple export formats (CSV, Excel, PDF)
 
 #### FilteredDataGrid.js
+
 - Passes report context to toolbar
 - Maintains backward compatibility
 - Supports custom report names and types
@@ -82,6 +84,7 @@ const fileName = generateEnhancedReportFileName({
 ### 3. Report Page Updates
 
 All report pages now include:
+
 - `reportName`: Descriptive name for the report
 - `reportType`: Type identifier for context detection
 - `branchName`: Branch information for file naming
@@ -90,21 +93,23 @@ All report pages now include:
 ## File Naming Patterns
 
 ### Basic Pattern
+
 ```
 {ReportName}_{BranchName}_{Date}_{Time}.{Extension}
 ```
 
 ### Enhanced Pattern (with filters)
+
 ```
 {ReportName}_{BranchName}_{FilterInfo}_{Date}_{Time}.{Extension}
 ```
 
 ### Examples
 
-| Report Type | Generated File Name |
-|-------------|-------------------|
-| Revenue Report | `Revenue_Report_Main_Branch_2025-01-27_1430.csv` |
-| Expenses with Category | `Expenses_Report_Office_Supplies_2025-01-27_1430.xlsx` |
+| Report Type            | Generated File Name                                         |
+| ---------------------- | ----------------------------------------------------------- |
+| Revenue Report         | `Revenue_Report_Main_Branch_2025-01-27_1430.csv`            |
+| Expenses with Category | `Expenses_Report_Office_Supplies_2025-01-27_1430.xlsx`      |
 | Orders with Date Range | `Orders_Report_Warehouse_2025-01-01_to_2025-01-31_1430.pdf` |
 
 ## Usage in Components
@@ -142,9 +147,9 @@ const handleExport = (format) => {
     branchName: 'Main_Branch',
     filters: currentFilters,
     includeTimestamp: true,
-    includeUniqueId: false
+    includeUniqueId: false,
   })
-  
+
   // Implement your export logic here
   exportData(data, fileName)
 }
@@ -155,7 +160,7 @@ const handleExport = (format) => {
 The implementation uses standard web APIs that are supported across all modern browsers:
 
 - **Chrome**: ✅ Full support
-- **Edge**: ✅ Full support  
+- **Edge**: ✅ Full support
 - **Firefox**: ✅ Full support
 - **Safari**: ✅ Full support
 
@@ -176,14 +181,14 @@ runAllTests()
 
 ```javascript
 const options = {
-  reportName: 'Custom_Report',        // Override default report name
-  reportType: 'custom',              // Report type identifier
-  format: 'csv',                      // Export format
-  date: new Date(),                  // Report date
-  branchName: 'Branch_Name',         // Branch information
-  filters: {},                       // Current filters
-  includeTimestamp: true,            // Include timestamp in filename
-  includeUniqueId: false             // Include unique ID for multiple downloads
+  reportName: 'Custom_Report', // Override default report name
+  reportType: 'custom', // Report type identifier
+  format: 'csv', // Export format
+  date: new Date(), // Report date
+  branchName: 'Branch_Name', // Branch information
+  filters: {}, // Current filters
+  includeTimestamp: true, // Include timestamp in filename
+  includeUniqueId: false, // Include unique ID for multiple downloads
 }
 ```
 
@@ -196,13 +201,13 @@ const contextMap = {
   '/reports/revenue': {
     reportName: 'Revenue_Report',
     reportType: 'revenue',
-    defaultFormat: 'csv'
+    defaultFormat: 'csv',
   },
   '/reports/expenses': {
-    reportName: 'Expenses_Report', 
+    reportName: 'Expenses_Report',
     reportType: 'expenses',
-    defaultFormat: 'csv'
-  }
+    defaultFormat: 'csv',
+  },
   // ... more mappings
 }
 ```
@@ -212,13 +217,14 @@ const contextMap = {
 ### For Existing Reports
 
 1. **Update FilteredDataGrid usage**:
+
    ```javascript
    // Before
    <FilteredDataGrid
      rows={data}
      columns={columns}
    />
-   
+
    // After
    <FilteredDataGrid
      rows={data}
@@ -262,7 +268,7 @@ import { generateEnhancedReportFileName } from '@/utils/fileNamingUtils'
 // Enable debug mode
 const fileName = generateEnhancedReportFileName({
   // ... options
-  debug: true  // This will log the generation process
+  debug: true, // This will log the generation process
 })
 ```
 

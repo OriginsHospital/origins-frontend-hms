@@ -19,7 +19,13 @@ import { useQuery } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import React, { useContext, useEffect, useState } from 'react'
 import { useSelector } from 'react-redux'
+import { useRouter } from 'next/router'
+import { toast } from 'react-toastify'
+import { toastconfig } from '@/utils/toastconfig'
+import { hasRevenueAccess } from '@/utils/revenueAccess'
+
 function SalesNew() {
+  const router = useRouter()
   const userDetails = useSelector((store) => store.user)
   const dropdowns = useSelector((store) => store.dropdowns)
   // Initialize with current date for fromDate and 30 days ago for toDate
@@ -39,6 +45,18 @@ function SalesNew() {
   const [appliedToDate, setAppliedToDate] = useState(dayjs().toDate())
   const [appliedBranchId, setAppliedBranchId] = useState('')
   const [appliedPaymentMode, setAppliedPaymentMode] = useState('ALL')
+
+  // Access control: Check if user has revenue access
+  useEffect(() => {
+    if (userDetails?.email && !hasRevenueAccess(userDetails.email)) {
+      toast.error(
+        'You do not have permission to access Revenue Reports.',
+        toastconfig,
+      )
+      router.replace('/home')
+      return
+    }
+  }, [userDetails?.email, router])
 
   // Set initial branch and handle branch data loading
   useEffect(() => {
@@ -128,6 +146,17 @@ function SalesNew() {
         return response.data
       } catch (error) {
         console.error('Revenue API Error:', error)
+        // Handle 403 Forbidden (unauthorized access)
+        if (
+          error?.message?.includes('Access restricted') ||
+          error?.response?.status === 403
+        ) {
+          toast.error(
+            'You do not have permission to access Revenue Reports.',
+            toastconfig,
+          )
+          router.replace('/home')
+        }
         throw error
       }
     },
@@ -221,6 +250,11 @@ function SalesNew() {
     setAppliedToDate(defaultTo)
     setAppliedBranchId(defaultBranch)
     setAppliedPaymentMode('ALL')
+  }
+
+  // Don't render if user doesn't have access
+  if (userDetails?.email && !hasRevenueAccess(userDetails.email)) {
+    return null
   }
 
   return (

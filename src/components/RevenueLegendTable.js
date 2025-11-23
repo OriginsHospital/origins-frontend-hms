@@ -29,9 +29,9 @@ const RevenueLegendTable = ({ items = [] }) => {
   const column2 = sortedItems.slice(itemsPerColumn, itemsPerColumn * 2)
   const column3 = sortedItems.slice(itemsPerColumn * 2)
 
-  const renderColumn = (columnItems) => (
+  const renderColumn = columnItems => (
     <div className={styles.column}>
-      {columnItems.map((item) => (
+      {columnItems.map(item => (
         <div key={item.label} className={styles.item}>
           <div className={styles.header}>
             <span
