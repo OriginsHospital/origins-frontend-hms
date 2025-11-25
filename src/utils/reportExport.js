@@ -110,6 +110,73 @@ export const generateReportFileName = ({
 }
 
 /**
+ * Get value from row for a column, handling nested objects
+ * @param {Object} row - Data row
+ * @param {Object} col - Column definition
+ * @returns {string} - Extracted value
+ */
+const getCellValue = (row, col) => {
+  // Use valueGetter if provided (MUI DataGrid feature)
+  if (col.valueGetter && typeof col.valueGetter === 'function') {
+    try {
+      const result = col.valueGetter({ row, value: row[col.field] })
+      if (result !== null && result !== undefined) {
+        return String(result)
+      }
+    } catch (error) {
+      console.warn('Error in valueGetter for column', col.field, error)
+    }
+  }
+
+  // Get the raw value
+  let value = row[col.field]
+
+  // Handle nested objects based on common patterns
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    // Handle city object: { name: "Hyderabad", id: 4 }
+    if (col.field === 'city') {
+      value = value.name || value.cityName || ''
+    }
+    // Handle patientType object: { name: "FERT", id: 1 }
+    else if (col.field === 'patientType' || col.field === 'type') {
+      value = value.name || value.typeName || ''
+    }
+    // Handle referralSource object: { referralSource: "Friends", id: 1 }
+    else if (col.field === 'referralSource') {
+      value = value.referralSource || value.name || value.source || ''
+    }
+    // Generic fallback: try common property names
+    else {
+      value = value.name || value.label || value.value || value.text || value.title || ''
+    }
+  }
+
+  // Handle arrays (convert to comma-separated string)
+  if (Array.isArray(value)) {
+    value = value.map(item => {
+      if (typeof item === 'object' && item !== null) {
+        return item.name || item.label || item.value || String(item)
+      }
+      return String(item)
+    }).join(', ')
+  }
+
+  // Convert to string and handle null/undefined
+  if (value === null || value === undefined || value === '') {
+    return ''
+  }
+
+  const stringValue = String(value).trim()
+
+  // Escape commas and quotes in CSV
+  if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+    return `"${stringValue.replace(/"/g, '""')}"`
+  }
+
+  return stringValue
+}
+
+/**
  * Converts data to CSV format
  * @param {Array} data - Data to convert
  * @param {Array} columns - Column definitions
@@ -128,15 +195,7 @@ export const convertToCSV = (data, columns) => {
   const rows = data.map((row) => {
     return visibleColumns
       .map((col) => {
-        const value = row[col.field]
-        // Escape commas and quotes in CSV
-        if (
-          typeof value === 'string' &&
-          (value.includes(',') || value.includes('"'))
-        ) {
-          return `"${value.replace(/"/g, '""')}"`
-        }
-        return value || ''
+        return getCellValue(row, col)
       })
       .join(',')
   })

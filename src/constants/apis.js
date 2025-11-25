@@ -289,6 +289,23 @@ export const getPatientTreatmentCycles = async (token, searchValue) => {
   return response.json()
 }
 
+export const getNewPatientTracker = async (token, branch) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_NEW_PATIENT_TRACKER}?branch=${branch}`,
+    {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+
+  return response.json()
+}
+
 export const getDonarInformation = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)

@@ -320,6 +320,11 @@ function SideNav(props) {
             name: 'Treatment Cycles',
             relatedModule: 'donorModule',
           },
+          {
+            path: '/reports/newPatientTracker',
+            name: 'New Patient Tracker',
+            relatedModule: 'reportsModule',
+          },
         ],
       },
       {

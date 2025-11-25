@@ -24,6 +24,11 @@ self.__BUILD_MANIFEST = {
       "static/chunks/main.js",
       "static/chunks/pages/_error.js"
     ],
+    "/doctor/appointments": [
+      "static/chunks/webpack.js",
+      "static/chunks/main.js",
+      "static/chunks/pages/doctor/appointments.js"
+    ],
     "/home": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
@@ -33,11 +38,6 @@ self.__BUILD_MANIFEST = {
       "static/chunks/webpack.js",
       "static/chunks/main.js",
       "static/chunks/pages/login.js"
-    ],
-    "/pharmacy/medicinestages": [
-      "static/chunks/webpack.js",
-      "static/chunks/main.js",
-      "static/chunks/pages/pharmacy/medicinestages.js"
     ]
   },
   "ampFirstPages": []

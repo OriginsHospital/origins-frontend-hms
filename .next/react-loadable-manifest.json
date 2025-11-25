@@ -25,10 +25,40 @@
       "static/chunks/node_modules_jodit-react_build_jodit-react_js.js"
     ]
   },
+  "components\\DischargeSummarSheet.js -> jodit-react": {
+    "id": "components\\DischargeSummarSheet.js -> jodit-react",
+    "files": [
+      "static/chunks/node_modules_jodit-react_build_jodit-react_js.js"
+    ]
+  },
+  "components\\HysteroscopySheet.js -> jodit-react": {
+    "id": "components\\HysteroscopySheet.js -> jodit-react",
+    "files": [
+      "static/chunks/node_modules_jodit-react_build_jodit-react_js.js"
+    ]
+  },
   "components\\Loader.js -> react-lottie": {
     "id": "components\\Loader.js -> react-lottie",
     "files": [
       "static/chunks/node_modules_react-lottie_dist_index_js.js"
+    ]
+  },
+  "components\\OPDSheet.js -> jodit-react": {
+    "id": "components\\OPDSheet.js -> jodit-react",
+    "files": [
+      "static/chunks/node_modules_jodit-react_build_jodit-react_js.js"
+    ]
+  },
+  "components\\PatientPrescription.js -> jodit-react": {
+    "id": "components\\PatientPrescription.js -> jodit-react",
+    "files": [
+      "static/chunks/node_modules_jodit-react_build_jodit-react_js.js"
+    ]
+  },
+  "components\\PickupSheet.js -> jodit-react": {
+    "id": "components\\PickupSheet.js -> jodit-react",
+    "files": [
+      "static/chunks/node_modules_jodit-react_build_jodit-react_js.js"
     ]
   },
   "components\\PrintPreview.js -> html2pdf.js": {
@@ -49,10 +79,16 @@
       "static/chunks/node_modules_react-quill-new_lib_index_js.js"
     ]
   },
-  "pages\\pharmacy\\medicinestages\\index.js -> html2pdf.js": {
-    "id": "pages\\pharmacy\\medicinestages\\index.js -> html2pdf.js",
+  "components\\SpousePrescription.js -> jodit-react": {
+    "id": "components\\SpousePrescription.js -> jodit-react",
     "files": [
-      "static/chunks/node_modules_html2pdf_js_dist_html2pdf_js.js"
+      "static/chunks/node_modules_jodit-react_build_jodit-react_js.js"
+    ]
+  },
+  "pages\\doctor\\appointments.js -> jodit-react": {
+    "id": "pages\\doctor\\appointments.js -> jodit-react",
+    "files": [
+      "static/chunks/node_modules_jodit-react_build_jodit-react_js.js"
     ]
   }
 }

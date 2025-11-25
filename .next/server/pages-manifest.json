@@ -2,8 +2,8 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
-  "/login": "pages/login.js",
-  "/": "pages/index.js",
   "/home": "pages/home.js",
-  "/pharmacy/medicinestages": "pages/pharmacy/medicinestages.js"
+  "/doctor/appointments": "pages/doctor/appointments.js",
+  "/login": "pages/login.js",
+  "/": "pages/index.js"
 }

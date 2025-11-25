@@ -118,6 +118,13 @@ const subNav = [
     requiresRevenueAccess: false,
   },
   {
+    path: '/reports/newPatientTracker',
+    title: 'New Patient Tracker',
+    relatedModule: 'reportsModule',
+    icon: FiUser,
+    requiresRevenueAccess: false,
+  },
+  {
     path: '/reports/revenueNew',
     title: 'Revenue New',
     relatedModule: null,

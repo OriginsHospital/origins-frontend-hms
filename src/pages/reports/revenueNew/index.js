@@ -35,6 +35,7 @@ function SalesNew() {
   const [toDate, setToDate] = useState(dayjs().toDate())
   const [branchId, setBranchId] = useState('')
   const [paymentMode, setPaymentMode] = useState('ALL')
+  const [service, setService] = useState('ALL')
   const [activeView, setActiveView] = useState('sales') // 'sales' or 'refunds'
   const [filteredData, setFilteredData] = useState(null)
 
@@ -180,55 +181,108 @@ function SalesNew() {
       console.log('Processing sales dashboard data:', salesDashboardData)
       let filtered = { ...salesDashboardData }
 
+      // Start with the original data
+      let filteredSalesData = salesDashboardData.salesData || []
+      let filteredReturnData = salesDashboardData.returnData || []
+
       // Apply payment mode filter only when a specific mode is selected (not 'ALL')
       if (paymentMode && paymentMode !== 'ALL') {
         console.log('Applying payment mode filter:', paymentMode)
 
         // Safely filter sales data
-        const filteredSalesData = (salesDashboardData.salesData || []).filter(
+        filteredSalesData = filteredSalesData.filter(
           (item) => item && item.paymentMode === paymentMode,
         )
 
         // Safely filter return data
-        const filteredReturnData = (salesDashboardData.returnData || []).filter(
+        filteredReturnData = filteredReturnData.filter(
           (item) => item && item.paymentMode === paymentMode,
         )
+      }
 
-        // Safely calculate totals
-        const totalSales = filteredSalesData.reduce(
-          (sum, item) => sum + (Number(item?.amount) || 0),
-          0,
-        )
+      // Apply service filter only when a specific service is selected (not 'ALL')
+      if (service && service !== 'ALL') {
+        console.log('Applying service filter:', service)
 
-        const totalReturns = filteredReturnData.reduce(
-          (sum, item) => sum + (Math.abs(Number(item?.amount)) || 0),
-          0,
-        )
+        // Filter by productType field (case-insensitive comparison)
+        // The data uses productType field, and values can be in different cases (PHARMACY, Pharmacy, pharmacy)
+        const filterValue = service.toString().trim().toUpperCase()
+        
+        // Debug: Log sample data to understand structure (only log first time)
+        if (filteredSalesData.length > 0 && filteredSalesData[0]) {
+          const sampleItem = filteredSalesData[0]
+          console.log('Sample sales item structure:', {
+            hasService: !!sampleItem.service,
+            serviceValue: sampleItem.service,
+            hasProductType: !!sampleItem.productType,
+            productTypeValue: sampleItem.productType,
+            filterValue: filterValue,
+          })
+        }
 
-        console.log('Filtered data stats:', {
-          salesCount: filteredSalesData.length,
-          returnsCount: filteredReturnData.length,
-          totalSales,
-          totalReturns,
+        const beforeFilterCount = filteredSalesData.length
+
+        filteredSalesData = filteredSalesData.filter((item) => {
+          if (!item) return false
+          // Check both service and productType fields with case-insensitive comparison
+          const itemService = String(item.service || item.productType || '').trim().toUpperCase()
+          const matches = itemService === filterValue
+          return matches
         })
 
-        filtered = {
-          ...salesDashboardData,
-          salesData: filteredSalesData,
-          returnData: filteredReturnData,
-          salesDashboard: {
-            ...salesDashboardData.salesDashboard,
-            totalSales: totalSales,
-            totalReturns: totalReturns,
-          },
-        }
+        filteredReturnData = filteredReturnData.filter((item) => {
+          if (!item) return false
+          // Check both service and productType fields with case-insensitive comparison
+          const itemService = String(item.service || item.productType || '').trim().toUpperCase()
+          const matches = itemService === filterValue
+          return matches
+        })
+
+        console.log('Service filter results:', {
+          beforeFilterCount,
+          afterFilterCount: filteredSalesData.length,
+          filterValue,
+          originalSalesCount: (salesDashboardData.salesData || []).length,
+          filteredSalesCount: filteredSalesData.length,
+          originalReturnsCount: (salesDashboardData.returnData || []).length,
+          filteredReturnsCount: filteredReturnData.length,
+        })
+      }
+
+      // Safely calculate totals
+      const totalSales = filteredSalesData.reduce(
+        (sum, item) => sum + (Number(item?.amount) || 0),
+        0,
+      )
+
+      const totalReturns = filteredReturnData.reduce(
+        (sum, item) => sum + (Math.abs(Number(item?.amount)) || 0),
+        0,
+      )
+
+      console.log('Filtered data stats:', {
+        salesCount: filteredSalesData.length,
+        returnsCount: filteredReturnData.length,
+        totalSales,
+        totalReturns,
+      })
+
+      filtered = {
+        ...salesDashboardData,
+        salesData: filteredSalesData,
+        returnData: filteredReturnData,
+        salesDashboard: {
+          ...salesDashboardData.salesDashboard,
+          totalSales: totalSales,
+          totalReturns: totalReturns,
+        },
       }
 
       setFilteredData(filtered)
     } catch (error) {
       console.error('Error processing sales dashboard data:', error)
     }
-  }, [salesDashboardData, paymentMode])
+  }, [salesDashboardData, paymentMode, service])
 
   const handleApplyFilters = () => {
     setAppliedFromDate(fromDate)
@@ -245,6 +299,7 @@ function SalesNew() {
     setToDate(defaultTo)
     setBranchId(defaultBranch)
     setPaymentMode('ALL')
+    setService('ALL')
     setFilteredData(null)
     setAppliedFromDate(defaultFrom)
     setAppliedToDate(defaultTo)
@@ -323,6 +378,32 @@ function SalesNew() {
           </FormControl>
         </Grid>
         {/* END NIKKI PAYMENT MODE FILTER */}
+        {/* SERVICE FILTER */}
+        <Grid item xs={12} sm={3}>
+          <FormControl
+            variant="outlined"
+            className="bg-white"
+            sx={{
+              width: '125px',
+              '& .MuiInputBase-root': {
+                height: '56px', // Same height as other filters
+              },
+            }}
+          >
+            <InputLabel>Service</InputLabel>
+            <Select
+              label="Service"
+              name="service"
+              value={service}
+              onChange={(e) => setService(e.target.value)}
+              className="flex h-full"
+            >
+              <MenuItem value="ALL">All</MenuItem>
+              <MenuItem value="Pharmacy">Pharmacy</MenuItem>
+            </Select>
+          </FormControl>
+        </Grid>
+        {/* END SERVICE FILTER */}
         <DatePicker
           label="From Date"
           // disabled={isEdit == 'noneditable'}
