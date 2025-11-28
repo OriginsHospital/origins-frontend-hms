@@ -99,14 +99,24 @@ const SalesDashboard = ({
   const dataNormalizedReturns = (data?.returnData || []).map(normalizeRow)
 
   const rowsForActiveBranch = useMemo(() => {
+    // When branchId is "ALL", show all rows without filtering
+    if (branchId === 'ALL') {
+      return dataNormalizedSales || []
+    }
+    // Otherwise, filter by branchId
     return (dataNormalizedSales || []).filter(
-      (row) => row.branchId === branchId,
+      (row) => row.branchId === branchId || String(row.branchId) === String(branchId),
     )
   }, [dataNormalizedSales, branchId])
 
   const rowsForActiveBranchReturns = useMemo(() => {
+    // When branchId is "ALL", show all rows without filtering
+    if (branchId === 'ALL') {
+      return dataNormalizedReturns || []
+    }
+    // Otherwise, filter by branchId
     return (dataNormalizedReturns || []).filter(
-      (row) => row.branchId === branchId,
+      (row) => row.branchId === branchId || String(row.branchId) === String(branchId),
     )
   }, [dataNormalizedReturns, branchId])
 

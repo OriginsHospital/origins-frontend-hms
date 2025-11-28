@@ -28,11 +28,10 @@ function SalesNew() {
   const router = useRouter()
   const userDetails = useSelector((store) => store.user)
   const dropdowns = useSelector((store) => store.dropdowns)
-  // Initialize with current date for fromDate and 30 days ago for toDate
-  const [fromDate, setFromDate] = useState(
-    dayjs().subtract(30, 'days').toDate(),
-  )
-  const [toDate, setToDate] = useState(dayjs().toDate())
+  // Initialize with current date for both fromDate and toDate
+  const today = dayjs().toDate()
+  const [fromDate, setFromDate] = useState(today)
+  const [toDate, setToDate] = useState(today)
   const [branchId, setBranchId] = useState('')
   const [paymentMode, setPaymentMode] = useState('ALL')
   const [service, setService] = useState('ALL')
@@ -40,10 +39,8 @@ function SalesNew() {
   const [filteredData, setFilteredData] = useState(null)
 
   // Applied filters (used to trigger API)
-  const [appliedFromDate, setAppliedFromDate] = useState(
-    dayjs().subtract(30, 'days').toDate(),
-  )
-  const [appliedToDate, setAppliedToDate] = useState(dayjs().toDate())
+  const [appliedFromDate, setAppliedFromDate] = useState(today)
+  const [appliedToDate, setAppliedToDate] = useState(today)
   const [appliedBranchId, setAppliedBranchId] = useState('')
   const [appliedPaymentMode, setAppliedPaymentMode] = useState('ALL')
 
@@ -59,10 +56,14 @@ function SalesNew() {
     }
   }, [userDetails?.email, router])
 
-  // Set initial branch and handle branch data loading
+  // Set initial branch to HNK and handle branch data loading
   useEffect(() => {
     if (dropdowns?.branches?.length > 0) {
-      const defaultBranch = dropdowns.branches[0].id
+      // Find HNK branch or use first branch as fallback
+      const hnkBranch = dropdowns.branches.find(
+        (branch) => branch.name === 'HNK' || branch.name === 'hnk',
+      )
+      const defaultBranch = hnkBranch?.id || dropdowns.branches[0].id
       setBranchId(defaultBranch)
       setAppliedBranchId(defaultBranch) // Set applied branch ID immediately
       setAppliedPaymentMode('ALL')
@@ -72,8 +73,8 @@ function SalesNew() {
 
   // Validate and update applied filters
   useEffect(() => {
-    // Validate dates
-    const isValidDateRange = dayjs(fromDate).isBefore(dayjs(toDate))
+    // Validate dates (allow equal dates - fromDate can be same as toDate)
+    const isValidDateRange = dayjs(fromDate).isBefore(dayjs(toDate)) || dayjs(fromDate).isSame(dayjs(toDate), 'day')
     if (!isValidDateRange) {
       console.error('Invalid date range:', { fromDate, toDate })
       return
@@ -87,13 +88,19 @@ function SalesNew() {
         toDate: dayjs(toDate).format('YYYY-MM-DD'),
       })
 
-      setAppliedBranchId(branchId)
+      // When "ALL" is selected, we'll fetch data for all branches
+      // For now, set appliedBranchId to "ALL" to trigger multi-branch fetch
+      if (branchId === 'ALL') {
+        setAppliedBranchId('ALL')
+      } else {
+        setAppliedBranchId(branchId)
+      }
       setAppliedFromDate(fromDate)
       setAppliedToDate(toDate)
       // Ensure applied payment mode is set (default ALL)
       setAppliedPaymentMode(paymentMode || 'ALL')
     }
-  }, [branchId, fromDate, toDate])
+  }, [branchId, fromDate, toDate, dropdowns, paymentMode])
 
   const {
     data: salesDashboardData,
@@ -109,6 +116,7 @@ function SalesNew() {
       appliedToDate,
       appliedBranchId,
       appliedPaymentMode,
+      dropdowns?.branches?.length, // Include branches length to refetch when branches change
     ],
     queryFn: async () => {
       try {
@@ -119,32 +127,153 @@ function SalesNew() {
           throw new Error('Date range is required')
         if (!appliedBranchId) throw new Error('Branch ID is required')
 
-        // Log API call parameters
-        console.log('Revenue New API Call:', {
-          token: 'Present',
-          fromDate: dayjs(appliedFromDate).format('YYYY-MM-DD'),
-          toDate: dayjs(appliedToDate).format('YYYY-MM-DD'),
-          branchId: appliedBranchId,
-        })
-
-        // Make API call
-        const response = await SalesReportDashboard(
-          userDetails.accessToken,
-          dayjs(appliedFromDate).format('YYYY-MM-DD'),
-          dayjs(appliedToDate).format('YYYY-MM-DD'),
-          appliedBranchId,
+        const fromDateStr = dayjs(appliedFromDate).format('YYYY-MM-DD')
+        const toDateStr = dayjs(appliedToDate).format('YYYY-MM-DD')
+        const paymentModeParam =
           appliedPaymentMode && appliedPaymentMode !== 'ALL'
             ? appliedPaymentMode
-            : undefined,
-        )
+            : undefined
 
-        // Validate API response
-        if (!response || !response.data) {
-          throw new Error('Invalid API response format')
+        // When "ALL" is selected, fetch data for all branches and combine
+        if (appliedBranchId === 'ALL') {
+          console.log('Fetching data for ALL branches (HNK + HYD + KMM + SPL)')
+          
+          if (!dropdowns?.branches || dropdowns.branches.length === 0) {
+            throw new Error('No branches available')
+          }
+
+          // Log which branches will be fetched
+          const branchNames = dropdowns.branches.map(b => b.name).join(', ')
+          console.log(`Fetching data for branches: ${branchNames}`)
+
+          // Fetch data for all branches in parallel with error handling
+          const branchPromises = dropdowns.branches.map((branch) =>
+            SalesReportDashboard(
+              userDetails.accessToken,
+              fromDateStr,
+              toDateStr,
+              branch.id,
+              paymentModeParam,
+            )
+              .then((response) => {
+                if (!response || !response.data) {
+                  console.warn(`No data returned for branch: ${branch.name} (${branch.id})`)
+                  return {
+                    branchId: branch.id,
+                    branchName: branch.name,
+                    data: null,
+                    success: false,
+                  }
+                }
+                return {
+                  branchId: branch.id,
+                  branchName: branch.name,
+                  data: response.data,
+                  success: true,
+                }
+              })
+              .catch((error) => {
+                console.error(`Error fetching data for branch ${branch.name} (${branch.id}):`, error)
+                return {
+                  branchId: branch.id,
+                  branchName: branch.name,
+                  data: null,
+                  success: false,
+                  error: error.message,
+                }
+              }),
+          )
+
+          const branchResults = await Promise.all(branchPromises)
+
+          // Combine all branch data
+          const combinedSalesData = []
+          const combinedReturnData = []
+          let totalSales = 0
+          let totalReturns = 0
+          const successfulBranches = []
+          const failedBranches = []
+
+          branchResults.forEach((result) => {
+            if (result.success && result.data) {
+              successfulBranches.push(result.branchName)
+              
+              // Combine sales data
+              if (result.data.salesData && Array.isArray(result.data.salesData)) {
+                combinedSalesData.push(...result.data.salesData)
+              }
+              
+              // Combine return data
+              if (result.data.returnData && Array.isArray(result.data.returnData)) {
+                combinedReturnData.push(...result.data.returnData)
+              }
+              
+              // Sum totals
+              if (result.data.salesDashboard?.totalSales) {
+                totalSales += Number(result.data.salesDashboard.totalSales) || 0
+              }
+              if (result.data.salesDashboard?.totalReturns) {
+                totalReturns += Number(result.data.salesDashboard.totalReturns) || 0
+              }
+            } else {
+              failedBranches.push({
+                name: result.branchName,
+                error: result.error || 'No data returned',
+              })
+            }
+          })
+
+          // Log results
+          console.log('Combined data for ALL branches:', {
+            successfulBranches: successfulBranches.join(', '),
+            failedBranches: failedBranches.length > 0 ? failedBranches.map(b => b.name).join(', ') : 'None',
+            salesCount: combinedSalesData.length,
+            returnsCount: combinedReturnData.length,
+            totalSales,
+            totalReturns,
+          })
+
+          if (failedBranches.length > 0) {
+            console.warn('Some branches failed to load:', failedBranches)
+          }
+
+          // Return combined data structure matching the API response format
+          const combinedData = {
+            salesData: combinedSalesData,
+            returnData: combinedReturnData,
+            salesDashboard: {
+              totalSales,
+              totalReturns,
+            },
+          }
+
+          return combinedData
+        } else {
+          // Single branch fetch
+          console.log('Revenue New API Call:', {
+            token: 'Present',
+            fromDate: fromDateStr,
+            toDate: toDateStr,
+            branchId: appliedBranchId,
+          })
+
+          // Make API call
+          const response = await SalesReportDashboard(
+            userDetails.accessToken,
+            fromDateStr,
+            toDateStr,
+            appliedBranchId,
+            paymentModeParam,
+          )
+
+          // Validate API response
+          if (!response || !response.data) {
+            throw new Error('Invalid API response format')
+          }
+
+          console.log('Revenue New API Response:', response)
+          return response.data
         }
-
-        console.log('Revenue New API Response:', response)
-        return response.data
       } catch (error) {
         console.error('Revenue API Error:', error)
         // Handle 403 Forbidden (unauthorized access)
@@ -165,7 +294,8 @@ function SalesNew() {
       userDetails?.accessToken &&
         appliedBranchId &&
         appliedFromDate &&
-        appliedToDate,
+        appliedToDate &&
+        dropdowns?.branches?.length > 0, // Ensure branches are loaded
     ),
     retry: 1,
     staleTime: 30000, // Consider data stale after 30 seconds
@@ -178,7 +308,13 @@ function SalesNew() {
     try {
       if (!salesDashboardData) return
 
-      console.log('Processing sales dashboard data:', salesDashboardData)
+      console.log('Processing sales dashboard data:', {
+        hasData: !!salesDashboardData,
+        salesDataCount: salesDashboardData?.salesData?.length || 0,
+        returnDataCount: salesDashboardData?.returnData?.length || 0,
+        branchId,
+        branchIdType: typeof branchId,
+      })
       let filtered = { ...salesDashboardData }
 
       // Start with the original data
@@ -200,14 +336,44 @@ function SalesNew() {
         )
       }
 
+      // Apply branch filter only when a specific branch is selected (not 'ALL')
+      // When branchId === 'ALL': Show all branches (HNK + HYD + KMM + SPL) - NO filtering
+      if (branchId && branchId !== 'ALL') {
+        console.log('Applying branch filter for specific branch:', branchId)
+
+        const beforeSalesCount = filteredSalesData.length
+        const beforeReturnsCount = filteredReturnData.length
+
+        filteredSalesData = filteredSalesData.filter((item) => {
+          if (!item) return false
+          // Check branchId field - match by branchId or branch.id
+          const itemBranchId = item.branchId || item.branch?.id
+          return itemBranchId === branchId || String(itemBranchId) === String(branchId)
+        })
+
+        filteredReturnData = filteredReturnData.filter((item) => {
+          if (!item) return false
+          // Check branchId field - match by branchId or branch.id
+          const itemBranchId = item.branchId || item.branch?.id
+          return itemBranchId === branchId || String(itemBranchId) === String(branchId)
+        })
+
+        console.log('Branch filter results:', {
+          branchId,
+          beforeSalesCount,
+          afterSalesCount: filteredSalesData.length,
+          beforeReturnsCount,
+          afterReturnsCount: filteredReturnData.length,
+        })
+      } else if (branchId === 'ALL') {
+        // When "ALL" is selected, show all data from all branches (HNK + HYD + KMM + SPL)
+        console.log('Branch = ALL: Showing data from all branches (no branch filtering applied)')
+      }
+
       // Apply service filter only when a specific service is selected (not 'ALL')
       if (service && service !== 'ALL') {
         console.log('Applying service filter:', service)
 
-        // Filter by productType field (case-insensitive comparison)
-        // The data uses productType field, and values can be in different cases (PHARMACY, Pharmacy, pharmacy)
-        const filterValue = service.toString().trim().toUpperCase()
-        
         // Debug: Log sample data to understand structure (only log first time)
         if (filteredSalesData.length > 0 && filteredSalesData[0]) {
           const sampleItem = filteredSalesData[0]
@@ -216,32 +382,53 @@ function SalesNew() {
             serviceValue: sampleItem.service,
             hasProductType: !!sampleItem.productType,
             productTypeValue: sampleItem.productType,
-            filterValue: filterValue,
+            filterValue: service,
           })
         }
 
         const beforeFilterCount = filteredSalesData.length
 
-        filteredSalesData = filteredSalesData.filter((item) => {
-          if (!item) return false
-          // Check both service and productType fields with case-insensitive comparison
-          const itemService = String(item.service || item.productType || '').trim().toUpperCase()
-          const matches = itemService === filterValue
-          return matches
-        })
+        if (service === 'Pharmacy') {
+          // Filter to show only Pharmacy items
+          const filterValue = 'PHARMACY'
+          filteredSalesData = filteredSalesData.filter((item) => {
+            if (!item) return false
+            // Check both service and productType fields with case-insensitive comparison
+            const itemService = String(item.service || item.productType || '').trim().toUpperCase()
+            const matches = itemService === filterValue
+            return matches
+          })
 
-        filteredReturnData = filteredReturnData.filter((item) => {
-          if (!item) return false
-          // Check both service and productType fields with case-insensitive comparison
-          const itemService = String(item.service || item.productType || '').trim().toUpperCase()
-          const matches = itemService === filterValue
-          return matches
-        })
+          filteredReturnData = filteredReturnData.filter((item) => {
+            if (!item) return false
+            // Check both service and productType fields with case-insensitive comparison
+            const itemService = String(item.service || item.productType || '').trim().toUpperCase()
+            const matches = itemService === filterValue
+            return matches
+          })
+        } else if (service === 'Frontdesk') {
+          // Filter to show all items EXCEPT Pharmacy
+          filteredSalesData = filteredSalesData.filter((item) => {
+            if (!item) return false
+            // Check both service and productType fields with case-insensitive comparison
+            const itemService = String(item.service || item.productType || '').trim().toUpperCase()
+            // Exclude Pharmacy items
+            return itemService !== 'PHARMACY'
+          })
+
+          filteredReturnData = filteredReturnData.filter((item) => {
+            if (!item) return false
+            // Check both service and productType fields with case-insensitive comparison
+            const itemService = String(item.service || item.productType || '').trim().toUpperCase()
+            // Exclude Pharmacy items
+            return itemService !== 'PHARMACY'
+          })
+        }
 
         console.log('Service filter results:', {
           beforeFilterCount,
           afterFilterCount: filteredSalesData.length,
-          filterValue,
+          filterValue: service,
           originalSalesCount: (salesDashboardData.salesData || []).length,
           filteredSalesCount: filteredSalesData.length,
           originalReturnsCount: (salesDashboardData.returnData || []).length,
@@ -279,22 +466,40 @@ function SalesNew() {
       }
 
       setFilteredData(filtered)
+      
+      console.log('Final filtered data summary:', {
+        salesCount: filteredSalesData.length,
+        returnsCount: filteredReturnData.length,
+        totalSales: filtered.salesDashboard?.totalSales,
+        totalReturns: filtered.salesDashboard?.totalReturns,
+        branchId,
+        branchIdIsAll: branchId === 'ALL',
+      })
     } catch (error) {
       console.error('Error processing sales dashboard data:', error)
     }
-  }, [salesDashboardData, paymentMode, service])
+  }, [salesDashboardData, paymentMode, service, branchId])
 
   const handleApplyFilters = () => {
     setAppliedFromDate(fromDate)
     setAppliedToDate(toDate)
-    setAppliedBranchId(branchId)
+    // When "ALL" is selected, set appliedBranchId to "ALL" to trigger multi-branch fetch
+    if (branchId === 'ALL') {
+      setAppliedBranchId('ALL')
+    } else {
+      setAppliedBranchId(branchId)
+    }
     setAppliedPaymentMode(paymentMode || 'ALL')
   }
 
   const handleResetFilters = () => {
-    const defaultFrom = dayjs().subtract(30, 'day').toDate()
     const defaultTo = new Date()
-    const defaultBranch = dropdowns?.branches?.[0]?.id || ''
+    const defaultFrom = defaultTo // From Date = To Date on reset
+    // Set default branch to HNK
+    const hnkBranch = dropdowns?.branches?.find(
+      (branch) => branch.name === 'HNK' || branch.name === 'hnk',
+    )
+    const defaultBranch = hnkBranch?.id || dropdowns?.branches?.[0]?.id || ''
     setFromDate(defaultFrom)
     setToDate(defaultTo)
     setBranchId(defaultBranch)
@@ -400,6 +605,7 @@ function SalesNew() {
             >
               <MenuItem value="ALL">All</MenuItem>
               <MenuItem value="Pharmacy">Pharmacy</MenuItem>
+              <MenuItem value="Frontdesk">Frontdesk</MenuItem>
             </Select>
           </FormControl>
         </Grid>
@@ -443,6 +649,7 @@ function SalesNew() {
               className="flex h-full"
               placeholder="branch"
             >
+              <MenuItem value="ALL">ALL</MenuItem>
               {dropdowns?.branches?.map((branch, idx) => (
                 <MenuItem key={branch.id} value={branch.id}>
                   {branch.name}
@@ -506,12 +713,14 @@ function SalesNew() {
       )}
       <SalesDashboard
         data={filteredData || salesDashboardData}
-        branchId={appliedBranchId}
+        branchId={branchId === 'ALL' ? 'ALL' : appliedBranchId}
         reportName="Revenue_New_Report"
         reportType="revenue"
         branchName={
-          dropdowns?.branches?.find((branch) => branch.id === appliedBranchId)
-            ?.name
+          branchId === 'ALL'
+            ? 'ALL'
+            : dropdowns?.branches?.find((branch) => branch.id === appliedBranchId)
+                ?.name
         }
         filters={{
           fromDate: appliedFromDate
@@ -520,7 +729,7 @@ function SalesNew() {
           toDate: appliedToDate
             ? dayjs(appliedToDate).format('YYYY-MM-DD')
             : '',
-          branchId: appliedBranchId,
+          branchId: branchId === 'ALL' ? 'ALL' : appliedBranchId,
         }}
         activeView={activeView}
       />
