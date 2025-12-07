@@ -49,18 +49,20 @@ const PROCEDURE_OPTIONS = [
   'HYSTEROSCOPIC POLYPECTOMY',
 ]
 const INDICATION_OPTIONS = [
-  'Infertility',
-  'Abnormal Uterine Bleeding',
-  'Recurrent Miscarriage',
-  'Intrauterine Adhesions',
-  'Uterine Septum',
-  'Submucous Fibroid',
+  'Sub septate / Bicornate uterus',
+  'Sub septate Uterus',
   'Endometrial Polyp',
-  'Asherman Syndrome',
-  'Uterine Malformation',
-  'Failed IVF',
-  'Thin Endometrium',
-  'Other',
+  'Primary infertility',
+  'Primary infertility with 1 failed IVF',
+  'Primary infertility with B/L chocolate cysts',
+  'Primary infertility with B/L tubal block',
+  'Primary infertility with B/L HSX',
+  'Primary infertility with Fibroid',
+  'Primary infertility with Hypomenorrhea',
+  'Primary infertility with Low Ovarian Reserve with multiple fibroids',
+  'Primary infertility with Multiple Fibroids',
+  'Secondary infertility with B/L tubal block',
+  'Secondary infertility',
 ]
 const DISTENTION_MEDIUM_OPTIONS = ['Normal Saline', 'Glycine']
 
