@@ -53,11 +53,9 @@ const JoditEditor = dynamic(() => import('jodit-react'), {
 })
 function AdvancePayments({ formData }) {
   const userDetails = useSelector((store) => store.user)
-  const billTypes = useSelector((store) => store.dropdowns.billTypes)
   const dispatch = useDispatch()
-  const [billingCategory, setBillingCategory] = useState('')
+  const [appointmentReason, setAppointmentReason] = useState('')
   const [amount, setAmount] = useState('')
-  const [notes, setNotes] = useState('')
   const [selectedPayment, setSelectedPayment] = useState(null)
   const [editablePayableAmount, setEditablePayableAmount] = useState(0)
   const [invoiceHtml, setInvoiceHtml] = useState('')
@@ -101,23 +99,16 @@ function AdvancePayments({ formData }) {
       },
     })
   const handleAddOtherPayment = () => {
-    if (!billingCategory || !amount) {
+    if (!appointmentReason || !amount) {
       toast.error('Please fill in all required fields', toastconfig)
       return
     }
     addOtherPaymentMutation({
       patientId: formData.id,
-      billingCategory: billingCategory,
+      appointmentReason: appointmentReason,
       amount: amount,
-      notes: notes || null,
     })
   }
-
-  // Filter bill types to exclude Pharmacy
-  const billingCategories =
-    billTypes?.filter(
-      (billType) => billType.name?.toLowerCase() !== 'pharmacy',
-    ) || []
 
   // Payment handling functions
   const handlePayment = async (paymentMode, paymentData) => {
@@ -282,9 +273,8 @@ function AdvancePayments({ formData }) {
           color="primary"
           className="capitalize"
           onClick={() => {
-            setBillingCategory('')
+            setAppointmentReason('')
             setAmount('')
-            setNotes('')
             dispatch(openModal('advance-payment-modal'))
           }}
         >
@@ -643,20 +633,14 @@ function AdvancePayments({ formData }) {
         </div>
 
         <div className="flex flex-col gap-4 mt-4">
-          <FormControl fullWidth required>
-            <InputLabel>Billing Category</InputLabel>
-            <Select
-              value={billingCategory}
-              onChange={(e) => setBillingCategory(e.target.value)}
-              label="Billing Category"
-            >
-              {billingCategories.map((billType) => (
-                <MenuItem key={billType.id} value={billType.name}>
-                  {billType.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <TextField
+            label="Appointment Reason"
+            value={appointmentReason}
+            onChange={(e) => setAppointmentReason(e.target.value)}
+            fullWidth
+            required
+            placeholder="Enter appointment reason"
+          />
 
           <TextField
             label="Amount"
@@ -673,16 +657,6 @@ function AdvancePayments({ formData }) {
                 step: '0.01',
               },
             }}
-          />
-
-          <TextField
-            label="Notes"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            fullWidth
-            multiline
-            rows={3}
-            placeholder="Enter notes about the bill or payment"
           />
 
           <div className="flex justify-end">
