@@ -25,6 +25,10 @@ import {
   Typography,
   Chip,
   Autocomplete,
+  MenuItem,
+  Select,
+  FormControl,
+  InputLabel,
 } from '@mui/material'
 import {
   Close,
@@ -48,10 +52,12 @@ const JoditEditor = dynamic(() => import('jodit-react'), {
   ssr: false,
 })
 function AdvancePayments({ formData }) {
-  const userDetails = useSelector(store => store.user)
+  const userDetails = useSelector((store) => store.user)
+  const billTypes = useSelector((store) => store.dropdowns.billTypes)
   const dispatch = useDispatch()
-  const [appointmentReason, setAppointmentReason] = useState('')
+  const [billingCategory, setBillingCategory] = useState('')
   const [amount, setAmount] = useState('')
+  const [notes, setNotes] = useState('')
   const [selectedPayment, setSelectedPayment] = useState(null)
   const [editablePayableAmount, setEditablePayableAmount] = useState(0)
   const [invoiceHtml, setInvoiceHtml] = useState('')
@@ -61,7 +67,11 @@ function AdvancePayments({ formData }) {
   const isAdmin =
     userDetails.roleDetails?.id === 1 || userDetails.roleDetails?.id === 7
 
-  const { data: otherPaymentsStatus, isLoading, error } = useQuery({
+  const {
+    data: otherPaymentsStatus,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ['otherPaymentsStatus', formData.id],
     queryFn: async () => {
       return await getOtherPaymentsStatus(userDetails.accessToken, formData.id)
@@ -78,31 +88,36 @@ function AdvancePayments({ formData }) {
     },
   })
   const queryClient = useQueryClient()
-  const {
-    mutate: addOtherPaymentMutation,
-    isPending: addOtherPaymentLoading,
-  } = useMutation({
-    mutationFn: async payload => {
-      return await addOtherPayment(userDetails.accessToken, payload)
-    },
-    onSuccess: () => {
-      dispatch(closeModal('advance-payment-modal'))
-      queryClient.invalidateQueries({
-        queryKey: ['otherPaymentsStatus', formData.id],
-      })
-    },
-  })
+  const { mutate: addOtherPaymentMutation, isPending: addOtherPaymentLoading } =
+    useMutation({
+      mutationFn: async (payload) => {
+        return await addOtherPayment(userDetails.accessToken, payload)
+      },
+      onSuccess: () => {
+        dispatch(closeModal('advance-payment-modal'))
+        queryClient.invalidateQueries({
+          queryKey: ['otherPaymentsStatus', formData.id],
+        })
+      },
+    })
   const handleAddOtherPayment = () => {
-    if (!appointmentReason || !amount) {
+    if (!billingCategory || !amount) {
       toast.error('Please fill in all required fields', toastconfig)
       return
     }
     addOtherPaymentMutation({
       patientId: formData.id,
-      appointmentReason: appointmentReason,
+      billingCategory: billingCategory,
       amount: amount,
+      notes: notes || null,
     })
   }
+
+  // Filter bill types to exclude Pharmacy
+  const billingCategories =
+    billTypes?.filter(
+      (billType) => billType.name?.toLowerCase() !== 'pharmacy',
+    ) || []
 
   // Payment handling functions
   const handlePayment = async (paymentMode, paymentData) => {
@@ -134,7 +149,7 @@ function AdvancePayments({ formData }) {
             description: 'Advance Payment',
             order_id: order.data.orderId,
             'theme.color': '#FF6C22',
-            handler: async response => {
+            handler: async (response) => {
               const order_details = {
                 orderId: response.razorpay_order_id,
                 transactionId: response.razorpay_payment_id,
@@ -154,10 +169,10 @@ function AdvancePayments({ formData }) {
           }
           const paymentObject = new window.Razorpay(options)
           paymentObject.open()
-          paymentObject.on('payment.failed', function(response) {
+          paymentObject.on('payment.failed', function (response) {
             toast.error('Payment failed', toastconfig)
           })
-          paymentObject.on('payment.success', function(response) {
+          paymentObject.on('payment.success', function (response) {
             toast.success('Payment successful through online', toastconfig)
             dispatch(closeModal('payment-modal'))
             queryClient.invalidateQueries({
@@ -216,7 +231,7 @@ function AdvancePayments({ formData }) {
   }
 
   // Handle download invoice
-  const handleDownloadInvoice = async payment => {
+  const handleDownloadInvoice = async (payment) => {
     try {
       const response = await downloadOtherPaymentsInvoice(
         userDetails.accessToken,
@@ -267,8 +282,9 @@ function AdvancePayments({ formData }) {
           color="primary"
           className="capitalize"
           onClick={() => {
-            setAppointmentReason('')
+            setBillingCategory('')
             setAmount('')
+            setNotes('')
             dispatch(openModal('advance-payment-modal'))
           }}
         >
@@ -438,169 +454,173 @@ function AdvancePayments({ formData }) {
                   </div>
 
                   {/* Payment History */}
-                  {payment.paymentHistory && payment.paymentHistory.length > 0 && (
-                    <div>
-                      <Typography
-                        variant="h6"
-                        className="font-semibold mb-4 flex items-center"
-                      >
-                        <Receipt className="mr-2 text-gray-600" />
-                        Payment History
-                      </Typography>
-                      <div className="space-y-3">
-                        {payment.paymentHistory.map((history, historyIndex) => (
-                          <Accordion
-                            key={historyIndex}
-                            className="border border-gray-200"
-                          >
-                            <AccordionSummary
-                              expandIcon={<ExpandMore />}
-                              className="bg-gray-50"
-                            >
-                              <div className="flex items-center justify-between w-full pr-4">
-                                <div className="flex items-center space-x-3">
-                                  <div
-                                    className={`w-3 h-3 rounded-full ${
-                                      history.paymentMode === 'CASH' ||
-                                      history.paymentMode === 'UPI'
-                                        ? 'bg-green-500'
-                                        : history.paymentMode === 'ONLINE'
-                                        ? 'bg-blue-500'
-                                        : 'bg-gray-500'
-                                    }`}
-                                  />
-                                  <div>
-                                    <Typography
-                                      variant="subtitle1"
-                                      className="font-medium"
-                                    >
-                                      {history.paymentMode}
-                                    </Typography>
-                                    <Typography
-                                      variant="body2"
-                                      color="textSecondary"
-                                    >
-                                      {dayjs(history.paymentDate).format(
-                                        'DD/MM/YYYY',
+                  {payment.paymentHistory &&
+                    payment.paymentHistory.length > 0 && (
+                      <div>
+                        <Typography
+                          variant="h6"
+                          className="font-semibold mb-4 flex items-center"
+                        >
+                          <Receipt className="mr-2 text-gray-600" />
+                          Payment History
+                        </Typography>
+                        <div className="space-y-3">
+                          {payment.paymentHistory.map(
+                            (history, historyIndex) => (
+                              <Accordion
+                                key={historyIndex}
+                                className="border border-gray-200"
+                              >
+                                <AccordionSummary
+                                  expandIcon={<ExpandMore />}
+                                  className="bg-gray-50"
+                                >
+                                  <div className="flex items-center justify-between w-full pr-4">
+                                    <div className="flex items-center space-x-3">
+                                      <div
+                                        className={`w-3 h-3 rounded-full ${
+                                          history.paymentMode === 'CASH' ||
+                                          history.paymentMode === 'UPI'
+                                            ? 'bg-green-500'
+                                            : history.paymentMode === 'ONLINE'
+                                              ? 'bg-blue-500'
+                                              : 'bg-gray-500'
+                                        }`}
+                                      />
+                                      <div>
+                                        <Typography
+                                          variant="subtitle1"
+                                          className="font-medium"
+                                        >
+                                          {history.paymentMode}
+                                        </Typography>
+                                        <Typography
+                                          variant="body2"
+                                          color="textSecondary"
+                                        >
+                                          {dayjs(history.paymentDate).format(
+                                            'DD/MM/YYYY',
+                                          )}
+                                        </Typography>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                      <Chip
+                                        label={`₹${parseFloat(
+                                          history.paidOrderAmount,
+                                        ).toLocaleString()}`}
+                                        color="success"
+                                        size="small"
+                                      />
+                                      {parseFloat(history.discountAmount) >
+                                        0 && (
+                                        <Chip
+                                          icon={<Discount />}
+                                          label={`₹${parseFloat(
+                                            history.discountAmount,
+                                          ).toLocaleString()}`}
+                                          color="warning"
+                                          size="small"
+                                        />
                                       )}
-                                    </Typography>
+                                    </div>
                                   </div>
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                  <Chip
-                                    label={`₹${parseFloat(
-                                      history.paidOrderAmount,
-                                    ).toLocaleString()}`}
-                                    color="success"
-                                    size="small"
-                                  />
-                                  {parseFloat(history.discountAmount) > 0 && (
-                                    <Chip
-                                      icon={<Discount />}
-                                      label={`₹${parseFloat(
-                                        history.discountAmount,
-                                      ).toLocaleString()}`}
-                                      color="warning"
-                                      size="small"
-                                    />
-                                  )}
-                                </div>
-                              </div>
-                            </AccordionSummary>
+                                </AccordionSummary>
 
-                            <AccordionDetails>
-                              <div className="space-y-3">
-                                <div className="grid grid-cols-2 gap-4">
-                                  <div>
-                                    <Typography
-                                      variant="body2"
-                                      color="textSecondary"
-                                    >
-                                      Payment Date
-                                    </Typography>
-                                    <Typography
-                                      variant="body1"
-                                      className="font-medium"
-                                    >
-                                      {dayjs(history.paymentDate).format(
-                                        'DD/MM/YYYY',
-                                      )}
-                                    </Typography>
-                                  </div>
-                                  <div>
-                                    <Typography
-                                      variant="body2"
-                                      color="textSecondary"
-                                    >
-                                      Payment Mode
-                                    </Typography>
-                                    <Typography
-                                      variant="body1"
-                                      className="font-medium"
-                                    >
-                                      {history.paymentMode}
-                                    </Typography>
-                                  </div>
-                                  <div>
-                                    <Typography
-                                      variant="body2"
-                                      color="textSecondary"
-                                    >
-                                      Amount Paid
-                                    </Typography>
-                                    <Typography
-                                      variant="body1"
-                                      className="font-medium text-green-600"
-                                    >
-                                      ₹
-                                      {parseFloat(
-                                        history.paidOrderAmount,
-                                      ).toLocaleString()}
-                                    </Typography>
-                                  </div>
-                                  <div>
-                                    <Typography
-                                      variant="body2"
-                                      color="textSecondary"
-                                    >
-                                      Discount Applied
-                                    </Typography>
-                                    <Typography
-                                      variant="body1"
-                                      className="font-medium text-blue-600"
-                                    >
-                                      ₹
-                                      {parseFloat(
-                                        history.discountAmount,
-                                      ).toLocaleString()}
-                                    </Typography>
-                                  </div>
-                                </div>
+                                <AccordionDetails>
+                                  <div className="space-y-3">
+                                    <div className="grid grid-cols-2 gap-4">
+                                      <div>
+                                        <Typography
+                                          variant="body2"
+                                          color="textSecondary"
+                                        >
+                                          Payment Date
+                                        </Typography>
+                                        <Typography
+                                          variant="body1"
+                                          className="font-medium"
+                                        >
+                                          {dayjs(history.paymentDate).format(
+                                            'DD/MM/YYYY',
+                                          )}
+                                        </Typography>
+                                      </div>
+                                      <div>
+                                        <Typography
+                                          variant="body2"
+                                          color="textSecondary"
+                                        >
+                                          Payment Mode
+                                        </Typography>
+                                        <Typography
+                                          variant="body1"
+                                          className="font-medium"
+                                        >
+                                          {history.paymentMode}
+                                        </Typography>
+                                      </div>
+                                      <div>
+                                        <Typography
+                                          variant="body2"
+                                          color="textSecondary"
+                                        >
+                                          Amount Paid
+                                        </Typography>
+                                        <Typography
+                                          variant="body1"
+                                          className="font-medium text-green-600"
+                                        >
+                                          ₹
+                                          {parseFloat(
+                                            history.paidOrderAmount,
+                                          ).toLocaleString()}
+                                        </Typography>
+                                      </div>
+                                      <div>
+                                        <Typography
+                                          variant="body2"
+                                          color="textSecondary"
+                                        >
+                                          Discount Applied
+                                        </Typography>
+                                        <Typography
+                                          variant="body1"
+                                          className="font-medium text-blue-600"
+                                        >
+                                          ₹
+                                          {parseFloat(
+                                            history.discountAmount,
+                                          ).toLocaleString()}
+                                        </Typography>
+                                      </div>
+                                    </div>
 
-                                {history.couponCode && (
-                                  <div className="pt-2 border-t border-gray-200">
-                                    <Typography
-                                      variant="body2"
-                                      color="textSecondary"
-                                      className="mb-1"
-                                    >
-                                      Coupon Code
-                                    </Typography>
-                                    <Chip
-                                      label={history.couponCode}
-                                      color="primary"
-                                      variant="outlined"
-                                      className="font-mono"
-                                    />
+                                    {history.couponCode && (
+                                      <div className="pt-2 border-t border-gray-200">
+                                        <Typography
+                                          variant="body2"
+                                          color="textSecondary"
+                                          className="mb-1"
+                                        >
+                                          Coupon Code
+                                        </Typography>
+                                        <Chip
+                                          label={history.couponCode}
+                                          color="primary"
+                                          variant="outlined"
+                                          className="font-mono"
+                                        />
+                                      </div>
+                                    )}
                                   </div>
-                                )}
-                              </div>
-                            </AccordionDetails>
-                          </Accordion>
-                        ))}
+                                </AccordionDetails>
+                              </Accordion>
+                            ),
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
                 </div>
               </AccordionDetails>
             </Accordion>
@@ -623,20 +643,26 @@ function AdvancePayments({ formData }) {
         </div>
 
         <div className="flex flex-col gap-4 mt-4">
-          <TextField
-            label="Appointment Reason"
-            value={appointmentReason}
-            onChange={e => setAppointmentReason(e.target.value)}
-            fullWidth
-            required
-            placeholder="Enter appointment reason"
-          />
+          <FormControl fullWidth required>
+            <InputLabel>Billing Category</InputLabel>
+            <Select
+              value={billingCategory}
+              onChange={(e) => setBillingCategory(e.target.value)}
+              label="Billing Category"
+            >
+              {billingCategories.map((billType) => (
+                <MenuItem key={billType.id} value={billType.name}>
+                  {billType.name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
 
           <TextField
             label="Amount"
             type="number"
             value={amount}
-            onChange={e => setAmount(e.target.value)}
+            onChange={(e) => setAmount(e.target.value)}
             fullWidth
             required
             placeholder="Enter amount"
@@ -647,6 +673,16 @@ function AdvancePayments({ formData }) {
                 step: '0.01',
               },
             }}
+          />
+
+          <TextField
+            label="Notes"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            fullWidth
+            multiline
+            rows={3}
+            placeholder="Enter notes about the bill or payment"
           />
 
           <div className="flex justify-end">
@@ -805,7 +841,7 @@ const PaymentModal = ({
               type="number"
               label="Payable Amount"
               value={editablePayableAmount || ''}
-              onChange={e =>
+              onChange={(e) =>
                 onPayableAmountChange(e.target.value, remainingAmount)
               }
               fullWidth
@@ -829,12 +865,12 @@ const PaymentModal = ({
           </Typography>
           <Autocomplete
             options={coupons || []}
-            getOptionLabel={option =>
+            getOptionLabel={(option) =>
               `${option.couponCode} (${option.discountPercentage}% off)`
             }
             value={selectedCoupon}
             onChange={(event, newValue) => setSelectedCoupon(newValue)}
-            renderInput={params => (
+            renderInput={(params) => (
               <TextField
                 {...params}
                 label="Select Coupon"

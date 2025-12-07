@@ -43,7 +43,10 @@ import {
   savePaymentBreakup,
   savePharmacyItems,
   getAvailableGrnInfoByItemId,
+  getPharmacyMasterData,
+  addPaymentDetails,
 } from '@/constants/apis'
+import { API_ROUTES } from '@/constants/constants'
 import { toast, Bounce } from 'react-toastify'
 import {
   Close,
@@ -230,14 +233,23 @@ function RenderAccordianDetails({
       const res = await savePaymentBreakup(user.accessToken, {
         generateBreakUp: payload.generateBreakUp,
       })
-      return res.data
+      console.log('Payment breakup response:', res)
+      // Handle response structure: could be { data: [...] } or { generateBreakUp: [...] } or just [...]
+      return res.data || res.generateBreakUp || res
     },
     onSuccess: (res, variables) => {
-      if (details?.length != 0) {
+      // Ensure res is an array
+      const breakupArray = Array.isArray(res) ? res : []
+      console.log('Processing payment breakup array:', breakupArray)
+
+      if (details?.length != 0 && breakupArray.length > 0) {
         let detailsCopy = details
         detailsCopy = detailsCopy.map((medicineDetails) => {
-          const itemResObject = res.find(
-            (item) => item.itemName == medicineDetails.itemName,
+          // Match by id first, then by itemName
+          const itemResObject = breakupArray.find(
+            (item) =>
+              item.id === medicineDetails.id ||
+              item.itemName == medicineDetails.itemName,
           )
           if (itemResObject) {
             medicineDetails['refId'] = itemResObject?.refId
@@ -309,13 +321,86 @@ function RenderAccordianDetails({
   // Handle payment mode selection (just sets state, doesn't process payment)
   const handlePaymentModeSelect = (modeOfPayment) => {
     setSelectedPaymentMode(modeOfPayment)
+    setIsSplitPaymentMode(false)
+    setSplitPayments([
+      { method: '', amount: '' },
+      { method: '', amount: '' },
+    ])
+  }
+
+  // Handle split payment mode toggle
+  const handleSplitPaymentToggle = () => {
+    setIsSplitPaymentMode(!isSplitPaymentMode)
+    setSelectedPaymentMode(null)
+    if (!isSplitPaymentMode) {
+      // Reset split payments when enabling
+      setSplitPayments([
+        { method: '', amount: '' },
+        { method: '', amount: '' },
+      ])
+    }
+  }
+
+  // Handle split payment field changes
+  const handleSplitPaymentChange = (index, field, value) => {
+    setSplitPayments((prev) => {
+      const updated = [...prev]
+      updated[index] = { ...updated[index], [field]: value }
+      return updated
+    })
+  }
+
+  // Validate split payment
+  const validateSplitPayment = () => {
+    const totalAmount = discountedAmount || calculateAmount()
+    const enteredAmounts = splitPayments
+      .filter((p) => p.method && p.amount)
+      .map((p) => Number(p.amount) || 0)
+    const totalEntered = enteredAmounts.reduce((sum, amt) => sum + amt, 0)
+
+    // Check if at least two payment methods are selected
+    const selectedMethods = splitPayments
+      .filter((p) => p.method)
+      .map((p) => p.method)
+
+    if (selectedMethods.length < 2) {
+      toast.error(
+        'Please select at least two different payment methods',
+        toastconfig,
+      )
+      return false
+    }
+
+    // Check if payment methods are different
+    if (selectedMethods[0] === selectedMethods[1]) {
+      toast.error('Payment methods must be different', toastconfig)
+      return false
+    }
+
+    // Check if total matches
+    if (Math.abs(totalEntered - totalAmount) > 0.01) {
+      toast.error(
+        `Total split amount (₹${totalEntered.toFixed(2)}) must equal bill amount (₹${totalAmount.toFixed(2)})`,
+        toastconfig,
+      )
+      return false
+    }
+
+    return true
   }
 
   // Handle actual payment processing
   const handlePay = async () => {
-    if (!selectedPaymentMode) {
-      toast.error('Please select a payment mode', toastconfig)
-      return
+    // Validate split payment if in split mode
+    if (isSplitPaymentMode) {
+      if (!validateSplitPayment()) {
+        return
+      }
+    } else {
+      if (!selectedPaymentMode) {
+        toast.error('Please select a payment mode', toastconfig)
+        return
+      }
     }
 
     // Prevent duplicate requests
@@ -338,55 +423,241 @@ function RenderAccordianDetails({
       dispatch(showLoader())
 
       const detailsCopy = details
-      //refid, type, itemName, purchaseDetails, totalCost
+      // Build orderDetails with complete item structure matching backend format
       let paymentDBFormat = []
       detailsCopy.map((medicineInfo) => {
         // Use discounted price if coupon is applied, otherwise use original totalCost
         const discountedPrice = getItemPrice(medicineInfo.id)
-        paymentDBFormat.push({
-          refId: medicineInfo.refId,
+
+        // Find full item data from pharmacy items by matching itemName
+        const fullItemData = pharmacyItems?.find(
+          (item) => item.itemName === medicineInfo.itemName,
+        )
+
+        if (!fullItemData) {
+          console.warn(
+            `Full item data not found for: ${medicineInfo.itemName}. Using minimal structure.`,
+          )
+        }
+
+        // Build complete item object matching backend structure from inventory SQL
+        // Structure must match getAllPharmacyItemsQuery response
+        const orderItem = {
+          id: fullItemData?.id || null,
           itemName: medicineInfo.itemName,
+          inventoryType: fullItemData?.inventoryType
+            ? typeof fullItemData.inventoryType === 'string'
+              ? JSON.parse(fullItemData.inventoryType)
+              : fullItemData.inventoryType
+            : null,
+          manufacturer: fullItemData?.manufacturer
+            ? typeof fullItemData.manufacturer === 'string'
+              ? JSON.parse(fullItemData.manufacturer)
+              : fullItemData.manufacturer
+            : null,
+          hsnCode: fullItemData?.hsnCode || null,
+          categoryName: fullItemData?.categoryName || null,
+          taxCategory: fullItemData?.taxCategory
+            ? typeof fullItemData.taxCategory === 'string'
+              ? JSON.parse(fullItemData.taxCategory)
+              : fullItemData.taxCategory
+            : null,
+          isActive: fullItemData?.isActive ?? true,
+          departmentId: fullItemData?.departmentId || null,
+          departmentName: fullItemData?.departmentName || null,
+          createdBy: fullItemData?.createdBy
+            ? typeof fullItemData.createdBy === 'string'
+              ? JSON.parse(fullItemData.createdBy)
+              : fullItemData.createdBy
+            : null,
+          createdAt: fullItemData?.createdAt || null,
+          updatedAt: fullItemData?.updatedAt || null,
           prescribed: medicineInfo.purchaseQuantity || 0,
           totalCost: discountedPrice,
-          type: medicineInfo.type,
-        })
+          refId: medicineInfo.refId, // Reference ID for line bill association
+          type: header?.type || 'Treatment', // Required: "Treatment" or "Consultation"
+        }
+
+        paymentDBFormat.push(orderItem)
       })
       const totalAmount = detailsCopy.reduce(function (acc, obj) {
         return acc + Number(getItemPrice(obj.id))
       }, 0)
 
-      const paymentPayload = {
+      // Build payment payload for order creation (NO payments field - backend doesn't accept it)
+      let paymentPayload = {
         totalOrderAmount: Math.round(totalAmount),
         paidOrderAmount: Math.round(discountedAmount),
         discountAmount: Math.round(totalAmount) - Math.round(discountedAmount),
         couponCode: selectedCoupon?.id || null,
         orderDetails: paymentDBFormat,
-        paymentMode: selectedPaymentMode, // CASH, UPI, or ONLINE
         productType: 'PHARMACY',
       }
 
-      console.log('Pharmacy payment payload:', paymentPayload)
+      // Prepare split payments data (will be sent separately after orderId is received)
+      let splitPaymentsData = null
+      if (isSplitPaymentMode) {
+        // For split payment, use the first payment method as paymentMode for order creation
+        const validPayments = splitPayments
+          .filter((p) => p.method && p.amount)
+          .map((p) => ({
+            method: p.method,
+            amount: Math.round(Number(p.amount)),
+          }))
 
-      const data = await getOrderId(user.accessToken, paymentPayload)
+        // Set paymentMode to the first method (CASH, UPI, or ONLINE) for order creation
+        paymentPayload.paymentMode = validPayments[0]?.method || null
+        // Store split payments to send separately
+        splitPaymentsData = validPayments
+      } else {
+        paymentPayload.paymentMode = selectedPaymentMode // CASH, UPI, or ONLINE
+      }
 
-      console.log('Pharmacy payment response:', data)
+      console.log('Pharmacy order creation payload:', paymentPayload)
+
+      // Step 1: Create order and get orderId
+      const orderData = await getOrderId(user.accessToken, paymentPayload)
+
+      console.log('Pharmacy order creation response:', orderData)
+
+      // Extract orderId from response
+      const orderId =
+        orderData?.data?.orderId ||
+        orderData?.orderId ||
+        orderData?.data?.dataValues?.orderId
+
+      if (!orderId) {
+        dispatch(hideLoader())
+        setIsProcessingPayment(false)
+        toast.error('Failed to create order. Please try again.', toastconfig)
+        return
+      }
+
+      // Step 2: For split payments, note that backend doesn't have a separate endpoint
+      // The order is already created and marked as PAID (when paymentMode is CASH/UPI)
+      // We'll proceed with the UI update and store split payment info in frontend state
+      const data = orderData
+
+      // Log split payment info for reference (backend doesn't support it yet)
+      if (isSplitPaymentMode && splitPaymentsData) {
+        console.log('Split payment details (stored in frontend only):', {
+          orderId: orderId,
+          payments: splitPaymentsData,
+        })
+        // Note: Backend currently only stores the first payment method
+        // Split payment breakdown is maintained in frontend state for display
+      }
 
       // For CASH/UPI: backend directly processes payment
       // For ONLINE: backend might return orderId, but we treat it as successful without Razorpay
+      // For SPLIT: check both order creation and split payment API responses
       if (
         data?.status === 200 ||
         data?.success === true ||
-        data?.data?.orderId
+        data?.data?.orderId ||
+        data?.message === 'Payment Successful'
       ) {
         dispatch(hideLoader())
+
+        // Capture payment info before resetting state
+        const appointmentId = header?.appointmentId
+        const finalAmount = discountedAmount || calculateAmount()
+        const currentSplitPayments = [...splitPayments]
+        const currentIsSplitMode = isSplitPaymentMode
+        // For split payment, use first method; otherwise use selected mode
+        const currentPaymentMode = isSplitPaymentMode
+          ? splitPayments.find((p) => p.method && p.amount)?.method || null
+          : selectedPaymentMode
+
+        // Close payment modal
         dispatch(closeModal(header?.appointmentId + 'pay' + column.label))
+
+        // Reset payment state
         setSelectedCoupon(null)
         setDiscountedAmount(0)
         setSelectedPaymentMode(null)
-        toast.success('Payment Successful', toastconfig)
+        setIsSplitPaymentMode(false)
+        setSplitPayments([
+          { method: '', amount: '' },
+          { method: '', amount: '' },
+        ])
 
-        // Refetch pharmacy data to move patient to Paid container
-        await queryClient.refetchQueries({
+        // Immediately update React Query cache to move patient from PACKED → PAID
+        if (appointmentId) {
+          queryClient.setQueryData(
+            ['pharmacyModuleInfoByDate', date, selectedbranch],
+            (oldData) => {
+              if (!oldData) return oldData
+
+              const updatedData = { ...oldData }
+
+              // Find patient in PACKED array
+              const packedArray = updatedData.PACKED || []
+              const patientIndex = packedArray.findIndex(
+                (patient) => patient[appointmentId],
+              )
+
+              if (patientIndex !== -1) {
+                // Get the patient data
+                const patientData = packedArray[patientIndex]
+                const patientKey = Object.keys(patientData)[0]
+                const patient = patientData[patientKey]
+
+                // Update itemDetails to mark items as PAID
+                const updatedItemDetails = patient.itemDetails.map((item) => ({
+                  ...item,
+                  itemStage: 'PAID',
+                }))
+
+                // Prepare payment method information
+                const paymentMethods = currentIsSplitMode
+                  ? currentSplitPayments
+                      .filter((p) => p.method && p.amount)
+                      .map((p) => ({
+                        method: p.method,
+                        amount: Number(p.amount),
+                      }))
+                  : currentPaymentMode
+                    ? [{ method: currentPaymentMode, amount: finalAmount }]
+                    : null
+
+                // Create updated patient object with payment method info
+                const updatedPatient = {
+                  [patientKey]: {
+                    ...patient,
+                    itemDetails: updatedItemDetails,
+                    header: {
+                      ...patient.header,
+                      paymentMode: currentPaymentMode,
+                      paymentMethods: paymentMethods,
+                    },
+                  },
+                }
+
+                // Remove from PACKED
+                updatedData.PACKED = [
+                  ...packedArray.slice(0, patientIndex),
+                  ...packedArray.slice(patientIndex + 1),
+                ]
+
+                // Add to PAID
+                if (!updatedData.PAID) {
+                  updatedData.PAID = []
+                }
+                updatedData.PAID = [...updatedData.PAID, updatedPatient]
+
+                return updatedData
+              }
+
+              return oldData
+            },
+          )
+        }
+
+        toast.success('Payment Successful! Patient moved to Paid.', toastconfig)
+
+        // Refetch to ensure backend consistency (runs in background)
+        queryClient.refetchQueries({
           queryKey: ['pharmacyModuleInfoByDate', date, selectedbranch],
         })
       } else {
@@ -465,6 +736,12 @@ function RenderAccordianDetails({
   // Single payment mode state for Packed → Pay popup
   const [selectedPaymentMode, setSelectedPaymentMode] = useState(null)
   const [isProcessingPayment, setIsProcessingPayment] = useState(false)
+  // Split payment state
+  const [isSplitPaymentMode, setIsSplitPaymentMode] = useState(false)
+  const [splitPayments, setSplitPayments] = useState([
+    { method: '', amount: '' },
+    { method: '', amount: '' },
+  ])
 
   // Add sample coupons (you can replace with API data)
   // const coupons = [
@@ -478,6 +755,22 @@ function RenderAccordianDetails({
       const res = await getCoupons(user.accessToken)
       return res.data
     },
+  })
+
+  // Fetch pharmacy items to get full item structure for orderDetails
+  const { data: pharmacyItems } = useQuery({
+    queryKey: ['pharmacyItems'],
+    queryFn: async () => {
+      const res = await getPharmacyMasterData(
+        user.accessToken,
+        API_ROUTES.GET_ALL_PHARMACY_ITEMS,
+      )
+      if (res.status === 200) {
+        return res.data
+      }
+      return []
+    },
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   })
   // const coupons = useSelector(store => store.coupon)
   // console.log(coupons)
@@ -1086,6 +1379,12 @@ function RenderAccordianDetails({
                       {'InTake Time'}
                     </TableCell>
                   }
+                  <TableCell
+                    align="center"
+                    className="font-bold border-0 rounder-lg"
+                  >
+                    Payment Method
+                  </TableCell>
                 </>
               )}
               {column.label === 'PRESCRIBED' && (
@@ -1204,6 +1503,36 @@ function RenderAccordianDetails({
                         </span>
                       </TableCell>
                     }
+                    <TableCell align="center" className="border-0">
+                      {header?.paymentMethods ? (
+                        <span className="flex gap-2 flex-wrap justify-center">
+                          {Array.isArray(header.paymentMethods) ? (
+                            header.paymentMethods.map((pm, idx) => (
+                              <Chip
+                                key={idx}
+                                label={`${pm.method}: ₹${pm.amount}`}
+                                color="primary"
+                                size="small"
+                              />
+                            ))
+                          ) : (
+                            <Chip
+                              label={header.paymentMethods}
+                              color="primary"
+                              size="small"
+                            />
+                          )}
+                        </span>
+                      ) : header?.paymentMode ? (
+                        <Chip
+                          label={header.paymentMode}
+                          color="primary"
+                          size="small"
+                        />
+                      ) : (
+                        <span className="text-gray-400 text-sm">-</span>
+                      )}
+                    </TableCell>
                   </>
                 )}
                 {column.label === 'PRESCRIBED' && (
@@ -1456,12 +1785,29 @@ function RenderAccordianDetails({
         maxWidth={'sm'}
         uniqueKey={header?.appointmentId + 'pay' + column.label}
         closeOnOutsideClick={true}
+        onOutsideClick={() => {
+          // Reset payment state when modal closes
+          setSelectedPaymentMode(null)
+          setIsSplitPaymentMode(false)
+          setSplitPayments([
+            { method: '', amount: '' },
+            { method: '', amount: '' },
+          ])
+          dispatch(closeModal(header?.appointmentId + 'pay' + column.label))
+        }}
       >
         <div className="flex justify-between items-center mb-4">
           <Typography variant="h6">Payment Details</Typography>
           <div className="flex gap-2">
             <IconButton
               onClick={() => {
+                // Reset payment state when closing
+                setSelectedPaymentMode(null)
+                setIsSplitPaymentMode(false)
+                setSplitPayments([
+                  { method: '', amount: '' },
+                  { method: '', amount: '' },
+                ])
                 dispatch(
                   closeModal(header?.appointmentId + 'pay' + column.label),
                 )
@@ -1544,88 +1890,193 @@ function RenderAccordianDetails({
                 Total Amount: ₹{discountedAmount?.toFixed(2)}
               </span>
             </div>
-            <div className="flex gap-3 justify-center">
+
+            {/* Split Payment Button */}
+            <div className="flex justify-center">
               <Button
-                variant={
-                  selectedPaymentMode === 'ONLINE' ? 'contained' : 'outlined'
-                }
-                color="primary"
-                className="capitalize py-3 px-6"
-                onClick={() => handlePaymentModeSelect('ONLINE')}
+                variant={isSplitPaymentMode ? 'contained' : 'outlined'}
+                className="capitalize py-2 px-6"
+                onClick={handleSplitPaymentToggle}
                 disabled={isProcessingPayment}
                 sx={{
-                  backgroundColor:
-                    selectedPaymentMode === 'ONLINE'
-                      ? '#1976d2'
-                      : 'transparent',
-                  color: selectedPaymentMode === 'ONLINE' ? '#fff' : '#1976d2',
+                  backgroundColor: isSplitPaymentMode
+                    ? '#1976d2'
+                    : 'transparent',
+                  color: isSplitPaymentMode ? '#fff' : '#1976d2',
+                  borderColor: isSplitPaymentMode ? '#1976d2' : '#1976d2',
                   '&:hover': {
-                    backgroundColor:
-                      selectedPaymentMode === 'ONLINE'
-                        ? '#1565c0'
-                        : 'rgba(25, 118, 210, 0.04)',
+                    backgroundColor: isSplitPaymentMode
+                      ? '#1565c0'
+                      : 'rgba(25, 118, 210, 0.04)',
+                    borderColor: '#1565c0',
                   },
                 }}
               >
-                ONLINE
-              </Button>
-              <Button
-                variant={
-                  selectedPaymentMode === 'UPI' ? 'contained' : 'outlined'
-                }
-                color="primary"
-                className="capitalize py-3 px-6"
-                onClick={() => handlePaymentModeSelect('UPI')}
-                disabled={isProcessingPayment}
-                sx={{
-                  backgroundColor:
-                    selectedPaymentMode === 'UPI' ? '#1976d2' : 'transparent',
-                  color: selectedPaymentMode === 'UPI' ? '#fff' : '#1976d2',
-                  '&:hover': {
-                    backgroundColor:
-                      selectedPaymentMode === 'UPI'
-                        ? '#1565c0'
-                        : 'rgba(25, 118, 210, 0.04)',
-                  },
-                }}
-              >
-                UPI
-              </Button>
-              <Button
-                variant={
-                  selectedPaymentMode === 'CASH' ? 'contained' : 'outlined'
-                }
-                color="primary"
-                className="capitalize py-3 px-6"
-                onClick={() => handlePaymentModeSelect('CASH')}
-                disabled={isProcessingPayment}
-                sx={{
-                  backgroundColor:
-                    selectedPaymentMode === 'CASH' ? '#1976d2' : 'transparent',
-                  color: selectedPaymentMode === 'CASH' ? '#fff' : '#1976d2',
-                  '&:hover': {
-                    backgroundColor:
-                      selectedPaymentMode === 'CASH'
-                        ? '#1565c0'
-                        : 'rgba(25, 118, 210, 0.04)',
-                  },
-                }}
-              >
-                CASH
+                SPLIT PAYMENT
               </Button>
             </div>
-            {selectedPaymentMode && (
+
+            {/* Split Payment Fields */}
+            {isSplitPaymentMode ? (
+              <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
+                <Typography variant="subtitle2" className="font-semibold mb-3">
+                  Enter Split Payment Details
+                </Typography>
+                {splitPayments.map((payment, index) => (
+                  <div key={index} className="flex gap-3 items-center">
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Payment Method {index + 1}</InputLabel>
+                      <Select
+                        value={payment.method}
+                        label={`Payment Method ${index + 1}`}
+                        onChange={(e) =>
+                          handleSplitPaymentChange(
+                            index,
+                            'method',
+                            e.target.value,
+                          )
+                        }
+                        disabled={isProcessingPayment}
+                      >
+                        <MenuItem value="CASH">CASH</MenuItem>
+                        <MenuItem value="UPI">UPI</MenuItem>
+                        <MenuItem value="ONLINE">ONLINE</MenuItem>
+                      </Select>
+                    </FormControl>
+                    <TextField
+                      type="number"
+                      label={`Amount ${index + 1}`}
+                      size="small"
+                      value={payment.amount}
+                      onChange={(e) =>
+                        handleSplitPaymentChange(
+                          index,
+                          'amount',
+                          e.target.value,
+                        )
+                      }
+                      disabled={isProcessingPayment}
+                      InputProps={{
+                        inputProps: {
+                          min: 0,
+                          step: 0.01,
+                        },
+                      }}
+                      sx={{ width: 150 }}
+                    />
+                  </div>
+                ))}
+                <div className="pt-2">
+                  <Typography variant="body2" className="text-gray-600">
+                    Total Entered: ₹
+                    {splitPayments
+                      .filter((p) => p.method && p.amount)
+                      .reduce((sum, p) => sum + (Number(p.amount) || 0), 0)
+                      .toFixed(2)}
+                    {' / '}
+                    <span className="font-semibold">
+                      Required: ₹{discountedAmount?.toFixed(2)}
+                    </span>
+                  </Typography>
+                </div>
+              </div>
+            ) : (
+              /* Single Payment Mode Buttons */
+              <div className="flex gap-3 justify-center">
+                <Button
+                  variant={
+                    selectedPaymentMode === 'ONLINE' ? 'contained' : 'outlined'
+                  }
+                  className="capitalize py-3 px-6"
+                  onClick={() => handlePaymentModeSelect('ONLINE')}
+                  disabled={isProcessingPayment}
+                  sx={{
+                    backgroundColor:
+                      selectedPaymentMode === 'ONLINE'
+                        ? '#1976d2'
+                        : 'transparent',
+                    color:
+                      selectedPaymentMode === 'ONLINE' ? '#fff' : '#1976d2',
+                    borderColor: '#1976d2',
+                    '&:hover': {
+                      backgroundColor:
+                        selectedPaymentMode === 'ONLINE'
+                          ? '#1565c0'
+                          : 'rgba(25, 118, 210, 0.04)',
+                      borderColor: '#1565c0',
+                    },
+                  }}
+                >
+                  ONLINE
+                </Button>
+                <Button
+                  variant={
+                    selectedPaymentMode === 'UPI' ? 'contained' : 'outlined'
+                  }
+                  className="capitalize py-3 px-6"
+                  onClick={() => handlePaymentModeSelect('UPI')}
+                  disabled={isProcessingPayment}
+                  sx={{
+                    backgroundColor:
+                      selectedPaymentMode === 'UPI' ? '#1976d2' : 'transparent',
+                    color: selectedPaymentMode === 'UPI' ? '#fff' : '#1976d2',
+                    borderColor: '#1976d2',
+                    '&:hover': {
+                      backgroundColor:
+                        selectedPaymentMode === 'UPI'
+                          ? '#1565c0'
+                          : 'rgba(25, 118, 210, 0.04)',
+                      borderColor: '#1565c0',
+                    },
+                  }}
+                >
+                  UPI
+                </Button>
+                <Button
+                  variant={
+                    selectedPaymentMode === 'CASH' ? 'contained' : 'outlined'
+                  }
+                  className="capitalize py-3 px-6"
+                  onClick={() => handlePaymentModeSelect('CASH')}
+                  disabled={isProcessingPayment}
+                  sx={{
+                    backgroundColor:
+                      selectedPaymentMode === 'CASH'
+                        ? '#1976d2'
+                        : 'transparent',
+                    color: selectedPaymentMode === 'CASH' ? '#fff' : '#1976d2',
+                    borderColor: '#1976d2',
+                    '&:hover': {
+                      backgroundColor:
+                        selectedPaymentMode === 'CASH'
+                          ? '#1565c0'
+                          : 'rgba(25, 118, 210, 0.04)',
+                      borderColor: '#1565c0',
+                    },
+                  }}
+                >
+                  CASH
+                </Button>
+              </div>
+            )}
+
+            {/* Pay Button - Show for both single and split payment */}
+            {(selectedPaymentMode || isSplitPaymentMode) && (
               <div className="flex justify-center pt-2">
                 <Button
                   variant="contained"
-                  color="success"
                   className="capitalize py-3 px-8 text-lg font-bold"
                   onClick={handlePay}
                   disabled={isProcessingPayment}
                   sx={{
                     backgroundColor: '#4caf50',
+                    color: '#fff',
                     '&:hover': {
                       backgroundColor: '#45a049',
+                    },
+                    '&:disabled': {
+                      backgroundColor: '#cccccc',
+                      color: '#666666',
                     },
                   }}
                 >

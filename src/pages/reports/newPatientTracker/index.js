@@ -63,7 +63,11 @@ function NewPatientTracker() {
   }
 
   // Fetch all patients using the existing API
-  const { data: allPatientsResponse, isLoading: isLoadingPatients, isError: isErrorPatients } = useQuery({
+  const {
+    data: allPatientsResponse,
+    isLoading: isLoadingPatients,
+    isError: isErrorPatients,
+  } = useQuery({
     queryKey: ['ALL_PATIENTS_FOR_TRACKER', userDetails?.accessToken],
     queryFn: async () => {
       try {
@@ -94,31 +98,14 @@ function NewPatientTracker() {
     }
 
     // Filter patients with no treatment started
-    // A patient has no treatment if:
-    // - treatmentCycles is empty/null/undefined
-    // - treatmentDetails is null/undefined
-    // - No treatment-related data exists
+    // A patient is "new" if hasTreatment is 0 or false
     const patientsWithNoTreatment = allPatientsResponse.filter((patient) => {
-      // Check if patient has treatment cycles
-      const hasTreatmentCycles = patient.treatmentCycles && 
-                                 Array.isArray(patient.treatmentCycles) && 
-                                 patient.treatmentCycles.length > 0
-      
-      // Check if patient has treatment details
-      const hasTreatmentDetails = patient.treatmentDetails && 
-                                  Object.keys(patient.treatmentDetails).length > 0
-      
-      // Check if patient has visits with treatments
-      const hasTreatmentsInVisits = patient.visits && 
-                                    Array.isArray(patient.visits) &&
-                                    patient.visits.some(visit => 
-                                      visit.Treatments && 
-                                      Array.isArray(visit.Treatments) && 
-                                      visit.Treatments.length > 0
-                                    )
+      // Check if patient has treatment using the hasTreatment flag from backend
+      const hasTreatment =
+        patient.hasTreatment === 1 || patient.hasTreatment === true
 
-      // Patient has no treatment if none of the above conditions are true
-      return !hasTreatmentCycles && !hasTreatmentDetails && !hasTreatmentsInVisits
+      // Patient is new if hasTreatment is false/0
+      return !hasTreatment
     })
 
     // Filter by branch if selected
@@ -126,32 +113,39 @@ function NewPatientTracker() {
     if (selectedBranch) {
       // Find the selected branch object from dropdowns to get its ID
       const selectedBranchObj = activeBranches.find(
-        (b) => getBranchValue(b) === selectedBranch
+        (b) => getBranchValue(b) === selectedBranch,
       )
       const selectedBranchId = selectedBranchObj?.id
-      const selectedBranchCode = selectedBranchObj?.branchCode || selectedBranchObj?.name
-      
+      const selectedBranchCode =
+        selectedBranchObj?.branchCode || selectedBranchObj?.name
+
       filteredByBranch = patientsWithNoTreatment.filter((patient) => {
         // Try to match by branchId first (most reliable)
         if (selectedBranchId && patient.branchId) {
           return patient.branchId === selectedBranchId
         }
-        
+
         // Match by branchCode or branch name
-        const patientBranch = patient.branch || 
-                             patient.branchCode || 
-                             patient.branchName ||
-                             (patient.branchDetails?.branchCode) ||
-                             (patient.branchDetails?.name)
-        
+        const patientBranch =
+          patient.branch ||
+          patient.branchCode ||
+          patient.branchName ||
+          patient.branchDetails?.branchCode ||
+          patient.branchDetails?.name
+
         if (patientBranch) {
           const branchValue = selectedBranch.toString().toLowerCase().trim()
-          const patientBranchValue = patientBranch.toString().toLowerCase().trim()
-          return patientBranchValue === branchValue || 
-                 patientBranchValue?.includes(branchValue) ||
-                 branchValue?.includes(patientBranchValue)
+          const patientBranchValue = patientBranch
+            .toString()
+            .toLowerCase()
+            .trim()
+          return (
+            patientBranchValue === branchValue ||
+            patientBranchValue?.includes(branchValue) ||
+            branchValue?.includes(patientBranchValue)
+          )
         }
-        
+
         // If no branch data in patient, include it (show all patients without branch filter)
         return false
       })
@@ -167,63 +161,77 @@ function NewPatientTracker() {
           branchName = branchObj.branchCode || branchObj.name || 'N/A'
         }
       }
-      
+
       // Fallback to direct branch fields if not found in dropdowns
       if (branchName === 'N/A') {
-        branchName = patient.branch || 
-                    patient.branchCode || 
-                    patient.branchName || 
-                    (patient.branchDetails?.name) || 
-                    (patient.branchDetails?.branchCode) ||
-                    'N/A'
+        branchName =
+          patient.branch ||
+          patient.branchCode ||
+          patient.branchName ||
+          patient.branchDetails?.name ||
+          patient.branchDetails?.branchCode ||
+          'N/A'
       }
 
       // Get patient name
-      const patientName = patient.Name || 
-                         patient.patientName || 
-                         patient.name || 
-                         `${patient.firstName || ''} ${patient.lastName || ''}`.trim() || 
-                         'N/A'
+      const patientName =
+        patient.Name ||
+        patient.patientName ||
+        patient.name ||
+        `${patient.firstName || ''} ${patient.lastName || ''}`.trim() ||
+        'N/A'
 
       // Get referral source
-      const referralSource = patient.referralSource?.referralSource || 
-                            patient.referralSource || 
-                            'Unknown'
+      const referralSource =
+        patient.referralSource?.referralSource ||
+        patient.referralSource ||
+        'Unknown'
 
       // Get registered date (registration date or date of birth or created date)
-      const registeredDate = patient.registrationDate || 
-                           patient.registeredDate || 
-                           patient.createdAt || 
-                           patient.dateOfBirth || 
-                           null
+      const registeredDate =
+        patient.registrationDate ||
+        patient.registeredDate ||
+        patient.createdAt ||
+        patient.dateOfBirth ||
+        null
 
       // Get last appointment date (from visits if available)
       let lastAppointmentDate = null
-      if (patient.visits && Array.isArray(patient.visits) && patient.visits.length > 0) {
+      if (
+        patient.visits &&
+        Array.isArray(patient.visits) &&
+        patient.visits.length > 0
+      ) {
         const sortedVisits = patient.visits
-          .filter(v => v.appointmentDate || v.date)
+          .filter((v) => v.appointmentDate || v.date)
           .sort((a, b) => {
             const dateA = new Date(a.appointmentDate || a.date)
             const dateB = new Date(b.appointmentDate || b.date)
             return dateB - dateA
           })
         if (sortedVisits.length > 0) {
-          lastAppointmentDate = sortedVisits[0].appointmentDate || sortedVisits[0].date
+          lastAppointmentDate =
+            sortedVisits[0].appointmentDate || sortedVisits[0].date
         }
       }
 
       // Get last consultation notes (from last visit/consultation)
       let lastConsultationNotes = ''
-      if (patient.visits && Array.isArray(patient.visits) && patient.visits.length > 0) {
+      if (
+        patient.visits &&
+        Array.isArray(patient.visits) &&
+        patient.visits.length > 0
+      ) {
         const consultations = patient.visits
-          .filter(v => v.consultationNotes || v.notes)
+          .filter((v) => v.consultationNotes || v.notes)
           .sort((a, b) => {
             const dateA = new Date(a.appointmentDate || a.date || 0)
             const dateB = new Date(b.appointmentDate || b.date || 0)
             return dateB - dateA
           })
         if (consultations.length > 0) {
-          lastConsultationNotes = consultations[0].consultationNotes || consultations[0].notes || ''
+          lastConsultationNotes =
+            consultations[0].consultationNotes || consultations[0].notes || ''
         }
       }
 
@@ -324,9 +332,7 @@ function NewPatientTracker() {
       renderCell: (params) => {
         if (!params.row.registeredDate) return 'N/A'
         return (
-          <div>
-            {dayjs(params.row.registeredDate).format('DD-MM-YYYY')}
-          </div>
+          <div>{dayjs(params.row.registeredDate).format('DD-MM-YYYY')}</div>
         )
       },
     },
@@ -391,7 +397,8 @@ function NewPatientTracker() {
           >
             {activeBranches.map((branch) => {
               const branchValue = getBranchValue(branch)
-              const branchLabel = branch.branchCode || branch.name || `Branch ${branch.id}`
+              const branchLabel =
+                branch.branchCode || branch.name || `Branch ${branch.id}`
               return (
                 <MenuItem key={branch.id} value={branchValue}>
                   {branchLabel}
@@ -403,7 +410,10 @@ function NewPatientTracker() {
       </div>
       <div>
         {isLoading ? (
-          <div className="flex justify-center items-center" style={{ height: '400px' }}>
+          <div
+            className="flex justify-center items-center"
+            style={{ height: '400px' }}
+          >
             <CircularProgress />
           </div>
         ) : (
@@ -423,7 +433,9 @@ function NewPatientTracker() {
         {isError && (
           <div className="text-red-500 text-center mt-4 p-4">
             <div className="font-semibold mb-2">Error loading patient data</div>
-            <div className="text-sm">Please refresh the page or try again later.</div>
+            <div className="text-sm">
+              Please refresh the page or try again later.
+            </div>
           </div>
         )}
         {!isLoading && !isError && trackerData.length === 0 && (
@@ -432,13 +444,16 @@ function NewPatientTracker() {
               <div>
                 <div className="font-semibold mb-2">No new patients found</div>
                 <div className="text-sm">
-                  No patients without treatment started found for the selected branch.
+                  No patients without treatment started found for the selected
+                  branch.
                 </div>
               </div>
             ) : (
               <div>
                 <div className="font-semibold mb-2">No patients found</div>
-                <div className="text-sm">Please select a branch to view patients.</div>
+                <div className="text-sm">
+                  Please select a branch to view patients.
+                </div>
               </div>
             )}
           </div>
@@ -449,4 +464,3 @@ function NewPatientTracker() {
 }
 
 export default NewPatientTracker
-

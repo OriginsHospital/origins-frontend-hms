@@ -188,10 +188,8 @@ function Sales() {
     setAppliedBranchId(defaultBranch)
   }
 
-  // Don't render if user doesn't have access
-  if (userDetails?.email && !hasRevenueAccess(userDetails.email)) {
-    return null
-  }
+  // Revenue page is HIDDEN from all users
+  return null
 
   return (
     <div>

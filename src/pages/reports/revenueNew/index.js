@@ -22,7 +22,7 @@ import { useSelector } from 'react-redux'
 import { useRouter } from 'next/router'
 import { toast } from 'react-toastify'
 import { toastconfig } from '@/utils/toastconfig'
-import { hasRevenueAccess } from '@/utils/revenueAccess'
+import { hasRevenueNewAccess } from '@/utils/revenueAccess'
 
 function SalesNew() {
   const router = useRouter()
@@ -44,11 +44,11 @@ function SalesNew() {
   const [appliedBranchId, setAppliedBranchId] = useState('')
   const [appliedPaymentMode, setAppliedPaymentMode] = useState('ALL')
 
-  // Access control: Check if user has revenue access
+  // Access control: Check if user has Revenue New access
   useEffect(() => {
-    if (userDetails?.email && !hasRevenueAccess(userDetails.email)) {
+    if (userDetails?.email && !hasRevenueNewAccess(userDetails.email)) {
       toast.error(
-        'You do not have permission to access Revenue Reports.',
+        'You do not have permission to access Revenue New Reports.',
         toastconfig,
       )
       router.replace('/home')
@@ -74,7 +74,9 @@ function SalesNew() {
   // Validate and update applied filters
   useEffect(() => {
     // Validate dates (allow equal dates - fromDate can be same as toDate)
-    const isValidDateRange = dayjs(fromDate).isBefore(dayjs(toDate)) || dayjs(fromDate).isSame(dayjs(toDate), 'day')
+    const isValidDateRange =
+      dayjs(fromDate).isBefore(dayjs(toDate)) ||
+      dayjs(fromDate).isSame(dayjs(toDate), 'day')
     if (!isValidDateRange) {
       console.error('Invalid date range:', { fromDate, toDate })
       return
@@ -137,13 +139,13 @@ function SalesNew() {
         // When "ALL" is selected, fetch data for all branches and combine
         if (appliedBranchId === 'ALL') {
           console.log('Fetching data for ALL branches (HNK + HYD + KMM + SPL)')
-          
+
           if (!dropdowns?.branches || dropdowns.branches.length === 0) {
             throw new Error('No branches available')
           }
 
           // Log which branches will be fetched
-          const branchNames = dropdowns.branches.map(b => b.name).join(', ')
+          const branchNames = dropdowns.branches.map((b) => b.name).join(', ')
           console.log(`Fetching data for branches: ${branchNames}`)
 
           // Fetch data for all branches in parallel with error handling
@@ -157,7 +159,9 @@ function SalesNew() {
             )
               .then((response) => {
                 if (!response || !response.data) {
-                  console.warn(`No data returned for branch: ${branch.name} (${branch.id})`)
+                  console.warn(
+                    `No data returned for branch: ${branch.name} (${branch.id})`,
+                  )
                   return {
                     branchId: branch.id,
                     branchName: branch.name,
@@ -173,7 +177,10 @@ function SalesNew() {
                 }
               })
               .catch((error) => {
-                console.error(`Error fetching data for branch ${branch.name} (${branch.id}):`, error)
+                console.error(
+                  `Error fetching data for branch ${branch.name} (${branch.id}):`,
+                  error,
+                )
                 return {
                   branchId: branch.id,
                   branchName: branch.name,
@@ -197,23 +204,30 @@ function SalesNew() {
           branchResults.forEach((result) => {
             if (result.success && result.data) {
               successfulBranches.push(result.branchName)
-              
+
               // Combine sales data
-              if (result.data.salesData && Array.isArray(result.data.salesData)) {
+              if (
+                result.data.salesData &&
+                Array.isArray(result.data.salesData)
+              ) {
                 combinedSalesData.push(...result.data.salesData)
               }
-              
+
               // Combine return data
-              if (result.data.returnData && Array.isArray(result.data.returnData)) {
+              if (
+                result.data.returnData &&
+                Array.isArray(result.data.returnData)
+              ) {
                 combinedReturnData.push(...result.data.returnData)
               }
-              
+
               // Sum totals
               if (result.data.salesDashboard?.totalSales) {
                 totalSales += Number(result.data.salesDashboard.totalSales) || 0
               }
               if (result.data.salesDashboard?.totalReturns) {
-                totalReturns += Number(result.data.salesDashboard.totalReturns) || 0
+                totalReturns +=
+                  Number(result.data.salesDashboard.totalReturns) || 0
               }
             } else {
               failedBranches.push({
@@ -226,7 +240,10 @@ function SalesNew() {
           // Log results
           console.log('Combined data for ALL branches:', {
             successfulBranches: successfulBranches.join(', '),
-            failedBranches: failedBranches.length > 0 ? failedBranches.map(b => b.name).join(', ') : 'None',
+            failedBranches:
+              failedBranches.length > 0
+                ? failedBranches.map((b) => b.name).join(', ')
+                : 'None',
             salesCount: combinedSalesData.length,
             returnsCount: combinedReturnData.length,
             totalSales,
@@ -348,14 +365,20 @@ function SalesNew() {
           if (!item) return false
           // Check branchId field - match by branchId or branch.id
           const itemBranchId = item.branchId || item.branch?.id
-          return itemBranchId === branchId || String(itemBranchId) === String(branchId)
+          return (
+            itemBranchId === branchId ||
+            String(itemBranchId) === String(branchId)
+          )
         })
 
         filteredReturnData = filteredReturnData.filter((item) => {
           if (!item) return false
           // Check branchId field - match by branchId or branch.id
           const itemBranchId = item.branchId || item.branch?.id
-          return itemBranchId === branchId || String(itemBranchId) === String(branchId)
+          return (
+            itemBranchId === branchId ||
+            String(itemBranchId) === String(branchId)
+          )
         })
 
         console.log('Branch filter results:', {
@@ -367,7 +390,9 @@ function SalesNew() {
         })
       } else if (branchId === 'ALL') {
         // When "ALL" is selected, show all data from all branches (HNK + HYD + KMM + SPL)
-        console.log('Branch = ALL: Showing data from all branches (no branch filtering applied)')
+        console.log(
+          'Branch = ALL: Showing data from all branches (no branch filtering applied)',
+        )
       }
 
       // Apply service filter only when a specific service is selected (not 'ALL')
@@ -394,7 +419,9 @@ function SalesNew() {
           filteredSalesData = filteredSalesData.filter((item) => {
             if (!item) return false
             // Check both service and productType fields with case-insensitive comparison
-            const itemService = String(item.service || item.productType || '').trim().toUpperCase()
+            const itemService = String(item.service || item.productType || '')
+              .trim()
+              .toUpperCase()
             const matches = itemService === filterValue
             return matches
           })
@@ -402,16 +429,20 @@ function SalesNew() {
           filteredReturnData = filteredReturnData.filter((item) => {
             if (!item) return false
             // Check both service and productType fields with case-insensitive comparison
-            const itemService = String(item.service || item.productType || '').trim().toUpperCase()
+            const itemService = String(item.service || item.productType || '')
+              .trim()
+              .toUpperCase()
             const matches = itemService === filterValue
             return matches
           })
-        } else if (service === 'Frontdesk') {
+        } else if (service === 'Fronth Desk') {
           // Filter to show all items EXCEPT Pharmacy
           filteredSalesData = filteredSalesData.filter((item) => {
             if (!item) return false
             // Check both service and productType fields with case-insensitive comparison
-            const itemService = String(item.service || item.productType || '').trim().toUpperCase()
+            const itemService = String(item.service || item.productType || '')
+              .trim()
+              .toUpperCase()
             // Exclude Pharmacy items
             return itemService !== 'PHARMACY'
           })
@@ -419,7 +450,9 @@ function SalesNew() {
           filteredReturnData = filteredReturnData.filter((item) => {
             if (!item) return false
             // Check both service and productType fields with case-insensitive comparison
-            const itemService = String(item.service || item.productType || '').trim().toUpperCase()
+            const itemService = String(item.service || item.productType || '')
+              .trim()
+              .toUpperCase()
             // Exclude Pharmacy items
             return itemService !== 'PHARMACY'
           })
@@ -466,7 +499,7 @@ function SalesNew() {
       }
 
       setFilteredData(filtered)
-      
+
       console.log('Final filtered data summary:', {
         salesCount: filteredSalesData.length,
         returnsCount: filteredReturnData.length,
@@ -513,7 +546,7 @@ function SalesNew() {
   }
 
   // Don't render if user doesn't have access
-  if (userDetails?.email && !hasRevenueAccess(userDetails.email)) {
+  if (userDetails?.email && !hasRevenueNewAccess(userDetails.email)) {
     return null
   }
 
@@ -605,7 +638,7 @@ function SalesNew() {
             >
               <MenuItem value="ALL">All</MenuItem>
               <MenuItem value="Pharmacy">Pharmacy</MenuItem>
-              <MenuItem value="Frontdesk">Frontdesk</MenuItem>
+              <MenuItem value="Fronth Desk">Fronth Desk</MenuItem>
             </Select>
           </FormControl>
         </Grid>
@@ -719,8 +752,9 @@ function SalesNew() {
         branchName={
           branchId === 'ALL'
             ? 'ALL'
-            : dropdowns?.branches?.find((branch) => branch.id === appliedBranchId)
-                ?.name
+            : dropdowns?.branches?.find(
+                (branch) => branch.id === appliedBranchId,
+              )?.name
         }
         filters={{
           fromDate: appliedFromDate

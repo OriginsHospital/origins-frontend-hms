@@ -1,0 +1,1420 @@
+import React, { useState, useEffect, useRef } from 'react'
+import {
+  Box,
+  Paper,
+  Typography,
+  TextField,
+  Button,
+  List,
+  ListItem,
+  Avatar,
+  Badge,
+  IconButton,
+  InputAdornment,
+  Divider,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  CircularProgress,
+  Autocomplete,
+  Chip,
+} from '@mui/material'
+import {
+  Send,
+  AttachFile,
+  Videocam,
+  Phone,
+  Search,
+  Add,
+  MoreVert,
+  Close,
+  PersonAdd,
+  History,
+  GroupAdd,
+} from '@mui/icons-material'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useSelector } from 'react-redux'
+import {
+  getUserChats,
+  getChatMessages,
+  sendMessage,
+  createChat,
+  initiateCall,
+  updateCallStatus,
+} from '@/constants/teamsApis'
+import { getValidUsersList } from '@/constants/apis'
+import { io } from 'socket.io-client'
+import dayjs from 'dayjs'
+import { toast } from 'react-toastify'
+
+function ChatsView() {
+  const userDetails = useSelector((store) => store.user)
+  const queryClient = useQueryClient()
+  const [selectedChat, setSelectedChat] = useState(null)
+  const [messageText, setMessageText] = useState('')
+  const [socket, setSocket] = useState(null)
+  const messagesEndRef = useRef(null)
+  const [openNewChatDialog, setOpenNewChatDialog] = useState(false)
+  const [openNewGroupDialog, setOpenNewGroupDialog] = useState(false)
+  const [searchUserQuery, setSearchUserQuery] = useState('')
+  const [activeCall, setActiveCall] = useState(null)
+  const [incomingCall, setIncomingCall] = useState(null)
+  const [groupFormData, setGroupFormData] = useState({
+    name: '',
+    description: '',
+    selectedUsers: [],
+  })
+
+  // WebRTC refs
+  const localAudioRef = useRef(null)
+  const remoteAudioRef = useRef(null)
+  const peerConnectionRef = useRef(null)
+  const localStreamRef = useRef(null)
+  const pendingSignalsRef = useRef([])
+  const handleCallSignalRef = useRef(null)
+
+  // Fetch user's chats
+  const { data: chatsData, isLoading: isLoadingChats } = useQuery({
+    queryKey: ['userChats', userDetails?.accessToken],
+    queryFn: async () => {
+      const res = await getUserChats(userDetails?.accessToken)
+      if (res.status === 200) {
+        return res.data || []
+      }
+      return []
+    },
+    enabled: !!userDetails?.accessToken,
+    refetchInterval: 10000,
+  })
+
+  // Fetch messages for selected chat
+  const { data: messagesData, isLoading: isLoadingMessages } = useQuery({
+    queryKey: ['chatMessages', selectedChat, userDetails?.accessToken],
+    queryFn: async () => {
+      if (!selectedChat) return []
+      const res = await getChatMessages(
+        userDetails?.accessToken,
+        selectedChat.id,
+      )
+      if (res.status === 200) {
+        return res.data || []
+      }
+      return []
+    },
+    enabled: !!selectedChat && !!userDetails?.accessToken,
+  })
+
+  // Fetch all users for new chat
+  const { data: allUsers, isLoading: isLoadingUsers } = useQuery({
+    queryKey: ['allUsers', userDetails?.accessToken],
+    queryFn: async () => {
+      const res = await getValidUsersList(userDetails?.accessToken)
+      if (res.status === 200) {
+        return res.data || []
+      }
+      return []
+    },
+    enabled:
+      (openNewChatDialog || openNewGroupDialog) && !!userDetails?.accessToken,
+  })
+
+  // Filter users based on search query
+  const filteredUsers = allUsers?.filter((user) => {
+    if (!searchUserQuery.trim()) return true
+    const query = searchUserQuery.toLowerCase()
+    return (
+      user.fullName?.toLowerCase().includes(query) ||
+      user.email?.toLowerCase().includes(query)
+    )
+  })
+
+  // Create chat mutation
+  const createChatMutation = useMutation({
+    mutationFn: async (payload) => {
+      return await createChat(userDetails?.accessToken, payload)
+    },
+    onSuccess: async (res) => {
+      if (res.status === 201) {
+        // Close all dialogs
+        setOpenNewChatDialog(false)
+        setOpenNewGroupDialog(false)
+        setSearchUserQuery('')
+
+        // Format the created chat to match the expected structure
+        const createdChatData = res.data
+
+        // For direct chats, extract otherUser from members
+        let formattedChat = { ...createdChatData }
+        if (
+          createdChatData.chatType === 'direct' &&
+          createdChatData.members?.length > 0
+        ) {
+          // Find the other user (not the current user)
+          const otherMember = createdChatData.members.find(
+            (member) => member.user?.id !== userDetails?.id,
+          )
+          formattedChat.otherUser =
+            otherMember?.user || createdChatData.members[0]?.user || null
+          formattedChat.name = formattedChat.otherUser?.fullName || 'Unknown'
+        } else if (createdChatData.chatType === 'group') {
+          // For group chats, ensure name is set
+          formattedChat.name = createdChatData.name || 'Group Chat'
+        }
+        formattedChat.unreadCount = 0
+
+        // Reset group form data if it was a group chat
+        if (createdChatData.chatType === 'group') {
+          setGroupFormData({
+            name: '',
+            description: '',
+            selectedUsers: [],
+          })
+        }
+
+        // Set the chat as selected to open the interface
+        setSelectedChat(formattedChat)
+
+        // Invalidate and refetch chats list to update the sidebar
+        queryClient.invalidateQueries(['userChats'])
+
+        const successMessage =
+          createdChatData.chatType === 'group'
+            ? 'Group chat created successfully'
+            : 'Chat opened successfully'
+        toast.success(successMessage)
+      }
+    },
+    onError: (error) => {
+      toast.error('Failed to create chat. Please try again.')
+      console.error('Error creating chat:', error)
+    },
+  })
+
+  // Helper function to handle call signals - store in ref so socket can access it
+  const handleCallSignal = async (data, socketInstance = socket) => {
+    console.log('Processing call signal:', data)
+    if (!data.signal) return
+
+    // If peer connection not ready, queue the signal
+    if (!peerConnectionRef.current) {
+      console.log('Peer connection not ready, queuing signal')
+      pendingSignalsRef.current.push(data)
+      return
+    }
+
+    try {
+      const signal = data.signal
+
+      if (signal.type === 'offer') {
+        // Received offer from caller - set as remote description and create answer
+        await peerConnectionRef.current.setRemoteDescription(
+          new RTCSessionDescription(signal),
+        )
+        const answer = await peerConnectionRef.current.createAnswer()
+        await peerConnectionRef.current.setLocalDescription(answer)
+
+        // Send answer back via socket
+        const socketToUse = socketInstance || socket
+        if (socketToUse) {
+          socketToUse.emit('call_signal', {
+            toUserId: data.fromUserId,
+            signal: answer,
+            callId: data.callId,
+          })
+        }
+      } else if (signal.type === 'answer') {
+        // Received answer from receiver - set as remote description
+        await peerConnectionRef.current.setRemoteDescription(
+          new RTCSessionDescription(signal),
+        )
+      } else if (signal.type === 'candidate' && signal.candidate) {
+        // Received ICE candidate - add to peer connection
+        try {
+          await peerConnectionRef.current.addIceCandidate(
+            new RTCIceCandidate({
+              candidate: signal.candidate,
+              sdpMLineIndex: signal.sdpMLineIndex,
+              sdpMid: signal.sdpMid,
+            }),
+          )
+        } catch (error) {
+          console.error('Error adding ICE candidate:', error)
+        }
+      }
+    } catch (error) {
+      console.error('Error handling signal:', error)
+    }
+  }
+
+  // Store handler in ref
+  handleCallSignalRef.current = handleCallSignal
+
+  // Initialize Socket.io connection
+  useEffect(() => {
+    if (!userDetails?.accessToken) return
+
+    const socketUrl =
+      process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3000'
+    const newSocket = io(socketUrl, {
+      auth: {
+        token: userDetails.accessToken,
+      },
+      transports: ['websocket', 'polling'],
+    })
+
+    newSocket.on('connect', () => {
+      console.log('Connected to Teams Socket.io server', {
+        socketId: newSocket.id,
+        userId: userDetails?.id,
+      })
+    })
+
+    newSocket.on('connect_error', (error) => {
+      console.error('Socket connection error:', error)
+
+      // Check if it's an authentication error
+      if (error.message && error.message.includes('Authentication')) {
+        console.error(
+          'Socket authentication failed. Token might be invalid or expired.',
+        )
+        toast.error('Authentication failed. Please log in again.')
+        // Optionally redirect to login or refresh token
+      } else {
+        toast.error(
+          'Failed to connect to server. Please check your connection.',
+        )
+      }
+    })
+
+    newSocket.on('disconnect', (reason) => {
+      console.log('Socket disconnected:', reason)
+      if (reason === 'io server disconnect') {
+        // Server disconnected, reconnect manually
+        newSocket.connect()
+      }
+    })
+
+    newSocket.on('new_message', (data) => {
+      queryClient.invalidateQueries(['chatMessages', selectedChat])
+      queryClient.invalidateQueries(['userChats'])
+    })
+
+    newSocket.on('user_typing', (data) => {
+      // Handle typing indicator
+      console.log('User typing:', data)
+    })
+
+    // Call event handlers
+    newSocket.on('incoming_call', async (data) => {
+      console.log('Received incoming call:', data)
+      setIncomingCall(data)
+      // Play notification sound (optional)
+      toast.info(`Incoming call from ${data.callerName || 'Unknown'}`, {
+        autoClose: false,
+      })
+    })
+
+    newSocket.on('call_accepted', async (data) => {
+      console.log('Call accepted:', data)
+      setActiveCall(data)
+      setIncomingCall(null)
+      toast.success('Call connected')
+    })
+
+    newSocket.on('call_rejected', (data) => {
+      console.log('Call rejected:', data)
+      cleanupWebRTC()
+      setActiveCall(null)
+      setIncomingCall(null)
+      toast.info('Call was rejected')
+    })
+
+    newSocket.on('call_ended', (data) => {
+      console.log('Call ended:', data)
+      cleanupWebRTC()
+      setActiveCall(null)
+      setIncomingCall(null)
+      toast.info('Call ended')
+    })
+
+    newSocket.on('call_failed', (data) => {
+      console.log('Call failed:', data)
+      cleanupWebRTC()
+      setActiveCall(null)
+      setIncomingCall(null)
+      toast.error(data.reason || 'Call failed')
+    })
+
+    newSocket.on('call_initiated_offline', (data) => {
+      console.log('Call initiated but receiver offline:', data)
+      toast.info(data.message || 'Call initiated. Receiver is offline.')
+    })
+
+    // WebRTC signaling
+    newSocket.on('call_signal', (data) => {
+      // Pass socket instance to handler
+      if (handleCallSignalRef.current) {
+        handleCallSignalRef.current(data, newSocket)
+      }
+    })
+
+    setSocket(newSocket)
+
+    return () => {
+      newSocket.disconnect()
+    }
+  }, [userDetails?.accessToken])
+
+  // Join chat room when chat is selected
+  useEffect(() => {
+    if (socket && selectedChat) {
+      socket.emit('join_chat', selectedChat.id)
+      return () => {
+        socket.emit('leave_chat', selectedChat.id)
+      }
+    }
+  }, [socket, selectedChat])
+
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messagesData])
+
+  const handleSendMessage = async () => {
+    if (!messageText.trim() || !selectedChat || !socket) return
+
+    try {
+      const res = await sendMessage(userDetails?.accessToken, selectedChat.id, {
+        message: messageText,
+        messageType: 'text',
+      })
+
+      if (res.status === 201) {
+        // Emit to socket for real-time broadcast
+        socket.emit('send_message', {
+          chatId: selectedChat.id,
+          message: res.data,
+        })
+        setMessageText('')
+        queryClient.invalidateQueries(['chatMessages', selectedChat])
+        queryClient.invalidateQueries(['userChats'])
+      }
+    } catch (error) {
+      console.error('Error sending message:', error)
+    }
+  }
+
+  const handleChatClick = (chat) => {
+    setSelectedChat(chat)
+  }
+
+  const getChatDisplayName = (chat) => {
+    if (chat.chatType === 'direct' && chat.otherUser) {
+      return chat.otherUser.fullName || 'Unknown'
+    }
+    return chat.name || 'Group Chat'
+  }
+
+  const getChatAvatar = (chat) => {
+    if (chat.chatType === 'direct' && chat.otherUser) {
+      return chat.otherUser.fullName?.charAt(0) || '?'
+    }
+    return chat.name?.charAt(0) || '?'
+  }
+
+  const handleCreateDirectChat = (userId) => {
+    createChatMutation.mutate({
+      chatType: 'direct',
+      memberIds: [userId],
+    })
+  }
+
+  const handleOpenNewChat = () => {
+    setOpenNewChatDialog(true)
+    setSearchUserQuery('')
+  }
+
+  const handleOpenNewGroup = () => {
+    setOpenNewGroupDialog(true)
+    setGroupFormData({
+      name: '',
+      description: '',
+      selectedUsers: [],
+    })
+  }
+
+  const handleCreateGroupChat = () => {
+    if (!groupFormData.name.trim()) {
+      toast.error('Please enter a group name')
+      return
+    }
+    if (groupFormData.selectedUsers.length === 0) {
+      toast.error('Please select at least one member')
+      return
+    }
+
+    const memberIds = groupFormData.selectedUsers.map((user) => user.id)
+
+    createChatMutation.mutate({
+      chatType: 'group',
+      name: groupFormData.name.trim(),
+      description: groupFormData.description || null,
+      memberIds: memberIds,
+    })
+  }
+
+  // WebRTC helper functions
+  const cleanupWebRTC = () => {
+    try {
+      // Stop local stream
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach((track) => track.stop())
+        localStreamRef.current = null
+      }
+
+      // Close peer connection
+      if (peerConnectionRef.current) {
+        peerConnectionRef.current.destroy()
+        peerConnectionRef.current = null
+      }
+
+      // Clear audio elements
+      if (localAudioRef.current) {
+        localAudioRef.current.srcObject = null
+      }
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = null
+      }
+    } catch (error) {
+      console.error('Error cleaning up WebRTC:', error)
+    }
+  }
+
+  const initializeWebRTC = async (otherUserId, callId, isInitiator) => {
+    try {
+      // Get user media (audio only for voice calls)
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: false,
+      })
+
+      localStreamRef.current = stream
+
+      // Set local audio stream
+      if (localAudioRef.current) {
+        localAudioRef.current.srcObject = stream
+        localAudioRef.current.volume = 0 // Mute local audio to prevent feedback
+      }
+
+      // Create RTCPeerConnection
+      const configuration = {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+        ],
+      }
+
+      const PeerConnection =
+        window.RTCPeerConnection ||
+        window.webkitRTCPeerConnection ||
+        window.mozRTCPeerConnection
+
+      if (!PeerConnection) {
+        throw new Error('WebRTC is not supported in this browser')
+      }
+
+      const peerConnection = new PeerConnection(configuration)
+      peerConnectionRef.current = peerConnection
+
+      // Add local stream tracks
+      stream.getTracks().forEach((track) => {
+        peerConnection.addTrack(track, stream)
+      })
+
+      // Handle remote stream
+      peerConnection.ontrack = (event) => {
+        console.log('Received remote stream:', event)
+        if (remoteAudioRef.current && event.streams[0]) {
+          remoteAudioRef.current.srcObject = event.streams[0]
+        }
+      }
+
+      // Handle ICE candidates
+      peerConnection.onicecandidate = (event) => {
+        if (event.candidate && socket) {
+          console.log('Sending ICE candidate:', event.candidate)
+          socket.emit('call_signal', {
+            toUserId: otherUserId,
+            signal: {
+              type: 'candidate',
+              candidate: event.candidate.candidate,
+              sdpMLineIndex: event.candidate.sdpMLineIndex,
+              sdpMid: event.candidate.sdpMid,
+            },
+            callId: callId,
+          })
+        }
+      }
+
+      // Handle connection state changes
+      peerConnection.onconnectionstatechange = () => {
+        console.log('Connection state:', peerConnection.connectionState)
+        if (
+          peerConnection.connectionState === 'failed' ||
+          peerConnection.connectionState === 'disconnected'
+        ) {
+          toast.error('Call connection lost')
+          cleanupWebRTC()
+        }
+      }
+
+      if (isInitiator) {
+        // Create offer
+        const offer = await peerConnection.createOffer()
+        await peerConnection.setLocalDescription(offer)
+
+        // Send offer via socket
+        if (socket) {
+          socket.emit('call_signal', {
+            toUserId: otherUserId,
+            signal: offer,
+            callId: callId,
+          })
+        }
+      } else {
+        // Receiver: Process any pending signals (like offer from caller)
+        if (pendingSignalsRef.current.length > 0) {
+          console.log(
+            'Processing pending signals:',
+            pendingSignalsRef.current.length,
+          )
+          const signals = [...pendingSignalsRef.current]
+          pendingSignalsRef.current = []
+
+          for (const signalData of signals) {
+            await handleCallSignal(signalData)
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error initializing WebRTC:', error)
+      toast.error(
+        'Failed to start call: ' +
+          (error.message || 'Please allow microphone access'),
+      )
+      cleanupWebRTC()
+    }
+  }
+
+  const handleInitiateVoiceCall = async () => {
+    if (!selectedChat || !socket) {
+      toast.error('Socket connection not available. Please refresh the page.')
+      return
+    }
+
+    if (!socket.connected) {
+      toast.error('Not connected to server. Please check your connection.')
+      return
+    }
+
+    try {
+      // Get receiver ID for direct chat
+      let receiverId = null
+      if (selectedChat.chatType === 'direct' && selectedChat.otherUser) {
+        receiverId = selectedChat.otherUser.id
+      } else if (selectedChat.chatType === 'direct' && selectedChat.members) {
+        // Fallback: extract from members if otherUser is not available
+        const otherMember = selectedChat.members.find(
+          (member) => member.user?.id !== userDetails?.id,
+        )
+        receiverId = otherMember?.user?.id || null
+      }
+
+      if (!receiverId) {
+        toast.error(
+          'Unable to determine recipient. Please select a direct chat.',
+        )
+        return
+      }
+
+      console.log('Initiating call:', {
+        receiverId,
+        chatId: selectedChat.id,
+        callerId: userDetails?.id,
+      })
+
+      const res = await initiateCall(userDetails?.accessToken, {
+        callType: 'voice',
+        chatId: selectedChat.id,
+        receiverId: receiverId,
+      })
+
+      if (res.status === 201) {
+        const callData = res.data
+        setActiveCall(callData)
+
+        // Initialize WebRTC as caller
+        await initializeWebRTC(receiverId, callData.id, true)
+
+        // Emit socket event to initiate call
+        console.log('Emitting initiate_call event:', {
+          receiverId: receiverId,
+          callType: 'voice',
+          chatId: selectedChat.id,
+          callId: callData.id,
+        })
+
+        socket.emit('initiate_call', {
+          receiverId: receiverId,
+          callType: 'voice',
+          chatId: selectedChat.id,
+          callId: callData.id,
+        })
+
+        toast.success('Calling...')
+      } else {
+        toast.error(res.message || 'Failed to initiate call')
+      }
+    } catch (error) {
+      console.error('Error initiating call:', error)
+      toast.error(
+        'Failed to initiate call: ' + (error.message || 'Unknown error'),
+      )
+      cleanupWebRTC()
+    }
+  }
+
+  const handleAcceptCall = async () => {
+    if (!incomingCall || !socket) return
+
+    try {
+      // Update call status in backend
+      await updateCallStatus(userDetails?.accessToken, incomingCall.callId, {
+        callStatus: 'answered',
+      })
+
+      // Initialize WebRTC as receiver
+      await initializeWebRTC(incomingCall.callerId, incomingCall.callId, false)
+
+      socket.emit('accept_call', {
+        callerId: incomingCall.callerId,
+        callId: incomingCall.callId,
+      })
+
+      setActiveCall(incomingCall)
+      setIncomingCall(null)
+      toast.success('Call accepted')
+    } catch (error) {
+      console.error('Error accepting call:', error)
+      toast.error(
+        'Failed to accept call: ' +
+          (error.message || 'Please allow microphone access'),
+      )
+    }
+  }
+
+  const handleRejectCall = async () => {
+    if (!incomingCall || !socket) return
+
+    socket.emit('reject_call', {
+      callerId: incomingCall.callerId,
+      callId: incomingCall.callId,
+    })
+
+    // Update call status in backend
+    try {
+      await updateCallStatus(userDetails?.accessToken, incomingCall.callId, {
+        callStatus: 'rejected',
+      })
+    } catch (error) {
+      console.error('Error updating call status:', error)
+    }
+
+    setIncomingCall(null)
+    toast.info('Call rejected')
+  }
+
+  const handleEndCall = async () => {
+    if (!activeCall || !socket) return
+
+    const otherUserId =
+      activeCall.callerId === userDetails?.id
+        ? activeCall.receiverId
+        : activeCall.callerId
+
+    // Clean up WebRTC
+    cleanupWebRTC()
+
+    socket.emit('end_call', {
+      otherUserId,
+      callId: activeCall.id || activeCall.callId,
+      chatId: activeCall.chatId || selectedChat?.id,
+    })
+
+    // Update call status in backend
+    try {
+      const callId = activeCall.id || activeCall.callId
+      if (callId) {
+        await updateCallStatus(userDetails?.accessToken, callId, {
+          callStatus: 'ended',
+        })
+      }
+    } catch (error) {
+      console.error('Error updating call status:', error)
+    }
+
+    setActiveCall(null)
+    toast.info('Call ended')
+  }
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      cleanupWebRTC()
+    }
+  }, [])
+
+  return (
+    <Box className="flex h-[calc(100vh-200px)]">
+      {/* Chat List Sidebar */}
+      <Paper
+        elevation={2}
+        className="w-80 flex flex-col border-r border-gray-200"
+      >
+        <Box className="p-4 border-b border-gray-200">
+          <Box className="flex items-center gap-2 mb-3">
+            <Typography variant="h6" className="flex-1 font-semibold">
+              Chats
+            </Typography>
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<GroupAdd />}
+              onClick={handleOpenNewGroup}
+              className="shrink-0"
+            >
+              New Group
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<PersonAdd />}
+              onClick={handleOpenNewChat}
+              className="shrink-0"
+            >
+              New Chat
+            </Button>
+          </Box>
+          <TextField
+            fullWidth
+            size="small"
+            placeholder="Search chats..."
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search />
+                </InputAdornment>
+              ),
+            }}
+          />
+        </Box>
+
+        <List className="flex-1 overflow-y-auto">
+          {isLoadingChats ? (
+            <Typography className="p-4 text-center text-gray-500">
+              Loading chats...
+            </Typography>
+          ) : chatsData?.length === 0 ? (
+            <Typography className="p-4 text-center text-gray-500">
+              No chats found. Start a new conversation!
+            </Typography>
+          ) : (
+            chatsData?.map((chat) => (
+              <ListItem
+                key={chat.id}
+                button
+                onClick={() => handleChatClick(chat)}
+                className={`cursor-pointer hover:bg-gray-50 transition-colors ${
+                  selectedChat?.id === chat.id
+                    ? 'bg-blue-50 border-l-4 border-blue-500'
+                    : ''
+                }`}
+              >
+                <Badge
+                  badgeContent={chat.unreadCount || 0}
+                  color="error"
+                  overlap="circular"
+                  className="mr-3"
+                  invisible={!chat.unreadCount || chat.unreadCount === 0}
+                >
+                  <Avatar className="bg-blue-500">{getChatAvatar(chat)}</Avatar>
+                </Badge>
+                <Box className="flex-1 min-w-0">
+                  <Box className="flex items-center justify-between mb-1">
+                    <Typography
+                      variant="subtitle2"
+                      className="font-semibold truncate"
+                    >
+                      {getChatDisplayName(chat)}
+                    </Typography>
+                    {chat.messages?.[0] && (
+                      <Typography
+                        variant="caption"
+                        className="text-gray-400 text-xs ml-2 shrink-0"
+                      >
+                        {dayjs(chat.messages[0].createdAt).format('HH:mm')}
+                      </Typography>
+                    )}
+                  </Box>
+                  {chat.messages?.[0] ? (
+                    <Typography
+                      variant="caption"
+                      className="text-gray-500 truncate block"
+                    >
+                      {chat.messages[0].message}
+                    </Typography>
+                  ) : (
+                    <Typography
+                      variant="caption"
+                      className="text-gray-400 italic"
+                    >
+                      No messages yet
+                    </Typography>
+                  )}
+                </Box>
+              </ListItem>
+            ))
+          )}
+        </List>
+      </Paper>
+
+      {/* Chat Window */}
+      <Box className="flex-1 flex flex-col">
+        {selectedChat ? (
+          <>
+            {/* Chat Header */}
+            <Paper
+              elevation={1}
+              className="p-4 flex items-center justify-between border-b border-gray-200"
+            >
+              <Box className="flex items-center gap-3">
+                <Avatar>{getChatAvatar(selectedChat)}</Avatar>
+                <Box>
+                  <Typography variant="h6">
+                    {getChatDisplayName(selectedChat)}
+                  </Typography>
+                  <Typography variant="caption" className="text-gray-500">
+                    {selectedChat.chatType === 'direct'
+                      ? 'Direct chat'
+                      : selectedChat.chatType}
+                  </Typography>
+                </Box>
+              </Box>
+              <Box>
+                <IconButton
+                  size="small"
+                  color="primary"
+                  onClick={handleInitiateVoiceCall}
+                  disabled={activeCall !== null}
+                  title="Voice Call"
+                >
+                  <Phone />
+                </IconButton>
+                <IconButton size="small" color="primary" title="Video Call">
+                  <Videocam />
+                </IconButton>
+                <IconButton size="small">
+                  <MoreVert />
+                </IconButton>
+              </Box>
+            </Paper>
+
+            {/* Messages Area */}
+            <Box className="flex-1 overflow-y-auto p-4 bg-gray-50">
+              {isLoadingMessages ? (
+                <Typography className="text-center text-gray-500">
+                  Loading messages...
+                </Typography>
+              ) : messagesData?.length === 0 ? (
+                <Typography className="text-center text-gray-500">
+                  No messages yet. Start the conversation!
+                </Typography>
+              ) : (
+                messagesData?.map((message) => {
+                  const isOwnMessage = message.senderId === userDetails?.id
+                  return (
+                    <Box
+                      key={message.id}
+                      className={`mb-3 flex ${
+                        isOwnMessage ? 'justify-end' : 'justify-start'
+                      }`}
+                    >
+                      <Box
+                        className={`flex items-end gap-2 max-w-md ${isOwnMessage ? 'flex-row-reverse' : ''}`}
+                      >
+                        {!isOwnMessage && (
+                          <Avatar className="w-8 h-8 bg-gray-400 text-sm">
+                            {message.sender?.fullName
+                              ?.charAt(0)
+                              ?.toUpperCase() || '?'}
+                          </Avatar>
+                        )}
+                        <Box
+                          className={`flex flex-col ${isOwnMessage ? 'items-end' : 'items-start'}`}
+                        >
+                          {!isOwnMessage && (
+                            <Typography
+                              variant="caption"
+                              className="text-gray-600 mb-1 px-1"
+                            >
+                              {message.sender?.fullName || 'Unknown'}
+                            </Typography>
+                          )}
+                          <Paper
+                            elevation={1}
+                            className={`px-4 py-2 rounded-2xl ${
+                              isOwnMessage
+                                ? 'bg-blue-500 text-white rounded-br-sm'
+                                : 'bg-white text-gray-800 rounded-bl-sm'
+                            }`}
+                          >
+                            <Typography
+                              variant="body2"
+                              className="whitespace-pre-wrap break-words"
+                            >
+                              {message.message}
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              className={`block mt-1 ${
+                                isOwnMessage ? 'text-blue-100' : 'text-gray-500'
+                              }`}
+                            >
+                              {dayjs(message.createdAt).format('HH:mm')}
+                            </Typography>
+                          </Paper>
+                        </Box>
+                      </Box>
+                    </Box>
+                  )
+                })
+              )}
+              <div ref={messagesEndRef} />
+            </Box>
+
+            {/* Message Input */}
+            <Paper elevation={2} className="p-4 border-t border-gray-200">
+              <Box className="flex items-center gap-2">
+                <IconButton size="small">
+                  <AttachFile />
+                </IconButton>
+                <TextField
+                  fullWidth
+                  size="small"
+                  placeholder="Type a message..."
+                  value={messageText}
+                  onChange={(e) => setMessageText(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      handleSendMessage()
+                    }
+                  }}
+                  multiline
+                  maxRows={4}
+                />
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={handleSendMessage}
+                  disabled={!messageText.trim()}
+                  startIcon={<Send />}
+                >
+                  Send
+                </Button>
+              </Box>
+            </Paper>
+          </>
+        ) : (
+          <Box className="flex-1 flex items-center justify-center bg-gray-50">
+            <Typography variant="h6" className="text-gray-400">
+              Select a chat to start messaging
+            </Typography>
+          </Box>
+        )}
+      </Box>
+
+      {/* New Chat Dialog - Select User */}
+      <Dialog
+        open={openNewChatDialog}
+        onClose={() => {
+          setOpenNewChatDialog(false)
+          setSearchUserQuery('')
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle className="flex items-center justify-between">
+          <Typography variant="h6">Start New Chat</Typography>
+          <IconButton
+            size="small"
+            onClick={() => {
+              setOpenNewChatDialog(false)
+              setSearchUserQuery('')
+            }}
+          >
+            <Close />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            size="small"
+            placeholder="Search users by name or email..."
+            value={searchUserQuery}
+            onChange={(e) => setSearchUserQuery(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <Search />
+                </InputAdornment>
+              ),
+            }}
+            className="mb-4"
+          />
+          <Box className="max-h-96 overflow-y-auto">
+            {isLoadingUsers ? (
+              <Box className="flex justify-center items-center py-8">
+                <CircularProgress size={32} />
+              </Box>
+            ) : filteredUsers?.length === 0 ? (
+              <Typography className="text-center text-gray-500 py-8">
+                {searchUserQuery
+                  ? 'No users found matching your search'
+                  : 'No users available'}
+              </Typography>
+            ) : (
+              <List>
+                {filteredUsers
+                  ?.filter((user) => user.id !== userDetails?.id)
+                  .map((user) => (
+                    <ListItem
+                      key={user.id}
+                      button
+                      onClick={() => handleCreateDirectChat(user.id)}
+                      className="hover:bg-gray-50 rounded-lg mb-1"
+                      disabled={createChatMutation.isLoading}
+                    >
+                      <Avatar className="mr-3 bg-blue-500">
+                        {user.fullName?.charAt(0)?.toUpperCase() || '?'}
+                      </Avatar>
+                      <Box className="flex-1 min-w-0">
+                        <Typography
+                          variant="subtitle2"
+                          className="font-semibold truncate"
+                        >
+                          {user.fullName || 'Unknown User'}
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          className="text-gray-500 truncate"
+                        >
+                          {user.email || 'No email'}
+                        </Typography>
+                      </Box>
+                      {createChatMutation.isLoading && (
+                        <CircularProgress size={20} className="ml-2" />
+                      )}
+                    </ListItem>
+                  ))}
+              </List>
+            )}
+          </Box>
+        </DialogContent>
+      </Dialog>
+
+      {/* New Group Chat Dialog */}
+      <Dialog
+        open={openNewGroupDialog}
+        onClose={() => {
+          setOpenNewGroupDialog(false)
+          setGroupFormData({
+            name: '',
+            description: '',
+            selectedUsers: [],
+          })
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle className="flex items-center justify-between">
+          <Typography variant="h6">Create New Group</Typography>
+          <IconButton
+            size="small"
+            onClick={() => {
+              setOpenNewGroupDialog(false)
+              setGroupFormData({
+                name: '',
+                description: '',
+                selectedUsers: [],
+              })
+            }}
+          >
+            <Close />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          <Box className="space-y-4 mt-2">
+            <TextField
+              fullWidth
+              label="Group Name"
+              placeholder="Enter group name"
+              value={groupFormData.name}
+              onChange={(e) =>
+                setGroupFormData({ ...groupFormData, name: e.target.value })
+              }
+              required
+              error={
+                !groupFormData.name.trim() && groupFormData.name.length > 0
+              }
+              helperText={
+                !groupFormData.name.trim() && groupFormData.name.length > 0
+                  ? 'Group name is required'
+                  : ''
+              }
+            />
+
+            <TextField
+              fullWidth
+              label="Description (Optional)"
+              placeholder="Enter group description"
+              value={groupFormData.description}
+              onChange={(e) =>
+                setGroupFormData({
+                  ...groupFormData,
+                  description: e.target.value,
+                })
+              }
+              multiline
+              rows={2}
+            />
+
+            <Autocomplete
+              multiple
+              options={
+                allUsers?.filter((user) => user.id !== userDetails?.id) || []
+              }
+              getOptionLabel={(option) =>
+                option.fullName || option.email || 'Unknown'
+              }
+              value={groupFormData.selectedUsers}
+              onChange={(event, newValue) => {
+                setGroupFormData({ ...groupFormData, selectedUsers: newValue })
+              }}
+              loading={isLoadingUsers}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Select Members"
+                  placeholder="Search and select users"
+                  required
+                  error={
+                    groupFormData.selectedUsers.length === 0 &&
+                    groupFormData.selectedUsers.length >= 0
+                  }
+                  helperText={
+                    groupFormData.selectedUsers.length === 0
+                      ? 'Please select at least one member'
+                      : `${groupFormData.selectedUsers.length} member(s) selected`
+                  }
+                />
+              )}
+              renderTags={(value, getTagProps) =>
+                value.map((option, index) => (
+                  <Chip
+                    {...getTagProps({ index })}
+                    key={option.id}
+                    label={option.fullName || option.email}
+                    avatar={
+                      <Avatar className="bg-blue-500 text-white">
+                        {(option.fullName || '?').charAt(0).toUpperCase()}
+                      </Avatar>
+                    }
+                  />
+                ))
+              }
+              renderOption={(props, option) => (
+                <Box component="li" {...props} key={option.id}>
+                  <Avatar className="mr-2 bg-blue-500">
+                    {(option.fullName || '?').charAt(0).toUpperCase()}
+                  </Avatar>
+                  <Box className="flex-1 min-w-0">
+                    <Typography
+                      variant="subtitle2"
+                      className="font-semibold truncate"
+                    >
+                      {option.fullName || 'Unknown User'}
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      className="text-gray-500 truncate"
+                    >
+                      {option.email || 'No email'}
+                    </Typography>
+                  </Box>
+                </Box>
+              )}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              filterOptions={(options, params) => {
+                const filtered = options.filter((option) => {
+                  const query = params.inputValue.toLowerCase()
+                  return (
+                    option.fullName?.toLowerCase().includes(query) ||
+                    option.email?.toLowerCase().includes(query)
+                  )
+                })
+                return filtered
+              }}
+              noOptionsText="No users found"
+            />
+
+            {groupFormData.selectedUsers.length > 0 && (
+              <Box className="mt-2">
+                <Typography variant="caption" className="text-gray-500">
+                  Selected Members ({groupFormData.selectedUsers.length}):
+                </Typography>
+                <Box className="flex flex-wrap gap-1 mt-1">
+                  {groupFormData.selectedUsers.map((user) => (
+                    <Chip
+                      key={user.id}
+                      label={user.fullName || user.email}
+                      size="small"
+                      avatar={
+                        <Avatar className="bg-blue-500 text-white text-xs">
+                          {(user.fullName || '?').charAt(0).toUpperCase()}
+                        </Avatar>
+                      }
+                    />
+                  ))}
+                </Box>
+              </Box>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions className="px-6 pb-4">
+          <Button
+            onClick={() => {
+              setOpenNewGroupDialog(false)
+              setGroupFormData({
+                name: '',
+                description: '',
+                selectedUsers: [],
+              })
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleCreateGroupChat}
+            disabled={
+              !groupFormData.name.trim() ||
+              groupFormData.selectedUsers.length === 0 ||
+              createChatMutation.isLoading
+            }
+            startIcon={<GroupAdd />}
+          >
+            {createChatMutation.isLoading ? 'Creating...' : 'Create Group'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Incoming Call Dialog */}
+      {incomingCall && (
+        <Dialog open={!!incomingCall} maxWidth="sm" fullWidth>
+          <DialogContent className="text-center py-6">
+            <Avatar className="w-24 h-24 mx-auto mb-4 bg-blue-500 text-4xl">
+              {incomingCall.callerName?.charAt(0) || '?'}
+            </Avatar>
+            <Typography variant="h5" className="mb-2">
+              {incomingCall.callerName || 'Unknown'}
+            </Typography>
+            <Typography variant="body2" className="text-gray-500 mb-4">
+              {incomingCall.callType === 'voice' ? 'Voice Call' : 'Video Call'}
+            </Typography>
+            <Box className="flex justify-center gap-3">
+              <Button
+                variant="contained"
+                color="success"
+                onClick={handleAcceptCall}
+                startIcon={<Phone />}
+              >
+                Accept
+              </Button>
+              <Button
+                variant="contained"
+                color="error"
+                onClick={handleRejectCall}
+                startIcon={<Close />}
+              >
+                Reject
+              </Button>
+            </Box>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Active Call Dialog */}
+      {activeCall && (
+        <Dialog open={!!activeCall} maxWidth="sm" fullWidth>
+          <DialogContent className="text-center py-6">
+            <Avatar className="w-24 h-24 mx-auto mb-4 bg-green-500 text-4xl">
+              {selectedChat?.otherUser?.fullName?.charAt(0) ||
+                activeCall.callerName?.charAt(0) ||
+                '?'}
+            </Avatar>
+            <Typography variant="h5" className="mb-2">
+              {selectedChat?.otherUser?.fullName ||
+                activeCall.callerName ||
+                'Unknown'}
+            </Typography>
+            <Typography variant="body2" className="text-gray-500 mb-4">
+              {activeCall.callType === 'voice' ? 'Voice Call' : 'Video Call'} -{' '}
+              {peerConnectionRef.current?.connectionState === 'connected'
+                ? 'Connected'
+                : peerConnectionRef.current?.connectionState || 'Connecting...'}
+            </Typography>
+
+            {/* Hidden audio elements for WebRTC */}
+            <audio
+              ref={localAudioRef}
+              autoPlay
+              muted
+              style={{ display: 'none' }}
+            />
+            <audio ref={remoteAudioRef} autoPlay style={{ display: 'none' }} />
+
+            <Box className="flex justify-center">
+              <Button
+                variant="contained"
+                color="error"
+                onClick={handleEndCall}
+                startIcon={<Phone />}
+                size="large"
+              >
+                End Call
+              </Button>
+            </Box>
+          </DialogContent>
+        </Dialog>
+      )}
+    </Box>
+  )
+}
+
+export default ChatsView

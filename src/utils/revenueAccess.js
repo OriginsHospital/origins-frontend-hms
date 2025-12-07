@@ -1,30 +1,40 @@
 /**
- * List of allowed emails for Revenue and Revenue New reports
- * Only these email IDs are authorized to access Revenue pages
+ * List of allowed emails for Revenue New page
+ * Only these email IDs are authorized to access Revenue New page
  */
-const ALLOWED_REVENUE_EMAILS = [
-  'karun@gmail.com',
+const ALLOWED_REVENUE_NEW_EMAILS = [
+  'nikhilsuvva77@gmail.com',
   'originsivf@gmail.com',
   'jhansi@gmail.com',
-  'nikhilsuvva77@gmail.com',
 ]
 
 /**
- * Checks if a user email has access to Revenue reports
+ * Checks if a user email has access to Revenue page
+ * Revenue page is HIDDEN from all users
  * @param {string} userEmail - The user's email address
- * @returns {boolean} - True if the user has access, false otherwise
+ * @returns {boolean} - Always returns false (Revenue page is hidden from all)
  */
 export function hasRevenueAccess(userEmail) {
-  if (!userEmail) {
-    return false
-  }
-  return ALLOWED_REVENUE_EMAILS.includes(userEmail.toLowerCase().trim())
+  // Revenue page is hidden from all users
+  return false
 }
 
 /**
- * Gets the list of allowed emails (for reference/debugging)
+ * Checks if a user email has access to Revenue New page
+ * @param {string} userEmail - The user's email address
+ * @returns {boolean} - True if the user has access, false otherwise
+ */
+export function hasRevenueNewAccess(userEmail) {
+  if (!userEmail) {
+    return false
+  }
+  return ALLOWED_REVENUE_NEW_EMAILS.includes(userEmail.toLowerCase().trim())
+}
+
+/**
+ * Gets the list of allowed emails for Revenue New (for reference/debugging)
  * @returns {string[]} - Array of allowed email addresses
  */
-export function getAllowedRevenueEmails() {
-  return [...ALLOWED_REVENUE_EMAILS]
+export function getAllowedRevenueNewEmails() {
+  return [...ALLOWED_REVENUE_NEW_EMAILS]
 }

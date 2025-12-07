@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react'
+import React, { useRef, useState, useEffect } from 'react'
 import {
   DoneAll,
   DoubleArrowOutlined,
@@ -8,67 +8,106 @@ import {
 } from '@mui/icons-material'
 import { Box, Button, IconButton, Popover, Typography } from '@mui/material'
 import { useRouter } from 'next/router'
-
-const initialNotifications = [
-  {
-    id: 1,
-    title: 'New patient Registered',
-    message: 'Test Patient',
-    timestamp: '2024-03-20T10:30',
-    isRead: false,
-    route: '/patient/register?search=123412341234',
-  },
-  {
-    id: 2,
-    title: 'New task assigned',
-    message: 'Srinivas | Lab ',
-    timestamp: '2024-03-20T09:00',
-    isRead: true,
-    route: '/tasktracker/',
-  },
-  {
-    id: 3,
-    title: 'New patient Registered',
-    message: 'Test Patient',
-    timestamp: '2024-03-19T16:45',
-    isRead: false,
-    route: '/patient/register?search=123412341234',
-  },
-]
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useSelector } from 'react-redux'
+import {
+  getNotifications,
+  getUnreadNotificationsCount,
+  markNotificationAsRead,
+  markAllNotificationsAsRead,
+} from '@/constants/apis'
 
 export default function NotificationBell() {
   const notificationAnchorEl = useRef()
   const [notificationOpen, setNotificationOpen] = useState(false)
-  const [notifications, setNotifications] = useState(initialNotifications)
   const router = useRouter()
+  const userDetails = useSelector((store) => store.user)
+  const queryClient = useQueryClient()
+
+  // Fetch notifications
+  const { data: notificationsData, isLoading: isLoadingNotifications } =
+    useQuery({
+      queryKey: ['notifications', userDetails?.accessToken],
+      queryFn: async () => {
+        if (!userDetails?.accessToken) return { data: [] }
+        const res = await getNotifications(userDetails.accessToken)
+        if (res.status === 200) {
+          return res.data || []
+        }
+        return []
+      },
+      enabled: !!userDetails?.accessToken,
+      refetchInterval: 30000, // Refetch every 30 seconds
+    })
+
+  // Fetch unread count
+  const { data: unreadCountData } = useQuery({
+    queryKey: ['unreadNotificationsCount', userDetails?.accessToken],
+    queryFn: async () => {
+      if (!userDetails?.accessToken) return { data: { count: 0 } }
+      const res = await getUnreadNotificationsCount(userDetails.accessToken)
+      if (res.status === 200) {
+        return res.data || { count: 0 }
+      }
+      return { count: 0 }
+    },
+    enabled: !!userDetails?.accessToken,
+    refetchInterval: 30000, // Refetch every 30 seconds
+  })
+
+  const notifications = notificationsData || []
+  const unreadCount = unreadCountData?.count || 0
+
+  // Mark notification as read mutation
+  const markAsReadMutation = useMutation({
+    mutationFn: async (notificationId) => {
+      return await markNotificationAsRead(
+        userDetails?.accessToken,
+        notificationId,
+      )
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['notifications'])
+      queryClient.invalidateQueries(['unreadNotificationsCount'])
+    },
+  })
+
+  // Mark all as read mutation
+  const markAllAsReadMutation = useMutation({
+    mutationFn: async () => {
+      return await markAllNotificationsAsRead(userDetails?.accessToken)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['notifications'])
+      queryClient.invalidateQueries(['unreadNotificationsCount'])
+    },
+  })
   const handleNotificationOpen = () => {
     setNotificationOpen(true)
-    // setNotifications(prevNotifications =>
-    //     prevNotifications.map(notification => ({
-    //         ...notification,
-    //         isRead: true
-    //     }))
-    // )
   }
 
   const handleNotificationClose = () => {
     setNotificationOpen(false)
   }
 
-  const handleNotificationClick = notification => {
-    router.push(notification.route)
+  const handleNotificationClick = (notification) => {
+    if (notification.route) {
+      router.push(notification.route)
+    }
+    // Mark as read when clicked
+    if (!notification.isRead) {
+      markAsReadMutation.mutate(notification.id)
+    }
     handleNotificationClose()
   }
 
   const handleMarkAsRead = (event, notificationId) => {
     event.stopPropagation() // Prevent triggering the notification click
-    setNotifications(prevNotifications =>
-      prevNotifications.map(notification =>
-        notification.id === notificationId
-          ? { ...notification, isRead: true }
-          : notification,
-      ),
-    )
+    markAsReadMutation.mutate(notificationId)
+  }
+
+  const handleMarkAllAsRead = () => {
+    markAllAsReadMutation.mutate()
   }
 
   return (
@@ -81,9 +120,9 @@ export default function NotificationBell() {
       {/* <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
                 {notifications.filter(n => !n.isRead).length > 0 && notifications.filter(n => !n.isRead).length}
             </span> */}
-      {notifications.filter(n => !n.isRead).length > 0 && (
-        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center">
-          {notifications.filter(n => !n.isRead).length}
+      {unreadCount > 0 && (
+        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-semibold">
+          {unreadCount > 99 ? '99+' : unreadCount}
         </span>
       )}
       <Popover
@@ -104,61 +143,81 @@ export default function NotificationBell() {
         }}
       >
         <Box sx={{ p: 1.5 }}>
-          <Typography
-            variant="h6"
-            sx={{ mb: 2, borderBottom: '1px solid #e0e0e0', pb: 1 }}
-          >
-            Notifications
-          </Typography>
-          {notifications.map(notification => (
-            <Box
-              key={notification.id}
-              sx={{
-                p: 1,
-                mb: 0.5,
-                backgroundColor: notification.isRead
-                  ? 'transparent'
-                  : '#f0f9ff',
-                borderRadius: 1,
-                '&:hover': {
-                  backgroundColor: '#f5f5f5',
-                },
-                border: '1px solid #e0e0e0',
-              }}
+          <div className="flex justify-between items-center mb-2 pb-2 border-b border-gray-200">
+            <Typography variant="h6">Notifications</Typography>
+            {unreadCount > 0 && (
+              <Button
+                size="small"
+                onClick={handleMarkAllAsRead}
+                disabled={markAllAsReadMutation.isLoading}
+                className="text-xs capitalize"
+              >
+                Mark all as read
+              </Button>
+            )}
+          </div>
+          {isLoadingNotifications ? (
+            <Typography variant="body2" className="text-center py-4">
+              Loading notifications...
+            </Typography>
+          ) : notifications.length === 0 ? (
+            <Typography
+              variant="body2"
+              className="text-center py-4 text-gray-500"
             >
-              <div className="flex justify-between">
-                <Typography
-                  variant="subtitle2"
-                  sx={{ fontWeight: notification.isRead ? 'normal' : 'bold' }}
-                >
-                  {notification.title}
-                </Typography>
-                <Typography
-                  variant="body2"
-                  className="cursor-pointer"
-                  color="text.secondary"
-                  onClick={() => handleNotificationClick(notification)}
-                >
-                  {notification.message}
-                </Typography>
-              </div>
-              <div className="flex justify-between items-center">
-                <Typography variant="caption" color="text.secondary">
-                  {new Date(notification.timestamp).toLocaleString()}
-                </Typography>
-                {!notification.isRead ? (
-                  <Button
-                    onClick={e => handleMarkAsRead(e, notification.id)}
-                    className="text-xs capitalize"
+              No notifications
+            </Typography>
+          ) : (
+            notifications.map((notification) => (
+              <Box
+                key={notification.id}
+                sx={{
+                  p: 1,
+                  mb: 0.5,
+                  backgroundColor: notification.isRead
+                    ? 'transparent'
+                    : '#f0f9ff',
+                  borderRadius: 1,
+                  '&:hover': {
+                    backgroundColor: '#f5f5f5',
+                  },
+                  border: '1px solid #e0e0e0',
+                }}
+              >
+                <div className="flex justify-between">
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ fontWeight: notification.isRead ? 'normal' : 'bold' }}
                   >
-                    Mark as Read
-                  </Button>
-                ) : (
-                  <DoneAll fontSize="1rem" color="success" />
-                )}
-              </div>
-            </Box>
-          ))}
+                    {notification.title}
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    className="cursor-pointer"
+                    color="text.secondary"
+                    onClick={() => handleNotificationClick(notification)}
+                  >
+                    {notification.message}
+                  </Typography>
+                </div>
+                <div className="flex justify-between items-center">
+                  <Typography variant="caption" color="text.secondary">
+                    {new Date(notification.createdAt).toLocaleString()}
+                  </Typography>
+                  {!notification.isRead ? (
+                    <Button
+                      onClick={(e) => handleMarkAsRead(e, notification.id)}
+                      className="text-xs capitalize"
+                    >
+                      Mark as Read
+                    </Button>
+                  ) : (
+                    <DoneAll fontSize="1rem" color="success" />
+                  )}
+                </div>
+              </Box>
+            ))
+          )}
         </Box>
       </Popover>
     </div>

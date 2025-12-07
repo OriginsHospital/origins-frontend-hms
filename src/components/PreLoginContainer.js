@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useRouter } from 'next/router'
 import { useSelector, useDispatch } from 'react-redux'
 import { getDropdowns } from '@/constants/apis'
@@ -14,13 +14,20 @@ import {
 } from './LegalModals'
 
 function PreLoginContainer(props) {
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const router = useRouter()
   const dispatch = useDispatch()
+  const [isClient, setIsClient] = useState(false)
+
+  // Ensure this component only runs on client side
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
 
   const dropdowns = useQuery({
     queryKey: ['dropdowns'],
     queryFn: async () => {
+      if (typeof window === 'undefined') return null
       let token = localStorage.getItem('token')
       const responsejson = await getDropdowns(token)
       if (responsejson.status === 200) {
@@ -32,11 +39,20 @@ function PreLoginContainer(props) {
         throw new Error('Error occurred')
       }
     },
+    enabled: isClient,
   })
 
-  useLayoutEffect(() => {
-    if (user.isAuthenticated || localStorage.getItem('token')) {
-      const redirectPath = sessionStorage.getItem('redirectPath')
+  useEffect(() => {
+    if (!isClient) return
+
+    if (
+      user.isAuthenticated ||
+      (typeof window !== 'undefined' && localStorage.getItem('token'))
+    ) {
+      const redirectPath =
+        typeof window !== 'undefined'
+          ? sessionStorage.getItem('redirectPath')
+          : null
       if (redirectPath) {
         router.push(redirectPath)
         sessionStorage.removeItem('redirectPath')
@@ -44,7 +60,7 @@ function PreLoginContainer(props) {
         router.push('/home')
       }
     }
-  }, [user.isAuthenticated])
+  }, [user.isAuthenticated, isClient, router])
 
   return (
     <div className="min-h-screen flex flex-col">

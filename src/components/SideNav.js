@@ -31,6 +31,7 @@ import {
 import { LuCalendarDays } from 'react-icons/lu'
 import { FiUser, FiUsers } from 'react-icons/fi'
 import { LuLayoutDashboard, LuBedDouble } from 'react-icons/lu'
+import { HiUsers } from 'react-icons/hi2'
 
 import Image from 'next/image'
 import originslogo from '../../public/origins-new-logo.png'
@@ -285,6 +286,12 @@ function SideNav(props) {
         relatedModule: 'dashboard',
         // icon: <HomeOutlined className="text-secondary" />,
         Iconn: LuLayoutDashboard,
+      },
+      {
+        path: '/teams',
+        name: 'Teams',
+        relatedModule: 'teams',
+        Iconn: HiUsers,
       },
       {
         path: '/appointments',

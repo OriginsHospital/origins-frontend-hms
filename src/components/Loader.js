@@ -13,7 +13,7 @@ function Loader({
   overlay = true,
   backgroundColor = 'rgba(255, 255, 255, 0.2)',
 }) {
-  const loader = useSelector(store => store.loader)
+  const loader = useSelector((store) => store.loader)
   const [isMounted, setIsMounted] = useState(false)
 
   useEffect(() => {
@@ -30,6 +30,8 @@ function Loader({
     <>
       {loader.isLoading &&
         isMounted &&
+        typeof window !== 'undefined' &&
+        document.body &&
         createPortal(
           <div
             className={`

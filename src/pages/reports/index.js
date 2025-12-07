@@ -9,7 +9,7 @@ import { GoClockFill } from 'react-icons/go'
 import { useSelector } from 'react-redux'
 import { IoAlertSharp } from 'react-icons/io5'
 import { Announcement } from '@mui/icons-material'
-import { hasRevenueAccess } from '@/utils/revenueAccess'
+import { hasRevenueAccess, hasRevenueNewAccess } from '@/utils/revenueAccess'
 
 const subNav = [
   {
@@ -17,7 +17,15 @@ const subNav = [
     title: 'Revenue',
     relatedModule: null,
     icon: TbFileAnalytics,
-    requiresRevenueAccess: true, // Flag to indicate this requires revenue access
+    requiresRevenueAccess: true, // Revenue page is HIDDEN from all users
+    isHidden: true, // Flag to completely hide this page
+  },
+  {
+    path: '/reports/revenueNew',
+    title: 'Revenue New',
+    relatedModule: null,
+    icon: TbFileAnalytics,
+    requiresRevenueNewAccess: true, // Revenue New requires specific access
   },
   {
     path: '/reports/expenses',
@@ -124,13 +132,6 @@ const subNav = [
     icon: FiUser,
     requiresRevenueAccess: false,
   },
-  {
-    path: '/reports/revenueNew',
-    title: 'Revenue New',
-    relatedModule: null,
-    icon: TbFileAnalytics,
-    requiresRevenueAccess: true, // Flag to indicate this requires revenue access
-  },
 ]
 
 function Reports() {
@@ -139,9 +140,17 @@ function Reports() {
   // Filter out Revenue menu items for unauthorized users
   const filteredSubNav = useMemo(() => {
     return subNav.filter((nav) => {
+      // Hide Revenue page completely (isHidden flag)
+      if (nav.isHidden) {
+        return false
+      }
       // If this nav item requires revenue access, check if user has access
       if (nav.requiresRevenueAccess) {
         return hasRevenueAccess(user?.email)
+      }
+      // If this nav item requires revenue new access, check if user has access
+      if (nav.requiresRevenueNewAccess) {
+        return hasRevenueNewAccess(user?.email)
       }
       // Otherwise, show all other menu items
       return true

@@ -31,6 +31,9 @@ import {
   getPrescriptionDetailsByTreatmentCycleId,
   updateHysteroscopySheetByVisitId,
   getHysteroscopySheetByVisitId,
+  createHysteroscopyReport,
+  updateHysteroscopyReport,
+  getHysteroscopyReport,
   closeVisitInConsultation,
   closeVisitInTreatment,
   getAllActiveVisitAppointments,
@@ -57,6 +60,7 @@ import SpousePrescription from './SpousePrescription'
 import HysteroscopySheet from './HysteroscopySheet'
 import ERASheet from './ERASheet'
 import HysteroscopySheetNew from './HysteroscopySheetNew'
+import HysteroscopyFormStructured from './HysteroscopyFormStructured'
 
 function Prescription({
   appointmentId,
@@ -151,7 +155,9 @@ function Prescription({
   const [eraTemplate, setERATemplate] = useState({})
   const [triggerTime, setTriggerTime] = useState(null)
   const [hysteroscopyTime, setHysteroscopyTime] = useState(null)
+  const [eraStartTime, setEraStartTime] = useState(null)
   const [hysteroscopyTemplate, setHysteroscopyTemplate] = useState(null)
+  const [hysteroscopyReportId, setHysteroscopyReportId] = useState(null)
 
   const { data: treatmentStatus, isLoading: isTreatmentStatusLoading } =
     useQuery({
@@ -675,6 +681,68 @@ function Prescription({
     },
     enabled: !!patientInfo?.activeVisitId,
   })
+
+  // New structured hysteroscopy report query
+  const { data: hysteroscopyReport } = useQuery({
+    queryKey: [
+      'hysteroscopyReport',
+      patientInfo?.patientId,
+      patientInfo?.activeVisitId,
+    ],
+    queryFn: async () => {
+      if (!patientInfo?.patientId || !patientInfo?.activeVisitId) return null
+      const res = await getHysteroscopyReport(
+        user.accessToken,
+        patientInfo.patientId,
+        patientInfo.activeVisitId,
+      )
+      if (res.status == 200 && res.data && res.data.length > 0) {
+        const report = res.data[0]
+        setHysteroscopyReportId(report.id)
+        return report
+      }
+      return null
+    },
+    enabled: !!patientInfo?.patientId && !!patientInfo?.activeVisitId,
+  })
+
+  // Mutations for structured hysteroscopy report
+  const createHysteroscopyReportMutation = useMutation({
+    mutationFn: async (payload) => {
+      const res = await createHysteroscopyReport(user.accessToken, payload)
+      if (res.status !== 200) {
+        throw new Error(res.message || 'Failed to create hysteroscopy report')
+      }
+      return res.data
+    },
+    onSuccess: (data) => {
+      setHysteroscopyReportId(data.id)
+      queryClient.invalidateQueries('hysteroscopyReport')
+      toast.success('Hysteroscopy report saved successfully', toastconfig)
+      dispatch(closeModal())
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to save report', toastconfig)
+    },
+  })
+
+  const updateHysteroscopyReportMutation = useMutation({
+    mutationFn: async ({ id, payload }) => {
+      const res = await updateHysteroscopyReport(user.accessToken, id, payload)
+      if (res.status !== 200) {
+        throw new Error(res.message || 'Failed to update hysteroscopy report')
+      }
+      return res.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries('hysteroscopyReport')
+      toast.success('Hysteroscopy report updated successfully', toastconfig)
+      dispatch(closeModal())
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to update report', toastconfig)
+    },
+  })
   const handleUpdateTreatmentFETSheet = (temp) => {
     console.log(temp, fetFormData)
     if (temp !== 'update') {
@@ -735,14 +803,15 @@ function Prescription({
       try {
         const res = await reviewEraConsents(user.accessToken, visitId, {
           visitId,
-          stage: 'START_ERA',
+          stage: 'ERA_START',
+          eraStartTime,
           treatmentType: patientInfo?.treatmentDetails?.treatmentTypeId,
         })
 
         if (res.status === 200) {
           // Initialize empty ERA form data
           const initialTemplate = res.data || {
-            date: [moment().format('YYYY-MM-DD')],
+            date: [dayjs().format('YYYY-MM-DD')],
             medicationSheet: [],
             scanSheet: [],
           }
@@ -768,7 +837,7 @@ function Prescription({
             rows: initialTemplate.medicationSheet || [],
           })
           setERATemplate({
-            columns: initialTemplate.date || [moment().format('YYYY-MM-DD')],
+            columns: initialTemplate.date || [dayjs().format('YYYY-MM-DD')],
             rows: initialTemplate.medicationSheet || [],
           })
           setScanEraFormData({
@@ -777,6 +846,9 @@ function Prescription({
 
           // Update treatment sheet
           await handleUpdateTreatmentERASheet(temp)
+
+          // Reset eraStartTime
+          setEraStartTime(null)
 
           // Force modal refresh
           dispatch(closeModal())
@@ -831,13 +903,25 @@ function Prescription({
 
     const { mutate: updateTreatmentStatusMutation } = useMutation({
       mutationFn: async (payload) => {
+        console.log('End Treatment Payload:', payload)
         const res = await updateTreatmentStatus(user.accessToken, payload)
+        console.log('End Treatment Response:', res)
         if (res.status === 200) {
+          // Invalidate with the correct query key that matches the useQuery
+          queryClient.invalidateQueries([
+            'treatmentStatus',
+            patientInfo?.activeVisitId,
+            patientInfo?.treatmentDetails?.treatmentTypeId,
+          ])
+          // Also invalidate all treatmentStatus queries as fallback
           queryClient.invalidateQueries('treatmentStatus')
-          toast.success('Treatment ended successfully')
+          toast.success(
+            res.message || res.data || 'ICSI marked as completed',
+            toastconfig,
+          )
           onClose()
         } else {
-          toast.error(res.message, toastconfig)
+          toast.error(res.message || 'Failed to end treatment', toastconfig)
         }
       },
     })
@@ -972,6 +1056,8 @@ function Prescription({
         }
         if (res.status === 200) {
           queryClient.invalidateQueries('treatmentStatus')
+          // Invalidate appointments list so patient disappears from doctor's appointments
+          queryClient.invalidateQueries('appointmentsForDoctor')
           toast.success('Visit closed successfully')
           onClose()
         } else {
@@ -1843,12 +1929,35 @@ function Prescription({
         </div>
         {treatmentStatus?.START_ERA == 0 ? (
           <>
-            <StartERAConfirmation
-              onConfirm={() =>
-                reviewConsentsERA.mutate(patientInfo?.activeVisitId)
-              }
-              isLoading={reviewConsentsERA.isLoading}
-            />
+            <div className="text-center mb-6">
+              <DateTimePicker
+                label="ERA Start Time"
+                className="bg-white rounded-lg w-max-content mb-10"
+                name="eraStartTime"
+                onChange={(newValue) =>
+                  setEraStartTime(
+                    dayjs(newValue).format('YYYY-MM-DDTHH:mm:00[Z]'),
+                  )
+                }
+                viewRenderers={{
+                  hours: renderTimeViewClock,
+                  minutes: renderTimeViewClock,
+                }}
+              />
+              <h5 className="text-md font-semibold text-gray-800 mb-4">
+                Please Provide ERA Start Time to proceed further
+              </h5>
+              <Button
+                variant="contained"
+                className="text-white capitalize mt-5"
+                disabled={!eraStartTime || reviewConsentsERA.isLoading}
+                onClick={() =>
+                  reviewConsentsERA.mutate(patientInfo?.activeVisitId)
+                }
+              >
+                {reviewConsentsERA.isLoading ? 'Starting ERA...' : 'Start ERA'}
+              </Button>
+            </div>
           </>
         ) : (
           <>
@@ -1887,22 +1996,32 @@ function Prescription({
         </div>
         <div className="">
           {hysteroscopyTemplate ? (
-            <div className="text-center mb-6">
-              <HysteroscopySheet
-                hysteroscopyTemplate={hysteroscopyTemplate}
-                setHysteroscopyTemplate={setHysteroscopyTemplate}
+            <div>
+              <HysteroscopyFormStructured
+                visitId={patientInfo?.activeVisitId}
+                patientId={patientInfo?.patientId}
+                initialData={hysteroscopyReport}
+                onSave={(payload) => {
+                  if (hysteroscopyReportId) {
+                    updateHysteroscopyReportMutation.mutate({
+                      id: hysteroscopyReportId,
+                      payload,
+                    })
+                  } else {
+                    createHysteroscopyReportMutation.mutate(payload)
+                  }
+                }}
+                onPrint={(formData) => {
+                  // TODO: Implement PDF generation
+                  toast.info('PDF generation coming soon', toastconfig)
+                }}
+                onCancel={() => dispatch(closeModal())}
+                onImageUpload={async (file, visitId) => {
+                  // TODO: Implement image upload to S3/storage
+                  // For now, return a placeholder URL
+                  return URL.createObjectURL(file)
+                }}
               />
-              <Button
-                variant="contained"
-                className="text-white capitalize mt-5"
-                onClick={() =>
-                  updateHysteroscopySheetMutation.mutate(
-                    patientInfo?.activeVisitId,
-                  )
-                }
-              >
-                Update Hysteroscopy
-              </Button>
             </div>
           ) : (
             <div className="text-center mb-6">

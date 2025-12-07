@@ -21,7 +21,7 @@ import NotificationBell from './NotificationBell'
 import Marquee from 'react-fast-marquee'
 import DisplayAlerts from './DisplayAlerts'
 export default function Header() {
-  const userDetails = useSelector(state => state.user)
+  const userDetails = useSelector((state) => state.user)
   const anchorEl = useRef()
   const dispatch = useDispatch()
   const router = useRouter()
@@ -34,7 +34,7 @@ export default function Header() {
     setOpen(false)
   }
   const { mutate } = useMutation({
-    mutationFn: token => logout(token),
+    mutationFn: (token) => logout(token),
     onSuccess: () => {
       //remove userdetails in store
       localStorage.clear()
@@ -42,7 +42,7 @@ export default function Header() {
       toast.success('Logged-out successfully', toastconfig)
       router.push('/login')
     },
-    onError: error => {
+    onError: (error) => {
       console.log(error)
       toast.error('Failed to logout', toastconfig)
     },
@@ -55,7 +55,7 @@ export default function Header() {
     <div className="flex flex-col gap-4">
       <div className="fixed top-0 pr-[13%] w-full h-[60px] flex justify-end items-center p-5 border-b-2 bg-white  z-10">
         <div className="flex items-center gap-4">
-          {/* <NotificationBell /> */}
+          <NotificationBell />
           <span className="flex flex-col items-end pr-3">
             <span className=" text-slate-700 font-semibold">
               {userDetails?.fullName}

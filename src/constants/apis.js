@@ -1,6 +1,18 @@
 import { API_ROUTES } from './constants'
 import { useRouter } from 'next/router'
 import { useSelector, useDispatch } from 'react-redux'
+import api from '@/utils/api'
+
+// Health check endpoint using axios instance
+export const checkHealth = async () => {
+  try {
+    const response = await api.get('/api/health')
+    return response.data
+  } catch (error) {
+    console.error('Health check failed:', error)
+    throw error
+  }
+}
 
 export const getLoggedUserInfo = async (token) => {
   const myHeaders = new Headers()
@@ -1724,6 +1736,23 @@ export const sendTransactionId = async (token, payload) => {
   const response = await fetch(
     `
     ${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.SEND_TRANSACTION_DETAILS}`,
+    {
+      method: 'POST',
+      headers: myHeaders,
+      body: JSON.stringify(payload),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const addPaymentDetails = async (token, payload) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.ADD_PAYMENT_DETAILS}`,
     {
       method: 'POST',
       headers: myHeaders,
@@ -4004,6 +4033,63 @@ export const updateHysteroscopySheetByVisitId = async (token, payload) => {
   return response.json()
 }
 
+export const createHysteroscopyReport = async (token, payload) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.CREATE_HYSTEROSCOPY_REPORT}`,
+    {
+      method: 'POST',
+      body: JSON.stringify(payload),
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+
+  return response.json()
+}
+
+export const updateHysteroscopyReport = async (token, id, payload) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.UPDATE_HYSTEROSCOPY_REPORT}/${id}`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+
+  return response.json()
+}
+
+export const getHysteroscopyReport = async (
+  token,
+  patientId,
+  visitId = null,
+) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const url = visitId
+    ? `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_HYSTEROSCOPY_REPORT}/${patientId}?visitId=${visitId}`
+    : `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_HYSTEROSCOPY_REPORT}/${patientId}`
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: myHeaders,
+    redirect: 'follow',
+    credentials: 'include',
+  })
+
+  return response.json()
+}
+
 export const getAppointmentsByPatient = async (token, patientId) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
@@ -4274,6 +4360,70 @@ export const getAllAlerts = async (token) => {
     `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_ALL_ALERTS}`,
     {
       method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const getNotifications = async (token, limit = 50, offset = 0) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_NOTIFICATIONS}?limit=${limit}&offset=${offset}`,
+    {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const getUnreadNotificationsCount = async (token) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_UNREAD_NOTIFICATIONS_COUNT}`,
+    {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const markNotificationAsRead = async (token, notificationId) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.MARK_NOTIFICATION_AS_READ}/${notificationId}/read`,
+    {
+      method: 'PUT',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const markAllNotificationsAsRead = async (token) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.MARK_ALL_NOTIFICATIONS_AS_READ}`,
+    {
+      method: 'PUT',
       headers: myHeaders,
       redirect: 'follow',
       credentials: 'include',
