@@ -53,7 +53,7 @@ import { useRouter } from 'next/router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import FilteredDataGrid from '@/components/FilteredDataGrid'
 
-const steps = ['Patient Details', 'Building', 'Floor', 'Room', 'Bed']
+const steps = ['Location', 'Bed', 'Patient', 'Confirm']
 
 function IPModule() {
   const dropdowns = useSelector((store) => store.dropdowns)
@@ -83,24 +83,20 @@ function IPModule() {
     const newErrors = {}
     switch (step) {
       case 0:
+        if (!selectedBuilding) newErrors.building = 'Building is required'
+        if (!selectedFloor) newErrors.floor = 'Floor is required'
+        if (!selectedRoom) newErrors.room = 'Room is required'
+        break
+      case 1:
+        if (!selectedBed) newErrors.bed = 'Bed is required'
+        break
+      case 2:
         if (!selectedPatient) newErrors.patient = 'Patient is required'
         if (!selectedProcedure) newErrors.procedure = 'Procedure is required'
         if (!dateOfAdmission)
           newErrors.dateOfAdmission = 'Admission date is required'
         if (!timeOfAdmission)
           newErrors.timeOfAdmission = 'Admission time is required'
-        break
-      case 1:
-        if (!selectedBuilding) newErrors.building = 'Building is required'
-        break
-      case 2:
-        if (!selectedFloor) newErrors.floor = 'Floor is required'
-        break
-      case 3:
-        if (!selectedRoom) newErrors.room = 'Room is required'
-        break
-      case 4:
-        if (!selectedBed) newErrors.bed = 'Bed is required'
         break
     }
     setErrors(newErrors)
@@ -186,7 +182,8 @@ function IPModule() {
   }, [])
 
   useEffect(() => {
-    if (selectedBranch && activeStep === 1) {
+    // Load buildings when user is on the Location step
+    if (selectedBranch && activeStep === 0) {
       getBuildings(user.accessToken, selectedBranch)
         .then((response) => {
           if (response.status === 200) {
@@ -390,10 +387,128 @@ function IPModule() {
     )
 
     switch (step) {
+      // Step 0: Location (Building, Floor, Room)
       case 0:
         return (
           <>
             <Grid container spacing={3}>
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" sx={{ mb: 1 }}>
+                  Select Building
+                </Typography>
+                <Grid container spacing={2} justifyContent="flex-start">
+                  {buildings.map((building) => (
+                    <Grid item key={building.id}>
+                      <SelectionTile
+                        icon={<BuildingIcon sx={{ fontSize: 40 }} />}
+                        label={building.name}
+                        selected={selectedBuilding === building.id}
+                        onClick={() => {
+                          handleBuildingChange({
+                            target: { value: building.id },
+                          })
+                          setErrors({ ...errors, building: null })
+                        }}
+                      />
+                    </Grid>
+                  ))}
+                </Grid>
+                {errors.building && (
+                  <Typography color="error" sx={{ mt: 1 }}>
+                    {errors.building}
+                  </Typography>
+                )}
+              </Grid>
+
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" sx={{ mb: 1 }}>
+                  Select Floor
+                </Typography>
+                <Grid container spacing={2} justifyContent="flex-start">
+                  {floors.map((floor) => (
+                    <Grid item key={floor.id}>
+                      <SelectionTile
+                        icon={<FloorIcon sx={{ fontSize: 40 }} />}
+                        label={floor.name}
+                        selected={selectedFloor === floor.id}
+                        onClick={() => {
+                          handleFloorChange({ target: { value: floor.id } })
+                          setErrors({ ...errors, floor: null })
+                        }}
+                      />
+                    </Grid>
+                  ))}
+                </Grid>
+                {errors.floor && (
+                  <Typography color="error" sx={{ mt: 1 }}>
+                    {errors.floor}
+                  </Typography>
+                )}
+              </Grid>
+
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" sx={{ mb: 1 }}>
+                  Select Room
+                </Typography>
+                <Grid container spacing={2} justifyContent="flex-start">
+                  {rooms.map((room) => (
+                    <Grid item key={room.id}>
+                      <SelectionTile
+                        icon={<RoomIcon sx={{ fontSize: 40 }} />}
+                        label={`${room.name} (${room.type})`}
+                        selected={selectedRoom === room.id}
+                        onClick={() => {
+                          handleRoomChange({ target: { value: room.id } })
+                          setErrors({ ...errors, room: null })
+                        }}
+                      />
+                    </Grid>
+                  ))}
+                </Grid>
+                {errors.room && (
+                  <Typography color="error" sx={{ mt: 1 }}>
+                    {errors.room}
+                  </Typography>
+                )}
+              </Grid>
+            </Grid>
+            {renderNextButton(!selectedRoom)}
+          </>
+        )
+
+      // Step 1: Bed selection
+      case 1:
+        return (
+          <>
+            <Grid container spacing={2} justifyContent="center">
+              {floors.map((floor) => (
+                <Grid item key={floor.id}>
+                  <SelectionTile
+                    icon={<FloorIcon sx={{ fontSize: 40 }} />}
+                    label={floor.name}
+                    selected={selectedFloor === floor.id}
+                    onClick={() => {
+                      handleFloorChange({ target: { value: floor.id } })
+                      setErrors({ ...errors, floor: null })
+                    }}
+                  />
+                </Grid>
+              ))}
+            </Grid>
+            {errors.floor && (
+              <Typography color="error" sx={{ mt: 2, textAlign: 'center' }}>
+                {errors.floor}
+              </Typography>
+            )}
+            {renderNextButton(!selectedFloor)}
+          </>
+        )
+
+      // Step 2: Patient & admission details
+      case 2:
+        return (
+          <>
+            <Grid container spacing={2} justifyContent="center">
               <Grid item xs={12} md={6}>
                 <Autocomplete
                   fullWidth
@@ -418,6 +533,7 @@ function IPModule() {
                           searchPatients(e.target.value)
                         }
                       }}
+                      disabled={!selectedBed}
                     />
                   )}
                   renderOption={(props, option) => (
@@ -441,10 +557,15 @@ function IPModule() {
                       </div>
                     </li>
                   )}
+                  disabled={!selectedBed}
                 />
               </Grid>
               <Grid item xs={12} md={6}>
-                <FormControl fullWidth error={!!errors.procedure}>
+                <FormControl
+                  fullWidth
+                  error={!!errors.procedure}
+                  disabled={!selectedBed}
+                >
                   <InputLabel>Procedure</InputLabel>
                   <Select
                     value={selectedProcedure}
@@ -482,8 +603,10 @@ function IPModule() {
                       required
                       error={!!errors.dateOfAdmission}
                       helperText={errors.dateOfAdmission}
+                      disabled={!selectedBed}
                     />
                   )}
+                  disabled={!selectedBed}
                 />
               </Grid>
               <Grid item xs={12} md={6}>
@@ -502,8 +625,10 @@ function IPModule() {
                       required
                       error={!!errors.timeOfAdmission}
                       helperText={errors.timeOfAdmission}
+                      disabled={!selectedBed}
                     />
                   )}
+                  disabled={!selectedBed}
                 />
               </Grid>
               <Grid item xs={12} md={6}>
@@ -512,7 +637,10 @@ function IPModule() {
                   value={dateOfDischarge}
                   format="DD/MM/YYYY"
                   onChange={(newValue) => setDateOfDischarge(newValue)}
-                  renderInput={(params) => <TextField {...params} fullWidth />}
+                  renderInput={(params) => (
+                    <TextField {...params} fullWidth disabled={!selectedBed} />
+                  )}
+                  disabled={!selectedBed}
                 />
               </Grid>
               <Grid item xs={12} md={6}>
@@ -525,153 +653,158 @@ function IPModule() {
                   InputProps={{
                     startAdornment: <span>₹</span>,
                   }}
+                  disabled={!selectedBed}
                 />
               </Grid>
             </Grid>
             {renderNextButton()}
           </>
         )
-      case 1:
+
+      // Step 3: Confirm summary
+      case 3: {
+        const currentBuilding = buildings.find(
+          (building) => building.id === selectedBuilding,
+        )
+        const currentFloor = floors.find((floor) => floor.id === selectedFloor)
+        const currentRoom = rooms.find((room) => room.id === selectedRoom)
+        const currentBed = beds.find((bed) => bed.id === selectedBed)
+
         return (
           <>
-            <Grid container spacing={2} justifyContent="center">
-              {buildings.map((building) => (
-                <Grid item key={building.id}>
-                  <SelectionTile
-                    icon={<BuildingIcon sx={{ fontSize: 40 }} />}
-                    label={building.name}
-                    selected={selectedBuilding === building.id}
-                    onClick={() => {
-                      handleBuildingChange({ target: { value: building.id } })
-                      setErrors({ ...errors, building: null })
-                    }}
-                  />
-                </Grid>
-              ))}
+            <Typography variant="subtitle1" sx={{ mb: 2 }}>
+              Confirm IP Admission Details
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Location & Bed
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Building:</strong> {currentBuilding?.name || '-'}
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Floor:</strong> {currentFloor?.name || '-'}
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Room:</strong>{' '}
+                    {currentRoom
+                      ? `${currentRoom.name} (${currentRoom.type})`
+                      : '-'}
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Bed:</strong> {currentBed?.name || '-'}
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Charges / day:</strong>{' '}
+                    {currentBed?.charge ? `₹${currentBed.charge}` : '-'}
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Paper sx={{ p: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Patient & Admission
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Patient ID:</strong> {selectedPatient || '-'}
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Procedure:</strong>{' '}
+                    {
+                      otProcedureList?.find((p) => p.id === selectedProcedure)
+                        ?.name
+                    }
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Admission:</strong>{' '}
+                    {dateOfAdmission
+                      ? dateOfAdmission.format('DD/MM/YYYY')
+                      : '-'}
+                    {timeOfAdmission
+                      ? ` ${timeOfAdmission.format('HH:mm')}`
+                      : ''}
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Package Amount:</strong>{' '}
+                    {packageAmount ? `₹${packageAmount}` : '-'}
+                  </Typography>
+                </Paper>
+              </Grid>
             </Grid>
-            {errors.building && (
-              <Typography color="error" sx={{ mt: 2, textAlign: 'center' }}>
-                {errors.building}
-              </Typography>
-            )}
-            {renderNextButton(!selectedBuilding)}
           </>
         )
-      case 2:
-        return (
-          <>
-            <Grid container spacing={2} justifyContent="center">
-              {floors.map((floor) => (
-                <Grid item key={floor.id}>
-                  <SelectionTile
-                    icon={<FloorIcon sx={{ fontSize: 40 }} />}
-                    label={floor.name}
-                    selected={selectedFloor === floor.id}
-                    onClick={() => {
-                      handleFloorChange({ target: { value: floor.id } })
-                      setErrors({ ...errors, floor: null })
-                    }}
-                  />
-                </Grid>
-              ))}
-            </Grid>
-            {errors.floor && (
-              <Typography color="error" sx={{ mt: 2, textAlign: 'center' }}>
-                {errors.floor}
-              </Typography>
-            )}
-            {renderNextButton(!selectedFloor)}
-          </>
-        )
-      case 3:
-        return (
-          <>
-            <Grid container spacing={2} justifyContent="center">
-              {rooms.map((room) => (
-                <Grid item key={room.id}>
-                  <SelectionTile
-                    icon={<RoomIcon sx={{ fontSize: 40 }} />}
-                    label={`${room.name} (${room.type})`}
-                    selected={selectedRoom === room.id}
-                    onClick={() => {
-                      handleRoomChange({ target: { value: room.id } })
-                      setErrors({ ...errors, room: null })
-                    }}
-                  />
-                </Grid>
-              ))}
-            </Grid>
-            {errors.room && (
-              <Typography color="error" sx={{ mt: 2, textAlign: 'center' }}>
-                {errors.room}
-              </Typography>
-            )}
-            {renderNextButton(!selectedRoom)}
-          </>
-        )
-      case 4:
-        return (
-          <>
-            <Grid container spacing={2} justifyContent="center">
-              {beds.map((bed) => (
-                <Grid item key={bed.id}>
-                  <SelectionTile
-                    icon={<BedIcon sx={{ fontSize: 40 }} />}
-                    label={`${bed.name} (₹${bed.charge})`}
-                    selected={selectedBed === bed.id}
-                    onClick={() => {
-                      handleBedChange({ target: { value: bed.id } })
-                      setErrors({ ...errors, bed: null })
-                    }}
-                    disabled={bed.isBooked}
-                  />
-                </Grid>
-              ))}
-            </Grid>
-            {errors.bed && (
-              <Typography color="error" sx={{ mt: 2, textAlign: 'center' }}>
-                {errors.bed}
-              </Typography>
-            )}
-          </>
-        )
+      }
       default:
         return null
     }
   }
 
-  const SelectionTile = ({ icon, label, selected, onClick, disabled }) => (
-    <Paper
-      elevation={selected ? 4 : 1}
-      sx={{
-        p: 2,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        cursor: 'pointer',
-        bgcolor: selected ? 'primary.main' : 'background.paper',
-        color: selected ? 'white' : 'text.primary',
-        transition: 'all 0.3s ease',
-        minWidth: '120px',
-        minHeight: '120px',
-        justifyContent: 'center',
-        gap: 1,
-        opacity: disabled ? 0.5 : 1,
-        pointerEvents: disabled ? 'none' : 'auto',
-      }}
-      onClick={onClick}
-    >
-      {icon}
-      <Typography variant="subtitle1" align="center" sx={{}}>
-        {label}
-      </Typography>
-      {disabled && (
-        <Typography variant="subtitle2" align="center" sx={{ color: 'red' }}>
-          Booked
+  const SelectionTile = ({
+    icon,
+    label,
+    selected,
+    onClick,
+    disabled,
+    status,
+  }) => {
+    let bgColor = 'background.paper'
+    let borderColor = 'divider'
+
+    if (selected) {
+      // Selected state (blue-ish)
+      bgColor = 'info.main'
+      borderColor = 'info.dark'
+    } else if (status === 'available') {
+      // Available bed (green-ish)
+      bgColor = 'success.light'
+      borderColor = 'success.main'
+    } else if (status === 'occupied') {
+      // Occupied bed (red-ish)
+      bgColor = 'error.light'
+      borderColor = 'error.main'
+    }
+
+    return (
+      <Paper
+        elevation={selected ? 4 : 1}
+        sx={{
+          p: 2,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          bgcolor: bgColor,
+          color: selected ? 'white' : 'text.primary',
+          border: `1px solid`,
+          borderColor,
+          transition: 'all 0.3s ease',
+          minWidth: '120px',
+          minHeight: '120px',
+          justifyContent: 'center',
+          gap: 1,
+          opacity: disabled ? 0.7 : 1,
+          pointerEvents: disabled ? 'none' : 'auto',
+          '&:hover': {
+            transform: disabled ? 'none' : 'scale(1.03)',
+            boxShadow: disabled ? 1 : 4,
+          },
+        }}
+        onClick={onClick}
+      >
+        {icon}
+        <Typography variant="subtitle1" align="center" sx={{}}>
+          {label}
         </Typography>
-      )}
-    </Paper>
-  )
+        {disabled && (
+          <Typography variant="subtitle2" align="center" sx={{ color: 'red' }}>
+            Booked
+          </Typography>
+        )}
+      </Paper>
+    )
+  }
 
   return (
     <div style={{ padding: '20px' }}>
@@ -738,7 +871,7 @@ function IPModule() {
       <Modal uniqueKey="ipmodule" closeOnOutsideClick={false} maxWidth="md">
         <div className="flex justify-between">
           <Typography variant="h6" className="text-gray-800 mb-2">
-            Book Bed
+            Create IP Admission
           </Typography>
           <IconButton onClick={handleClose}>
             <CloseIcon />
@@ -800,7 +933,7 @@ function IPModule() {
               onClick={handleBookBed}
               disabled={!selectedBed}
             >
-              Book Bed
+              Confirm IP Admission
             </Button>
           ) : null}
         </div>

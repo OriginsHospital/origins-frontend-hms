@@ -47,6 +47,16 @@ import { toast } from 'react-toastify'
 import { toastconfig } from '@/utils/toastconfig'
 import SearchIcon from '@mui/icons-material/Search'
 
+const VENDOR_DEPARTMENTS = [
+  'Pharmacy',
+  'Lab',
+  'IT',
+  'IVF',
+  'Facilities',
+  'Marketing',
+  'Administration',
+]
+
 const tabs = {
   taxCategory: {
     label: 'Tax Categories',
@@ -1134,6 +1144,8 @@ const tabs = {
         required: true,
         id: 'departmentId',
         optionsUrl: API_ROUTES.GET_DEPARTMENTS_LIST,
+        selectedLabel: 'name',
+        allowedNames: VENDOR_DEPARTMENTS,
       },
       {
         label: 'Is Active',
@@ -1530,7 +1542,11 @@ function Managefields() {
   })
 
   const getDynamicOptions = (field) => {
-    // console.log('field', field)
+    // If field has static options configured, return them directly
+    if (Array.isArray(field.options)) {
+      return field.options
+    }
+
     // First check for static dropdowns from redux store
     switch (field.id) {
       case 'visit_type':
@@ -1583,10 +1599,18 @@ function Managefields() {
       // console.log('field.selectedLabel', field.selectedLabel)
       // Ensure options is an array before mapping
       if (Array.isArray(options)) {
-        return options.map((option) => ({
+        let mapped = options.map((option) => ({
           value: option.id,
           label: option[field.selectedLabel],
         }))
+
+        if (Array.isArray(field.allowedNames) && field.allowedNames.length) {
+          mapped = mapped.filter((opt) =>
+            field.allowedNames.includes(opt.label),
+          )
+        }
+
+        return mapped
       }
       return [] // Return empty array if options is not an array
     }
