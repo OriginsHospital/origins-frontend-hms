@@ -453,21 +453,6 @@ export const getPatientByAadharOrMobile = async (token, searchValue) => {
   return response.json()
 }
 
-export const getCities = async function (token, stateId) {
-  const myHeaders = new Headers()
-  myHeaders.append('Authorization', `Bearer ${token}`)
-  myHeaders.append('Content-Type', 'application/json')
-  const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_CITIES}${stateId}`,
-    {
-      method: 'GET',
-      headers: myHeaders,
-      redirect: 'follow',
-      credentials: 'include',
-    },
-  )
-  return response.json()
-}
 export const createPatientRecord = async (
   token,
   payload,
@@ -4971,6 +4956,366 @@ export const getClosedIP = async (token, branchId) => {
     `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_CLOSED_IP}?branchId=${branchId}`,
     {
       method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+// ========== LAYOUT MANAGEMENT APIs ==========
+
+// State APIs
+export const createState = async (token, data) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.CREATE_STATE}`,
+    {
+      method: 'POST',
+      headers: myHeaders,
+      body: JSON.stringify(data),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const getStates = async (token) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_STATES}`,
+    {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const updateState = async (token, id, data) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.UPDATE_STATE}/${id}`,
+    {
+      method: 'PUT',
+      headers: myHeaders,
+      body: JSON.stringify(data),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+// City APIs
+export const createCity = async (token, data) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.CREATE_CITY}`,
+    {
+      method: 'POST',
+      headers: myHeaders,
+      body: JSON.stringify(data),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const getCities = async (token, stateId = null) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const url = stateId
+    ? `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_CITIES}?stateId=${stateId}`
+    : `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_CITIES}`
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: myHeaders,
+    redirect: 'follow',
+    credentials: 'include',
+  })
+  return response.json()
+}
+
+export const updateCity = async (token, id, data) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.UPDATE_CITY}/${id}`,
+    {
+      method: 'PUT',
+      headers: myHeaders,
+      body: JSON.stringify(data),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+// Branch APIs
+export const createBranch = async (token, data) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.CREATE_BRANCH}`,
+    {
+      method: 'POST',
+      headers: myHeaders,
+      body: JSON.stringify(data),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const getBranches = async (token, cityId = null) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const url = cityId
+    ? `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_BRANCHES}?cityId=${cityId}`
+    : `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_BRANCHES}`
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: myHeaders,
+    redirect: 'follow',
+    credentials: 'include',
+  })
+  return response.json()
+}
+
+export const updateBranch = async (token, id, data) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.UPDATE_BRANCH}/${id}`,
+    {
+      method: 'PUT',
+      headers: myHeaders,
+      body: JSON.stringify(data),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+// Building APIs
+export const createBuilding = async (token, data) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.CREATE_BUILDING}`,
+    {
+      method: 'POST',
+      headers: myHeaders,
+      body: JSON.stringify(data),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const updateBuilding = async (token, id, data) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.UPDATE_BUILDING}/${id}`,
+    {
+      method: 'PUT',
+      headers: myHeaders,
+      body: JSON.stringify(data),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+// Floor APIs
+export const createFloor = async (token, data) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.CREATE_FLOOR}`,
+    {
+      method: 'POST',
+      headers: myHeaders,
+      body: JSON.stringify(data),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const updateFloor = async (token, id, data) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.UPDATE_FLOOR}/${id}`,
+    {
+      method: 'PUT',
+      headers: myHeaders,
+      body: JSON.stringify(data),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const deleteFloor = async (token, id) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.DELETE_FLOOR}/${id}`,
+    {
+      method: 'DELETE',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+// Room APIs
+export const createRoom = async (token, data) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.CREATE_ROOM}`,
+    {
+      method: 'POST',
+      headers: myHeaders,
+      body: JSON.stringify(data),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const updateRoom = async (token, id, data) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.UPDATE_ROOM}/${id}`,
+    {
+      method: 'PUT',
+      headers: myHeaders,
+      body: JSON.stringify(data),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const deleteRoom = async (token, id) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.DELETE_ROOM}/${id}`,
+    {
+      method: 'DELETE',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+// Bed APIs
+export const createBed = async (token, data) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.CREATE_BED}`,
+    {
+      method: 'POST',
+      headers: myHeaders,
+      body: JSON.stringify(data),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const createBedsBulk = async (token, data) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.CREATE_BEDS_BULK}`,
+    {
+      method: 'POST',
+      headers: myHeaders,
+      body: JSON.stringify(data),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const updateBed = async (token, id, data) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.UPDATE_BED}/${id}`,
+    {
+      method: 'PUT',
+      headers: myHeaders,
+      body: JSON.stringify(data),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const deleteBed = async (token, id) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.DELETE_BED}/${id}`,
+    {
+      method: 'DELETE',
       headers: myHeaders,
       redirect: 'follow',
       credentials: 'include',

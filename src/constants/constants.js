@@ -29,7 +29,6 @@ export const API_ROUTES = {
   EDIT_DONAR_RECORD: '/visits/editDonar',
   DELET_DONOR_FILE: '/visits/deleteDonorFile',
   GET_DROPDOWNS: '/api/dropdownOptions',
-  GET_CITIES: '/api/getCities/',
   GET_TREATMENT_TYPES: '/api/getTreatmentTypes',
   GET_PATIENTS_BY_AADHAAR_OR_MOBILE: '/patients/searchPatient',
   CREATE_PATIENT_RECORD: '/patients/createPatient',
@@ -443,6 +442,29 @@ export const API_ROUTES = {
   REGISTER_BUILDING: '/ip/registerBuilding',
   GET_LAYOUT_OVERVIEW: '/ip/layouts/overview',
   GET_BED_DETAILS: '/ip/layouts/bedDetails',
+
+  // Layout Management APIs
+  CREATE_STATE: '/ip/layout/state',
+  GET_STATES: '/ip/layout/states',
+  UPDATE_STATE: '/ip/layout/state',
+  CREATE_CITY: '/ip/layout/city',
+  GET_CITIES: '/ip/layout/cities',
+  UPDATE_CITY: '/ip/layout/city',
+  CREATE_BRANCH: '/ip/layout/branch',
+  GET_BRANCHES: '/ip/layout/branches',
+  UPDATE_BRANCH: '/ip/layout/branch',
+  CREATE_BUILDING: '/ip/layout/building',
+  UPDATE_BUILDING: '/ip/layout/building',
+  CREATE_FLOOR: '/ip/layout/floor',
+  UPDATE_FLOOR: '/ip/layout/floor',
+  DELETE_FLOOR: '/ip/layout/floor',
+  CREATE_ROOM: '/ip/layout/room',
+  UPDATE_ROOM: '/ip/layout/room',
+  DELETE_ROOM: '/ip/layout/room',
+  CREATE_BED: '/ip/layout/bed',
+  CREATE_BEDS_BULK: '/ip/layout/beds/bulk',
+  UPDATE_BED: '/ip/layout/bed',
+  DELETE_BED: '/ip/layout/bed',
 }
 
 export const ACCESS_TYPES = {
