@@ -144,12 +144,21 @@ function SalesNew() {
             throw new Error('No branches available')
           }
 
+          // Filter out excluded branches (OBH, 02, kmm03, HYD-KKT)
+          const filteredBranches = dropdowns.branches.filter(
+            (branch) =>
+              branch.name !== 'OBH' &&
+              branch.name !== '02' &&
+              branch.name !== 'kmm03' &&
+              branch.name !== 'HYD-KKT',
+          )
+
           // Log which branches will be fetched
-          const branchNames = dropdowns.branches.map((b) => b.name).join(', ')
+          const branchNames = filteredBranches.map((b) => b.name).join(', ')
           console.log(`Fetching data for branches: ${branchNames}`)
 
           // Fetch data for all branches in parallel with error handling
-          const branchPromises = dropdowns.branches.map((branch) =>
+          const branchPromises = filteredBranches.map((branch) =>
             SalesReportDashboard(
               userDetails.accessToken,
               fromDateStr,
@@ -683,11 +692,19 @@ function SalesNew() {
               placeholder="branch"
             >
               <MenuItem value="ALL">ALL</MenuItem>
-              {dropdowns?.branches?.map((branch, idx) => (
-                <MenuItem key={branch.id} value={branch.id}>
-                  {branch.name}
-                </MenuItem>
-              ))}
+              {dropdowns?.branches
+                ?.filter(
+                  (branch) =>
+                    branch.name !== 'OBH' &&
+                    branch.name !== '02' &&
+                    branch.name !== 'kmm03' &&
+                    branch.name !== 'HYD-KKT',
+                )
+                ?.map((branch, idx) => (
+                  <MenuItem key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </MenuItem>
+                ))}
             </Select>
           </FormControl>
         </Grid>
