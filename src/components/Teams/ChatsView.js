@@ -44,7 +44,8 @@ import {
   updateCallStatus,
 } from '@/constants/teamsApis'
 import { getValidUsersList } from '@/constants/apis'
-import { io } from 'socket.io-client'
+// Socket.io disabled - using REST API only
+// import { io } from 'socket.io-client'
 import dayjs from 'dayjs'
 import { toast } from 'react-toastify'
 
@@ -53,7 +54,8 @@ function ChatsView() {
   const queryClient = useQueryClient()
   const [selectedChat, setSelectedChat] = useState(null)
   const [messageText, setMessageText] = useState('')
-  const [socket, setSocket] = useState(null)
+  // Socket.io disabled
+  // const [socket, setSocket] = useState(null)
   const messagesEndRef = useRef(null)
   const [openNewChatDialog, setOpenNewChatDialog] = useState(false)
   const [openNewGroupDialog, setOpenNewGroupDialog] = useState(false)
@@ -191,190 +193,26 @@ function ChatsView() {
     },
   })
 
-  // Helper function to handle call signals - store in ref so socket can access it
-  const handleCallSignal = async (data, socketInstance = socket) => {
-    console.log('Processing call signal:', data)
-    if (!data.signal) return
+  // Socket.io call signal handler disabled
+  // const handleCallSignal = async (data, socketInstance = socket) => {
+  //   Socket.io WebRTC signaling code removed
+  // }
+  // handleCallSignalRef.current = handleCallSignal
 
-    // If peer connection not ready, queue the signal
-    if (!peerConnectionRef.current) {
-      console.log('Peer connection not ready, queuing signal')
-      pendingSignalsRef.current.push(data)
-      return
-    }
+  // Socket.io connection disabled - using REST API polling instead
+  // useEffect(() => {
+  //   Socket.io code removed
+  // }, [userDetails?.accessToken])
 
-    try {
-      const signal = data.signal
-
-      if (signal.type === 'offer') {
-        // Received offer from caller - set as remote description and create answer
-        await peerConnectionRef.current.setRemoteDescription(
-          new RTCSessionDescription(signal),
-        )
-        const answer = await peerConnectionRef.current.createAnswer()
-        await peerConnectionRef.current.setLocalDescription(answer)
-
-        // Send answer back via socket
-        const socketToUse = socketInstance || socket
-        if (socketToUse) {
-          socketToUse.emit('call_signal', {
-            toUserId: data.fromUserId,
-            signal: answer,
-            callId: data.callId,
-          })
-        }
-      } else if (signal.type === 'answer') {
-        // Received answer from receiver - set as remote description
-        await peerConnectionRef.current.setRemoteDescription(
-          new RTCSessionDescription(signal),
-        )
-      } else if (signal.type === 'candidate' && signal.candidate) {
-        // Received ICE candidate - add to peer connection
-        try {
-          await peerConnectionRef.current.addIceCandidate(
-            new RTCIceCandidate({
-              candidate: signal.candidate,
-              sdpMLineIndex: signal.sdpMLineIndex,
-              sdpMid: signal.sdpMid,
-            }),
-          )
-        } catch (error) {
-          console.error('Error adding ICE candidate:', error)
-        }
-      }
-    } catch (error) {
-      console.error('Error handling signal:', error)
-    }
-  }
-
-  // Store handler in ref
-  handleCallSignalRef.current = handleCallSignal
-
-  // Initialize Socket.io connection
-  useEffect(() => {
-    if (!userDetails?.accessToken) return
-
-    const socketUrl =
-      process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:3000'
-    const newSocket = io(socketUrl, {
-      auth: {
-        token: userDetails.accessToken,
-      },
-      transports: ['websocket', 'polling'],
-    })
-
-    newSocket.on('connect', () => {
-      console.log('Connected to Teams Socket.io server', {
-        socketId: newSocket.id,
-        userId: userDetails?.id,
-      })
-    })
-
-    newSocket.on('connect_error', (error) => {
-      console.error('Socket connection error:', error)
-
-      // Check if it's an authentication error
-      if (error.message && error.message.includes('Authentication')) {
-        console.error(
-          'Socket authentication failed. Token might be invalid or expired.',
-        )
-        toast.error('Authentication failed. Please log in again.')
-        // Optionally redirect to login or refresh token
-      } else {
-        toast.error(
-          'Failed to connect to server. Please check your connection.',
-        )
-      }
-    })
-
-    newSocket.on('disconnect', (reason) => {
-      console.log('Socket disconnected:', reason)
-      if (reason === 'io server disconnect') {
-        // Server disconnected, reconnect manually
-        newSocket.connect()
-      }
-    })
-
-    newSocket.on('new_message', (data) => {
-      queryClient.invalidateQueries(['chatMessages', selectedChat])
-      queryClient.invalidateQueries(['userChats'])
-    })
-
-    newSocket.on('user_typing', (data) => {
-      // Handle typing indicator
-      console.log('User typing:', data)
-    })
-
-    // Call event handlers
-    newSocket.on('incoming_call', async (data) => {
-      console.log('Received incoming call:', data)
-      setIncomingCall(data)
-      // Play notification sound (optional)
-      toast.info(`Incoming call from ${data.callerName || 'Unknown'}`, {
-        autoClose: false,
-      })
-    })
-
-    newSocket.on('call_accepted', async (data) => {
-      console.log('Call accepted:', data)
-      setActiveCall(data)
-      setIncomingCall(null)
-      toast.success('Call connected')
-    })
-
-    newSocket.on('call_rejected', (data) => {
-      console.log('Call rejected:', data)
-      cleanupWebRTC()
-      setActiveCall(null)
-      setIncomingCall(null)
-      toast.info('Call was rejected')
-    })
-
-    newSocket.on('call_ended', (data) => {
-      console.log('Call ended:', data)
-      cleanupWebRTC()
-      setActiveCall(null)
-      setIncomingCall(null)
-      toast.info('Call ended')
-    })
-
-    newSocket.on('call_failed', (data) => {
-      console.log('Call failed:', data)
-      cleanupWebRTC()
-      setActiveCall(null)
-      setIncomingCall(null)
-      toast.error(data.reason || 'Call failed')
-    })
-
-    newSocket.on('call_initiated_offline', (data) => {
-      console.log('Call initiated but receiver offline:', data)
-      toast.info(data.message || 'Call initiated. Receiver is offline.')
-    })
-
-    // WebRTC signaling
-    newSocket.on('call_signal', (data) => {
-      // Pass socket instance to handler
-      if (handleCallSignalRef.current) {
-        handleCallSignalRef.current(data, newSocket)
-      }
-    })
-
-    setSocket(newSocket)
-
-    return () => {
-      newSocket.disconnect()
-    }
-  }, [userDetails?.accessToken])
-
-  // Join chat room when chat is selected
-  useEffect(() => {
-    if (socket && selectedChat) {
-      socket.emit('join_chat', selectedChat.id)
-      return () => {
-        socket.emit('leave_chat', selectedChat.id)
-      }
-    }
-  }, [socket, selectedChat])
+  // Socket.io room joining disabled
+  // useEffect(() => {
+  //   if (socket && selectedChat) {
+  //     socket.emit('join_chat', selectedChat.id)
+  //     return () => {
+  //       socket.emit('leave_chat', selectedChat.id)
+  //     }
+  //   }
+  // }, [socket, selectedChat])
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -382,7 +220,7 @@ function ChatsView() {
   }, [messagesData])
 
   const handleSendMessage = async () => {
-    if (!messageText.trim() || !selectedChat || !socket) return
+    if (!messageText.trim() || !selectedChat) return
 
     try {
       const res = await sendMessage(userDetails?.accessToken, selectedChat.id, {
@@ -391,17 +229,14 @@ function ChatsView() {
       })
 
       if (res.status === 201) {
-        // Emit to socket for real-time broadcast
-        socket.emit('send_message', {
-          chatId: selectedChat.id,
-          message: res.data,
-        })
+        // Socket.io disabled - just refresh queries
         setMessageText('')
         queryClient.invalidateQueries(['chatMessages', selectedChat])
         queryClient.invalidateQueries(['userChats'])
       }
     } catch (error) {
       console.error('Error sending message:', error)
+      toast.error('Failed to send message')
     }
   }
 
@@ -544,10 +379,15 @@ function ChatsView() {
         }
       }
 
-      // Handle ICE candidates
+      // Handle ICE candidates (Socket.io disabled)
       peerConnection.onicecandidate = (event) => {
+        // Socket.io disabled - ICE candidates require socket.io
+        console.log(
+          'ICE candidate generated (socket.io disabled):',
+          event.candidate,
+        )
+        /*
         if (event.candidate && socket) {
-          console.log('Sending ICE candidate:', event.candidate)
           socket.emit('call_signal', {
             toUserId: otherUserId,
             signal: {
@@ -559,6 +399,7 @@ function ChatsView() {
             callId: callId,
           })
         }
+        */
       }
 
       // Handle connection state changes
@@ -578,7 +419,9 @@ function ChatsView() {
         const offer = await peerConnection.createOffer()
         await peerConnection.setLocalDescription(offer)
 
-        // Send offer via socket
+        // Socket.io disabled - WebRTC signaling requires socket.io
+        console.log('WebRTC offer created (socket.io disabled)')
+        /*
         if (socket) {
           socket.emit('call_signal', {
             toUserId: otherUserId,
@@ -586,6 +429,7 @@ function ChatsView() {
             callId: callId,
           })
         }
+        */
       } else {
         // Receiver: Process any pending signals (like offer from caller)
         if (pendingSignalsRef.current.length > 0) {
@@ -612,7 +456,20 @@ function ChatsView() {
   }
 
   const handleInitiateVoiceCall = async () => {
-    if (!selectedChat || !socket) {
+    if (!selectedChat) {
+      toast.error('Please select a chat first.')
+      return
+    }
+
+    // Socket.io disabled - voice calls require WebRTC which needs socket.io
+    toast.info(
+      'Voice calls are currently disabled. Socket.io server is not configured.',
+    )
+    return
+
+    // Original socket.io code below (disabled)
+    /*
+    if (!socket) {
       toast.error('Socket connection not available. Please refresh the page.')
       return
     }
@@ -621,6 +478,7 @@ function ChatsView() {
       toast.error('Not connected to server. Please check your connection.')
       return
     }
+    */
 
     try {
       // Get receiver ID for direct chat
@@ -658,25 +516,24 @@ function ChatsView() {
         const callData = res.data
         setActiveCall(callData)
 
+        // Socket.io disabled - WebRTC calls require socket.io
+        toast.info(
+          'Call initiated. Note: Real-time call features require Socket.io server.',
+        )
+
+        // Original socket.io code below (disabled)
+        /*
         // Initialize WebRTC as caller
         await initializeWebRTC(receiverId, callData.id, true)
 
         // Emit socket event to initiate call
-        console.log('Emitting initiate_call event:', {
-          receiverId: receiverId,
-          callType: 'voice',
-          chatId: selectedChat.id,
-          callId: callData.id,
-        })
-
         socket.emit('initiate_call', {
           receiverId: receiverId,
           callType: 'voice',
           chatId: selectedChat.id,
           callId: callData.id,
         })
-
-        toast.success('Calling...')
+        */
       } else {
         toast.error(res.message || 'Failed to initiate call')
       }
@@ -690,15 +547,21 @@ function ChatsView() {
   }
 
   const handleAcceptCall = async () => {
-    if (!incomingCall || !socket) return
+    if (!incomingCall) return
 
+    // Socket.io disabled - calls require socket.io for WebRTC
+    toast.info(
+      'Call acceptance requires Socket.io server. Please use REST API only.',
+    )
+    return
+
+    // Original socket.io code below (disabled)
+    /*
     try {
-      // Update call status in backend
       await updateCallStatus(userDetails?.accessToken, incomingCall.callId, {
         callStatus: 'answered',
       })
 
-      // Initialize WebRTC as receiver
       await initializeWebRTC(incomingCall.callerId, incomingCall.callId, false)
 
       socket.emit('accept_call', {
@@ -711,52 +574,37 @@ function ChatsView() {
       toast.success('Call accepted')
     } catch (error) {
       console.error('Error accepting call:', error)
-      toast.error(
-        'Failed to accept call: ' +
-          (error.message || 'Please allow microphone access'),
-      )
+      toast.error('Failed to accept call')
     }
+    */
   }
 
   const handleRejectCall = async () => {
-    if (!incomingCall || !socket) return
+    if (!incomingCall) return
 
-    socket.emit('reject_call', {
-      callerId: incomingCall.callerId,
-      callId: incomingCall.callId,
-    })
-
-    // Update call status in backend
+    // Update call status in backend (REST API only)
     try {
       await updateCallStatus(userDetails?.accessToken, incomingCall.callId, {
         callStatus: 'rejected',
       })
+      setIncomingCall(null)
+      toast.info('Call rejected')
     } catch (error) {
       console.error('Error updating call status:', error)
+      toast.error('Failed to reject call')
     }
 
-    setIncomingCall(null)
-    toast.info('Call rejected')
+    // Socket.io emit removed
+    // socket.emit('reject_call', { ... })
   }
 
   const handleEndCall = async () => {
-    if (!activeCall || !socket) return
-
-    const otherUserId =
-      activeCall.callerId === userDetails?.id
-        ? activeCall.receiverId
-        : activeCall.callerId
+    if (!activeCall) return
 
     // Clean up WebRTC
     cleanupWebRTC()
 
-    socket.emit('end_call', {
-      otherUserId,
-      callId: activeCall.id || activeCall.callId,
-      chatId: activeCall.chatId || selectedChat?.id,
-    })
-
-    // Update call status in backend
+    // Update call status in backend (REST API only)
     try {
       const callId = activeCall.id || activeCall.callId
       if (callId) {
@@ -764,12 +612,15 @@ function ChatsView() {
           callStatus: 'ended',
         })
       }
+      setActiveCall(null)
+      toast.info('Call ended')
     } catch (error) {
       console.error('Error updating call status:', error)
+      toast.error('Failed to end call')
     }
 
-    setActiveCall(null)
-    toast.info('Call ended')
+    // Socket.io emit removed
+    // socket.emit('end_call', { ... })
   }
 
   // Cleanup on unmount
