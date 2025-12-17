@@ -320,40 +320,51 @@ function ChatsView() {
     setSelectedMessages((prev) => {
       const newSet = new Set(prev)
       newSet.add(messageId) // Always add on long press
+      console.log('Selected messages after long press:', Array.from(newSet))
       return newSet
     })
   }
 
   // Click handler for message selection
   const handleMessageClick = (messageId, e) => {
-    if (isSelectionMode) {
-      e.preventDefault()
-      e.stopPropagation()
-      setSelectedMessages((prev) => {
-        const newSet = new Set(prev)
-        if (newSet.has(messageId)) {
-          newSet.delete(messageId)
-        } else {
-          newSet.add(messageId)
-        }
-        console.log('Selected messages after click:', Array.from(newSet))
-        if (newSet.size === 0) {
-          setIsSelectionMode(false)
-        }
-        return newSet
-      })
+    if (!isSelectionMode) {
+      return // Only handle clicks when in selection mode
     }
+
+    e.preventDefault()
+    e.stopPropagation()
+
+    setSelectedMessages((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(messageId)) {
+        newSet.delete(messageId)
+        console.log('Deselected message:', messageId)
+      } else {
+        newSet.add(messageId)
+        console.log('Selected message:', messageId)
+      }
+      console.log('Total selected messages:', Array.from(newSet))
+      if (newSet.size === 0) {
+        setIsSelectionMode(false)
+        console.log('Selection mode disabled - no messages selected')
+      }
+      return newSet
+    })
   }
 
   // Start long press timer
   const handleMessageMouseDown = (messageId, e) => {
-    if (isSelectionMode) {
-      // If already in selection mode, toggle immediately
-      e.preventDefault()
-      e.stopPropagation()
-      handleMessageClick(messageId, e)
+    // Don't interfere if clicking on the checkbox
+    if (e.target.closest('button') || e.target.closest('[role="button"]')) {
       return
     }
+
+    if (isSelectionMode) {
+      // In selection mode, don't start long press timer
+      // The onClick handler will handle the selection
+      return
+    }
+
     longPressTimerRef.current = setTimeout(() => {
       handleMessageLongPress(messageId)
     }, 500) // 500ms for long press
@@ -369,13 +380,17 @@ function ChatsView() {
 
   // Touch handlers for mobile
   const handleMessageTouchStart = (messageId, e) => {
-    if (isSelectionMode) {
-      // If already in selection mode, toggle immediately
-      e.preventDefault()
-      e.stopPropagation()
-      handleMessageClick(messageId, e)
+    // Don't interfere if clicking on the checkbox
+    if (e.target.closest('button') || e.target.closest('[role="button"]')) {
       return
     }
+
+    if (isSelectionMode) {
+      // In selection mode, don't start long press timer
+      // The onClick handler will handle the selection
+      return
+    }
+
     longPressTimerRef.current = setTimeout(() => {
       handleMessageLongPress(messageId)
     }, 500)
@@ -1057,9 +1072,20 @@ function ChatsView() {
                       key={message.id}
                       className={`mb-3 flex ${
                         isOwnMessage ? 'justify-end' : 'justify-start'
-                      } ${isSelectionMode ? 'cursor-pointer' : ''}`}
+                      } ${isSelectionMode ? 'cursor-pointer' : ''} ${
+                        isSelected ? 'ring-2 ring-blue-400 rounded-lg p-1' : ''
+                      }`}
                       onClick={(e) => {
+                        // Don't handle if clicking on checkbox or other interactive elements
+                        if (
+                          e.target.closest('button') ||
+                          e.target.closest('[role="button"]')
+                        ) {
+                          return
+                        }
                         if (isSelectionMode) {
+                          e.preventDefault()
+                          e.stopPropagation()
                           handleMessageClick(message.id, e)
                         }
                       }}
@@ -1070,6 +1096,10 @@ function ChatsView() {
                         handleMessageTouchStart(message.id, e)
                       }
                       onTouchEnd={handleMessageTouchEnd}
+                      style={{
+                        userSelect: isSelectionMode ? 'none' : 'auto',
+                        WebkitUserSelect: isSelectionMode ? 'none' : 'auto',
+                      }}
                     >
                       <Box
                         className={`flex items-end gap-2 max-w-md ${isOwnMessage ? 'flex-row-reverse' : ''} ${
@@ -1082,10 +1112,33 @@ function ChatsView() {
                             onClick={(e) => {
                               e.preventDefault()
                               e.stopPropagation()
-                              handleMessageClick(message.id, e)
+                              // Toggle selection when checkbox is clicked
+                              setSelectedMessages((prev) => {
+                                const newSet = new Set(prev)
+                                if (newSet.has(message.id)) {
+                                  newSet.delete(message.id)
+                                } else {
+                                  newSet.add(message.id)
+                                }
+                                console.log(
+                                  'Selected messages after checkbox click:',
+                                  Array.from(newSet),
+                                )
+                                if (newSet.size === 0) {
+                                  setIsSelectionMode(false)
+                                }
+                                return newSet
+                              })
                             }}
                             className="self-center"
-                            onMouseDown={(e) => e.stopPropagation()}
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                            }}
+                            onTouchStart={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                            }}
                           >
                             {isSelected ? (
                               <CheckCircle color="primary" />
