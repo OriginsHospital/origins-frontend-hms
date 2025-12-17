@@ -315,19 +315,11 @@ function ChatsView() {
 
   // Long press handler for message selection
   const handleMessageLongPress = (messageId) => {
-    if (!isSelectionMode) {
-      setIsSelectionMode(true)
-    }
+    console.log('Long press detected for message:', messageId)
+    setIsSelectionMode(true)
     setSelectedMessages((prev) => {
       const newSet = new Set(prev)
-      if (newSet.has(messageId)) {
-        newSet.delete(messageId)
-      } else {
-        newSet.add(messageId)
-      }
-      if (newSet.size === 0) {
-        setIsSelectionMode(false)
-      }
+      newSet.add(messageId) // Always add on long press
       return newSet
     })
   }
@@ -336,6 +328,7 @@ function ChatsView() {
   const handleMessageClick = (messageId, e) => {
     if (isSelectionMode) {
       e.preventDefault()
+      e.stopPropagation()
       setSelectedMessages((prev) => {
         const newSet = new Set(prev)
         if (newSet.has(messageId)) {
@@ -343,6 +336,7 @@ function ChatsView() {
         } else {
           newSet.add(messageId)
         }
+        console.log('Selected messages after click:', Array.from(newSet))
         if (newSet.size === 0) {
           setIsSelectionMode(false)
         }
@@ -352,14 +346,21 @@ function ChatsView() {
   }
 
   // Start long press timer
-  const handleMessageMouseDown = (messageId) => {
+  const handleMessageMouseDown = (messageId, e) => {
+    if (isSelectionMode) {
+      // If already in selection mode, toggle immediately
+      e.preventDefault()
+      e.stopPropagation()
+      handleMessageClick(messageId, e)
+      return
+    }
     longPressTimerRef.current = setTimeout(() => {
       handleMessageLongPress(messageId)
     }, 500) // 500ms for long press
   }
 
   // Cancel long press timer
-  const handleMessageMouseUp = () => {
+  const handleMessageMouseUp = (e) => {
     if (longPressTimerRef.current) {
       clearTimeout(longPressTimerRef.current)
       longPressTimerRef.current = null
@@ -367,13 +368,20 @@ function ChatsView() {
   }
 
   // Touch handlers for mobile
-  const handleMessageTouchStart = (messageId) => {
+  const handleMessageTouchStart = (messageId, e) => {
+    if (isSelectionMode) {
+      // If already in selection mode, toggle immediately
+      e.preventDefault()
+      e.stopPropagation()
+      handleMessageClick(messageId, e)
+      return
+    }
     longPressTimerRef.current = setTimeout(() => {
       handleMessageLongPress(messageId)
     }, 500)
   }
 
-  const handleMessageTouchEnd = () => {
+  const handleMessageTouchEnd = (e) => {
     if (longPressTimerRef.current) {
       clearTimeout(longPressTimerRef.current)
       longPressTimerRef.current = null
@@ -388,14 +396,34 @@ function ChatsView() {
 
   // Delete messages
   const handleDeleteMessages = () => {
-    if (selectedMessages.size === 0) return
+    console.log(
+      'Delete button clicked. Selected messages:',
+      Array.from(selectedMessages),
+    )
+    if (selectedMessages.size === 0) {
+      toast.warning('No messages selected')
+      return
+    }
     setOpenDeleteDialog(true)
   }
 
   // Delete mutation
   const deleteMessagesMutation = useMutation({
     mutationFn: async ({ messageIds, deleteForEveryone }) => {
-      const deletePromises = Array.from(messageIds).map(async (messageId) => {
+      const messageIdsArray = Array.from(messageIds)
+      console.log(
+        'Deleting messages:',
+        messageIdsArray,
+        'deleteForEveryone:',
+        deleteForEveryone,
+      )
+
+      if (messageIdsArray.length === 0) {
+        throw new Error('No messages selected')
+      }
+
+      const deletePromises = messageIdsArray.map(async (messageId) => {
+        console.log('Deleting message:', messageId)
         const response = await deleteMessage(
           userDetails?.accessToken,
           selectedChat.id,
@@ -404,11 +432,15 @@ function ChatsView() {
         )
         // Check if response is successful
         if (!response.ok && response.status !== 200) {
+          console.error('Failed to delete message:', messageId, response)
           throw new Error(response.message || 'Failed to delete message')
         }
+        console.log('Message deleted successfully:', messageId)
         return response
       })
-      return Promise.all(deletePromises)
+      const results = await Promise.all(deletePromises)
+      console.log('All messages deleted:', results)
+      return results
     },
     onSuccess: async () => {
       // Invalidate and refetch messages immediately
@@ -1026,14 +1058,16 @@ function ChatsView() {
                       className={`mb-3 flex ${
                         isOwnMessage ? 'justify-end' : 'justify-start'
                       } ${isSelectionMode ? 'cursor-pointer' : ''}`}
-                      onClick={(e) => handleMessageClick(message.id, e)}
-                      onMouseDown={() =>
-                        !isSelectionMode && handleMessageMouseDown(message.id)
-                      }
+                      onClick={(e) => {
+                        if (isSelectionMode) {
+                          handleMessageClick(message.id, e)
+                        }
+                      }}
+                      onMouseDown={(e) => handleMessageMouseDown(message.id, e)}
                       onMouseUp={handleMessageMouseUp}
                       onMouseLeave={handleMessageMouseUp}
-                      onTouchStart={() =>
-                        !isSelectionMode && handleMessageTouchStart(message.id)
+                      onTouchStart={(e) =>
+                        handleMessageTouchStart(message.id, e)
                       }
                       onTouchEnd={handleMessageTouchEnd}
                     >
@@ -1046,10 +1080,12 @@ function ChatsView() {
                           <IconButton
                             size="small"
                             onClick={(e) => {
+                              e.preventDefault()
                               e.stopPropagation()
                               handleMessageClick(message.id, e)
                             }}
                             className="self-center"
+                            onMouseDown={(e) => e.stopPropagation()}
                           >
                             {isSelected ? (
                               <CheckCircle color="primary" />
