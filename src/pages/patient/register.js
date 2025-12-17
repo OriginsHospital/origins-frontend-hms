@@ -285,16 +285,30 @@ export default function Register() {
       return
     }
 
-    const {
-      hasGuardianInfo,
-      guardianDetails,
-      patientId,
-      createdBy,
-      updatedBy,
-      createdAt,
-      updatedAt,
-      ...editPatientPayload
-    } = formData
+    // Explicitly include only fields allowed in edit schema
+    // Exclude all fields that are not part of the edit patient schema
+    const editPatientPayload = {
+      id: formData.id,
+      branchId: formData.branchId,
+      aadhaarNo: formData.aadhaarNo,
+      mobileNo: formData.mobileNo,
+      email: formData.email || null,
+      firstName: formData.firstName,
+      lastName: formData.lastName || null,
+      gender: formData.gender || 'Female',
+      maritalStatus: formData.maritalStatus,
+      dateOfBirth: formData.dateOfBirth || null,
+      bloodGroup: formData.bloodGroup || null,
+      addressLine1: formData.addressLine1 || null,
+      addressLine2: formData.addressLine2 || null,
+      patientTypeId: formData.patientTypeId,
+      cityId: formData.cityId || null,
+      stateId: formData.stateId || null,
+      referralId: formData.referralId || null,
+      referralName: formData.referralName || null,
+      pincode: formData.pincode || null,
+      photoPath: formData.photoPath || null,
+    }
 
     // Log the payload being sent
     console.log('Sending edit patient payload:', editPatientPayload)
@@ -314,14 +328,34 @@ export default function Register() {
           toastconfig,
         )
         setIsEdit('noneditable')
-        console.log(
-          'Refreshing patient data with aadhaar:',
-          formData?.aadhaarNo,
-        )
-        // Wait a bit before refetching to ensure DB has updated
-        setTimeout(() => {
-          fetchPatientMutate(formData?.aadhaarNo)
-        }, 500)
+
+        // If response includes updated patient data, update formData immediately
+        if (
+          editPatient.data &&
+          typeof editPatient.data === 'object' &&
+          editPatient.data.id
+        ) {
+          console.log('Updating formData with response data:', editPatient.data)
+          let { uploadedDocuments, ...nonUpload } = editPatient.data
+          setFormData(nonUpload)
+          // Also update photo if photoPath changed
+          if (editPatient.data?.photoPath) {
+            setImagePreview(editPatient.data.photoPath)
+            setPhoto(null)
+          }
+          if (uploadedDocuments) {
+            setUploadedDocuments(uploadedDocuments || [])
+          }
+        } else {
+          // Fallback: refetch patient data
+          console.log(
+            'Refreshing patient data with aadhaar:',
+            formData?.aadhaarNo,
+          )
+          setTimeout(() => {
+            fetchPatientMutate(formData?.aadhaarNo)
+          }, 500)
+        }
       } else {
         const errorMessage =
           editPatient.message || editPatient.error || 'Failed to update patient'
