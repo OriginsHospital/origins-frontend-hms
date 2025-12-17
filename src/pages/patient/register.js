@@ -278,6 +278,13 @@ export default function Register() {
       )
       return
     }
+
+    // Ensure patient ID is included
+    if (!formData.id) {
+      toast.error('Patient ID is missing. Cannot update patient.', toastconfig)
+      return
+    }
+
     const {
       hasGuardianInfo,
       guardianDetails,
@@ -288,18 +295,45 @@ export default function Register() {
       updatedAt,
       ...editPatientPayload
     } = formData
-    const editPatient = await editPatientRecord(
-      userDetails?.accessToken,
-      editPatientPayload,
-      photo == defaultProfile ? null : photo,
-    )
-    if (editPatient.status == 200) {
-      toast.success(editPatient.message, toastconfig)
-      setIsEdit('noneditable')
-      console.log('editPatientMutate', formData?.aadhaarNo)
-      fetchPatientMutate(formData?.aadhaarNo)
-    } else {
-      toast.error(editPatient.message, toastconfig)
+
+    // Log the payload being sent
+    console.log('Sending edit patient payload:', editPatientPayload)
+
+    try {
+      const editPatient = await editPatientRecord(
+        userDetails?.accessToken,
+        editPatientPayload,
+        photo == defaultProfile ? null : photo,
+      )
+
+      console.log('Edit patient response:', editPatient)
+
+      if (editPatient.status == 200) {
+        toast.success(
+          editPatient.message || 'Patient updated successfully',
+          toastconfig,
+        )
+        setIsEdit('noneditable')
+        console.log(
+          'Refreshing patient data with aadhaar:',
+          formData?.aadhaarNo,
+        )
+        // Wait a bit before refetching to ensure DB has updated
+        setTimeout(() => {
+          fetchPatientMutate(formData?.aadhaarNo)
+        }, 500)
+      } else {
+        const errorMessage =
+          editPatient.message || editPatient.error || 'Failed to update patient'
+        console.error('Edit patient error:', editPatient)
+        toast.error(errorMessage, toastconfig)
+      }
+    } catch (error) {
+      console.error('Exception during patient update:', error)
+      toast.error(
+        error.message || 'An error occurred while updating patient',
+        toastconfig,
+      )
     }
   }
 

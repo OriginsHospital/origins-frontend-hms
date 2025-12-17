@@ -455,13 +455,14 @@ function SideNav(props) {
           },
         ],
       },
-      {
-        path: '/layouts',
-        name: 'Layouts',
-        relatedModule: 'layouts',
-        Iconn: LuBedDouble,
-        subRoutes: [],
-      },
+      // Hidden Layouts menu item - accessible via IP Module > Layouts button
+      // {
+      //   path: '/layouts',
+      //   name: 'Layouts',
+      //   relatedModule: 'layouts',
+      //   Iconn: LuBedDouble,
+      //   subRoutes: [],
+      // },
       {
         path: '/indent',
         name: 'IP Indent',

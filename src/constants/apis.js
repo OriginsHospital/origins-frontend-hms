@@ -509,19 +509,31 @@ export const editPatientRecord = async (
 ) => {
   const formData = new FormData()
   const { aadhaarCard, marriageCertificate, affidavit, ...rest } = payload
+
+  // Log payload for debugging
+  console.log('Edit Patient Payload:', payload)
+
   Object.keys(rest).forEach((key) => {
-    // console.log(key, payload[key])
-    if (typeof payload[key] === 'object') {
-      formData.append(key, JSON.stringify(payload[key]))
+    const value = rest[key]
+    // Skip undefined values, but include null and empty strings
+    if (value === undefined) {
+      return
+    }
+
+    if (value === null) {
+      formData.append(key, '')
+    } else if (typeof value === 'object' && value !== null) {
+      formData.append(key, JSON.stringify(value))
     } else {
-      formData.append(key, payload[key])
+      // Convert to string for FormData
+      formData.append(key, String(value))
     }
   })
-  // console.log(typeof file)
+
+  // Handle file uploads
   if (file && typeof file == 'object') formData.append('file', file)
   if (aadhaarCard && typeof aadhaarCard === 'object') {
     formData.append('aadhaarCard', aadhaarCard)
-    // console.log(aadhaarCard)
   }
   if (marriageCertificate && typeof marriageCertificate === 'object') {
     formData.append('marriageCertificate', marriageCertificate)
@@ -529,12 +541,7 @@ export const editPatientRecord = async (
   if (affidavit && typeof affidavit === 'object') {
     formData.append('affidavit', affidavit)
   }
-  // console.log(formData, file, uploadedDocuments)
-  // if (uploadedDocuments?.length > 0) {
-  //   uploadedDocuments.forEach(eachDoc =>
-  //     typeof file == 'object' ? formData.append('uploadedDocuments', eachDoc) : eachDoc
-  //   )
-  // }
+
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
 
@@ -551,7 +558,10 @@ export const editPatientRecord = async (
     requestOptions,
   )
 
-  return response.json()
+  const result = await response.json()
+  console.log('Edit Patient Response:', result)
+
+  return result
 }
 export const getPackageData = async (token, visitId) => {
   const myHeaders = new Headers()
@@ -4882,7 +4892,18 @@ export const getBuildings = async (token, branchId) => {
       credentials: 'include',
     },
   )
-  return response.json()
+  const result = await response.json()
+  if (!response.ok) {
+    const errorMessage =
+      result.message ||
+      result.error ||
+      `HTTP ${response.status}: Failed to fetch buildings`
+    throw new Error(errorMessage)
+  }
+  if (result.status && result.status !== 200) {
+    throw new Error(result.message || 'Failed to fetch buildings')
+  }
+  return result
 }
 
 export const getFloors = async (token, buildingId) => {
@@ -4898,7 +4919,18 @@ export const getFloors = async (token, buildingId) => {
       credentials: 'include',
     },
   )
-  return response.json()
+  const result = await response.json()
+  if (!response.ok) {
+    const errorMessage =
+      result.message ||
+      result.error ||
+      `HTTP ${response.status}: Failed to fetch floors`
+    throw new Error(errorMessage)
+  }
+  if (result.status && result.status !== 200) {
+    throw new Error(result.message || 'Failed to fetch floors')
+  }
+  return result
 }
 
 export const getRooms = async (token, floorId) => {
@@ -4914,7 +4946,18 @@ export const getRooms = async (token, floorId) => {
       credentials: 'include',
     },
   )
-  return response.json()
+  const result = await response.json()
+  if (!response.ok) {
+    const errorMessage =
+      result.message ||
+      result.error ||
+      `HTTP ${response.status}: Failed to fetch rooms`
+    throw new Error(errorMessage)
+  }
+  if (result.status && result.status !== 200) {
+    throw new Error(result.message || 'Failed to fetch rooms')
+  }
+  return result
 }
 
 export const getBeds = async (token, roomId) => {
@@ -4922,7 +4965,7 @@ export const getBeds = async (token, roomId) => {
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
   const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_BEDS}/${roomId}  `,
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_BEDS}/${roomId}`,
     {
       method: 'GET',
       headers: myHeaders,
@@ -4930,7 +4973,18 @@ export const getBeds = async (token, roomId) => {
       credentials: 'include',
     },
   )
-  return response.json()
+  const result = await response.json()
+  if (!response.ok) {
+    const errorMessage =
+      result.message ||
+      result.error ||
+      `HTTP ${response.status}: Failed to fetch beds`
+    throw new Error(errorMessage)
+  }
+  if (result.status && result.status !== 200) {
+    throw new Error(result.message || 'Failed to fetch beds')
+  }
+  return result
 }
 export const getActiveIP = async (token, branchId) => {
   const myHeaders = new Headers()
@@ -4981,7 +5035,18 @@ export const createState = async (token, data) => {
       credentials: 'include',
     },
   )
-  return response.json()
+  const result = await response.json()
+  if (!response.ok) {
+    const errorMessage =
+      result.message ||
+      result.error ||
+      `HTTP ${response.status}: Failed to create state`
+    throw new Error(errorMessage)
+  }
+  if (result.status && result.status !== 200) {
+    throw new Error(result.message || 'Failed to create state')
+  }
+  return result
 }
 
 export const getStates = async (token) => {
@@ -4997,7 +5062,16 @@ export const getStates = async (token) => {
       credentials: 'include',
     },
   )
-  return response.json()
+  const result = await response.json()
+  if (!response.ok) {
+    throw new Error(
+      result.message || `HTTP ${response.status}: Failed to fetch states`,
+    )
+  }
+  if (result.status && result.status !== 200) {
+    throw new Error(result.message || 'Failed to fetch states')
+  }
+  return result
 }
 
 export const updateState = async (token, id, data) => {
@@ -5014,7 +5088,11 @@ export const updateState = async (token, id, data) => {
       credentials: 'include',
     },
   )
-  return response.json()
+  const result = await response.json()
+  if (!response.ok || result.status !== 200) {
+    throw new Error(result.message || 'Failed to update state')
+  }
+  return result
 }
 
 // City APIs
@@ -5032,7 +5110,11 @@ export const createCity = async (token, data) => {
       credentials: 'include',
     },
   )
-  return response.json()
+  const result = await response.json()
+  if (!response.ok || result.status !== 200) {
+    throw new Error(result.message || 'Failed to create city')
+  }
+  return result
 }
 
 export const getCities = async (token, stateId = null) => {
@@ -5048,7 +5130,11 @@ export const getCities = async (token, stateId = null) => {
     redirect: 'follow',
     credentials: 'include',
   })
-  return response.json()
+  const result = await response.json()
+  if (!response.ok || result.status !== 200) {
+    throw new Error(result.message || 'Failed to fetch cities')
+  }
+  return result
 }
 
 export const updateCity = async (token, id, data) => {
@@ -5065,7 +5151,11 @@ export const updateCity = async (token, id, data) => {
       credentials: 'include',
     },
   )
-  return response.json()
+  const result = await response.json()
+  if (!response.ok || result.status !== 200) {
+    throw new Error(result.message || 'Failed to update city')
+  }
+  return result
 }
 
 // Branch APIs
@@ -5083,7 +5173,11 @@ export const createBranch = async (token, data) => {
       credentials: 'include',
     },
   )
-  return response.json()
+  const result = await response.json()
+  if (!response.ok || result.status !== 200) {
+    throw new Error(result.message || 'Failed to create branch')
+  }
+  return result
 }
 
 export const getBranches = async (token, cityId = null) => {
@@ -5099,7 +5193,18 @@ export const getBranches = async (token, cityId = null) => {
     redirect: 'follow',
     credentials: 'include',
   })
-  return response.json()
+  const result = await response.json()
+  if (!response.ok) {
+    const errorMessage =
+      result.message ||
+      result.error ||
+      `HTTP ${response.status}: Failed to fetch branches`
+    throw new Error(errorMessage)
+  }
+  if (result.status && result.status !== 200) {
+    throw new Error(result.message || 'Failed to fetch branches')
+  }
+  return result
 }
 
 export const updateBranch = async (token, id, data) => {
@@ -5116,7 +5221,11 @@ export const updateBranch = async (token, id, data) => {
       credentials: 'include',
     },
   )
-  return response.json()
+  const result = await response.json()
+  if (!response.ok || result.status !== 200) {
+    throw new Error(result.message || 'Failed to update branch')
+  }
+  return result
 }
 
 // Building APIs
@@ -5134,7 +5243,11 @@ export const createBuilding = async (token, data) => {
       credentials: 'include',
     },
   )
-  return response.json()
+  const result = await response.json()
+  if (!response.ok || result.status !== 200) {
+    throw new Error(result.message || 'Failed to create building')
+  }
+  return result
 }
 
 export const updateBuilding = async (token, id, data) => {
@@ -5151,7 +5264,11 @@ export const updateBuilding = async (token, id, data) => {
       credentials: 'include',
     },
   )
-  return response.json()
+  const result = await response.json()
+  if (!response.ok || result.status !== 200) {
+    throw new Error(result.message || 'Failed to update building')
+  }
+  return result
 }
 
 // Floor APIs
@@ -5169,7 +5286,11 @@ export const createFloor = async (token, data) => {
       credentials: 'include',
     },
   )
-  return response.json()
+  const result = await response.json()
+  if (!response.ok || result.status !== 200) {
+    throw new Error(result.message || 'Failed to create floor')
+  }
+  return result
 }
 
 export const updateFloor = async (token, id, data) => {
@@ -5186,7 +5307,11 @@ export const updateFloor = async (token, id, data) => {
       credentials: 'include',
     },
   )
-  return response.json()
+  const result = await response.json()
+  if (!response.ok || result.status !== 200) {
+    throw new Error(result.message || 'Failed to update floor')
+  }
+  return result
 }
 
 export const deleteFloor = async (token, id) => {
@@ -5202,7 +5327,11 @@ export const deleteFloor = async (token, id) => {
       credentials: 'include',
     },
   )
-  return response.json()
+  const result = await response.json()
+  if (!response.ok || result.status !== 200) {
+    throw new Error(result.message || 'Failed to delete floor')
+  }
+  return result
 }
 
 // Room APIs
@@ -5220,7 +5349,11 @@ export const createRoom = async (token, data) => {
       credentials: 'include',
     },
   )
-  return response.json()
+  const result = await response.json()
+  if (!response.ok || result.status !== 200) {
+    throw new Error(result.message || 'Failed to create room')
+  }
+  return result
 }
 
 export const updateRoom = async (token, id, data) => {
@@ -5237,7 +5370,11 @@ export const updateRoom = async (token, id, data) => {
       credentials: 'include',
     },
   )
-  return response.json()
+  const result = await response.json()
+  if (!response.ok || result.status !== 200) {
+    throw new Error(result.message || 'Failed to update room')
+  }
+  return result
 }
 
 export const deleteRoom = async (token, id) => {
@@ -5253,7 +5390,11 @@ export const deleteRoom = async (token, id) => {
       credentials: 'include',
     },
   )
-  return response.json()
+  const result = await response.json()
+  if (!response.ok || result.status !== 200) {
+    throw new Error(result.message || 'Failed to delete room')
+  }
+  return result
 }
 
 // Bed APIs
@@ -5271,7 +5412,11 @@ export const createBed = async (token, data) => {
       credentials: 'include',
     },
   )
-  return response.json()
+  const result = await response.json()
+  if (!response.ok || result.status !== 200) {
+    throw new Error(result.message || 'Failed to create bed')
+  }
+  return result
 }
 
 export const createBedsBulk = async (token, data) => {
@@ -5288,7 +5433,11 @@ export const createBedsBulk = async (token, data) => {
       credentials: 'include',
     },
   )
-  return response.json()
+  const result = await response.json()
+  if (!response.ok || result.status !== 200) {
+    throw new Error(result.message || 'Failed to create beds')
+  }
+  return result
 }
 
 export const updateBed = async (token, id, data) => {
@@ -5305,7 +5454,11 @@ export const updateBed = async (token, id, data) => {
       credentials: 'include',
     },
   )
-  return response.json()
+  const result = await response.json()
+  if (!response.ok || result.status !== 200) {
+    throw new Error(result.message || 'Failed to update bed')
+  }
+  return result
 }
 
 export const deleteBed = async (token, id) => {
@@ -5321,7 +5474,11 @@ export const deleteBed = async (token, id) => {
       credentials: 'include',
     },
   )
-  return response.json()
+  const result = await response.json()
+  if (!response.ok || result.status !== 200) {
+    throw new Error(result.message || 'Failed to delete bed')
+  }
+  return result
 }
 
 export const createIPRegistration = async (token, payload) => {

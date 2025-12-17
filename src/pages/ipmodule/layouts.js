@@ -30,6 +30,8 @@ import {
 } from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 import AddIcon from '@mui/icons-material/Add'
+import EditIcon from '@mui/icons-material/Edit'
+import DeleteIcon from '@mui/icons-material/Delete'
 import MeetingRoomIcon from '@mui/icons-material/MeetingRoom'
 import HotelIcon from '@mui/icons-material/Hotel'
 import LocalHotelIcon from '@mui/icons-material/LocalHotel'
@@ -80,15 +82,14 @@ const BedBox = styled(Box)(({ theme, ownerState }) => {
   }
 
   const { status } = ownerState
+  const statusColor = statusColors[status] || theme.palette.divider
 
   return {
     borderRadius: theme.spacing(1),
     padding: theme.spacing(1),
-    border: `2px solid ${statusColors[status] || theme.palette.divider}`,
-    backgroundColor: `${statusColors[status] || theme.palette.divider}15`,
-    color: theme.palette.getContrastText(
-      statusColors[status] || theme.palette.background.paper,
-    ),
+    border: `2px solid ${statusColor}`,
+    backgroundColor: `${statusColor}15`,
+    color: '#212121', // Dark text color for maximum visibility
     textAlign: 'center',
     cursor: status === 'Maintenance' ? 'not-allowed' : 'pointer',
     transition: 'all 0.2s ease',
@@ -97,9 +98,24 @@ const BedBox = styled(Box)(({ theme, ownerState }) => {
     flexDirection: 'column',
     justifyContent: 'center',
     gap: 0.5,
+    position: 'relative',
+    '& .bed-name': {
+      fontWeight: 600,
+      color: '#212121', // Dark color for bed name
+      fontSize: '0.875rem',
+      lineHeight: 1.2,
+    },
+    '& .bed-status': {
+      color: statusColor, // Use the status color for the status text
+      fontSize: '0.75rem',
+      fontWeight: 600, // Bolder for better visibility
+      textTransform: 'capitalize',
+      lineHeight: 1.2,
+    },
     '&:hover': {
-      backgroundColor: `${statusColors[status]}25`,
+      backgroundColor: `${statusColor}25`,
       transform: status === 'Maintenance' ? 'none' : 'translateY(-2px)',
+      boxShadow: `0 4px 8px ${statusColor}40`,
     },
   }
 })
@@ -117,6 +133,9 @@ const LayoutsPage = () => {
   const [selectedFloorId, setSelectedFloorId] = useState('')
   const [selectedRoomId, setSelectedRoomId] = useState('')
 
+  // View state: 'landing' | 'buildings' | 'floors' | 'rooms' | 'beds'
+  const [currentView, setCurrentView] = useState('landing')
+
   // Modal states
   const [addStateModal, setAddStateModal] = useState(false)
   const [addCityModal, setAddCityModal] = useState(false)
@@ -127,6 +146,18 @@ const LayoutsPage = () => {
   const [addRoomModal, setAddRoomModal] = useState(false)
   const [addBedModal, setAddBedModal] = useState(false)
   const [addBedsBulkModal, setAddBedsBulkModal] = useState(false)
+
+  // Edit and delete states
+  const [editingBuilding, setEditingBuilding] = useState(null)
+  const [editingFloor, setEditingFloor] = useState(null)
+  const [editingRoom, setEditingRoom] = useState(null)
+  const [editingBed, setEditingBed] = useState(null)
+  const [deleteConfirm, setDeleteConfirm] = useState({
+    open: false,
+    type: '', // 'building', 'floor', 'room', 'bed'
+    id: null,
+    name: '',
+  })
 
   // Form states
   const [stateForm, setStateForm] = useState({ name: '', isActive: true })
@@ -208,7 +239,7 @@ const LayoutsPage = () => {
     enabled: !!user.accessToken && !!selectedStateId,
   })
 
-  const { data: branchesData } = useQuery({
+  const { data: branchesData, refetch: refetchBranches } = useQuery({
     queryKey: ['branches', selectedCityId],
     queryFn: () => getBranches(user.accessToken, selectedCityId),
     enabled: !!user.accessToken && !!selectedCityId,
@@ -217,28 +248,44 @@ const LayoutsPage = () => {
   const { data: buildingsData } = useQuery({
     queryKey: ['buildings', selectedBranchId],
     queryFn: () => getBuildings(user.accessToken, selectedBranchId),
-    enabled: !!user.accessToken && !!selectedBranchId,
+    enabled:
+      !!user.accessToken &&
+      !!selectedBranchId &&
+      (currentView === 'buildings' ||
+        currentView === 'floors' ||
+        currentView === 'rooms' ||
+        currentView === 'beds'),
   })
 
   const { data: floorsData } = useQuery({
     queryKey: ['floors', selectedBuildingId],
     queryFn: () => getFloors(user.accessToken, selectedBuildingId),
-    enabled: !!user.accessToken && !!selectedBuildingId,
+    enabled:
+      !!user.accessToken &&
+      !!selectedBuildingId &&
+      (currentView === 'floors' ||
+        currentView === 'rooms' ||
+        currentView === 'beds'),
   })
 
   const { data: roomsData } = useQuery({
     queryKey: ['rooms', selectedFloorId],
     queryFn: () => getRooms(user.accessToken, selectedFloorId),
-    enabled: !!user.accessToken && !!selectedFloorId,
+    enabled:
+      !!user.accessToken &&
+      !!selectedFloorId &&
+      (currentView === 'rooms' || currentView === 'beds'),
   })
 
   const { data: bedsData } = useQuery({
     queryKey: ['beds', selectedRoomId],
     queryFn: () => getBeds(user.accessToken, selectedRoomId),
-    enabled: !!user.accessToken && !!selectedRoomId,
+    enabled: !!user.accessToken && !!selectedRoomId && currentView === 'beds',
   })
 
-  const states = statesData?.data || []
+  const states = (statesData?.data || []).filter(
+    (state) => state.name?.toLowerCase() !== 'telagana',
+  )
   const cities = citiesData?.data || []
   const branches = branchesData?.data || []
   const buildings = buildingsData?.data || []
@@ -248,54 +295,80 @@ const LayoutsPage = () => {
 
   // Mutations
   const createStateMutation = useMutation({
-    mutationFn: (data) => createState(user.accessToken, data),
-    onSuccess: () => {
+    mutationFn: async (data) => {
+      const response = await createState(user.accessToken, data)
+      return response
+    },
+    onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['states'] })
       setSnackbar({
         open: true,
-        message: 'State created successfully',
+        message: response.message || 'State created successfully',
         severity: 'success',
       })
       setAddStateModal(false)
       setStateForm({ name: '', isActive: true })
     },
     onError: (error) => {
+      console.error('Error creating state:', error)
       setSnackbar({
         open: true,
-        message: error.message || 'Failed to create state',
+        message:
+          error.message ||
+          error.response?.data?.message ||
+          'Failed to create state',
         severity: 'error',
       })
     },
   })
 
   const createCityMutation = useMutation({
-    mutationFn: (data) => createCity(user.accessToken, data),
-    onSuccess: () => {
+    mutationFn: async (data) => {
+      const response = await createCity(user.accessToken, data)
+      return response
+    },
+    onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['cities'] })
       setSnackbar({
         open: true,
-        message: 'City created successfully',
+        message: response.message || 'City created successfully',
         severity: 'success',
       })
       setAddCityModal(false)
       setCityForm({ name: '', stateId: '', isActive: true })
     },
     onError: (error) => {
+      console.error('Error creating city:', error)
       setSnackbar({
         open: true,
-        message: error.message || 'Failed to create city',
+        message:
+          error.message ||
+          error.response?.data?.message ||
+          'Failed to create city',
         severity: 'error',
       })
     },
   })
 
   const createBranchMutation = useMutation({
-    mutationFn: (data) => createBranch(user.accessToken, data),
-    onSuccess: () => {
+    mutationFn: async (data) => {
+      const response = await createBranch(user.accessToken, data)
+      return response
+    },
+    onSuccess: (response, variables) => {
+      // Invalidate and refetch queries for the specific cityId that was used
+      queryClient.invalidateQueries({
+        queryKey: ['branches', variables.cityId],
+      })
+      // Also invalidate all branches queries to be safe
       queryClient.invalidateQueries({ queryKey: ['branches'] })
+      // Force refetch if cityId matches selectedCityId
+      if (variables.cityId === selectedCityId) {
+        refetchBranches()
+      }
       setSnackbar({
         open: true,
-        message: 'Branch created successfully',
+        message: response.message || 'Branch created successfully',
         severity: 'success',
       })
       setAddBranchModal(false)
@@ -308,21 +381,28 @@ const LayoutsPage = () => {
       })
     },
     onError: (error) => {
+      console.error('Error creating branch:', error)
       setSnackbar({
         open: true,
-        message: error.message || 'Failed to create branch',
+        message:
+          error.message ||
+          error.response?.data?.message ||
+          'Failed to create branch',
         severity: 'error',
       })
     },
   })
 
   const createBuildingMutation = useMutation({
-    mutationFn: (data) => createBuilding(user.accessToken, data),
-    onSuccess: () => {
+    mutationFn: async (data) => {
+      const response = await createBuilding(user.accessToken, data)
+      return response
+    },
+    onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['buildings'] })
       setSnackbar({
         open: true,
-        message: 'Building created successfully',
+        message: response.message || 'Building created successfully',
         severity: 'success',
       })
       setAddBuildingModal(false)
@@ -335,21 +415,34 @@ const LayoutsPage = () => {
       })
     },
     onError: (error) => {
+      console.error('Error creating building:', error)
       setSnackbar({
         open: true,
-        message: error.message || 'Failed to create building',
+        message:
+          error.message ||
+          error.response?.data?.message ||
+          'Failed to create building',
         severity: 'error',
       })
     },
   })
 
   const createFloorMutation = useMutation({
-    mutationFn: (data) => createFloor(user.accessToken, data),
-    onSuccess: () => {
+    mutationFn: async (data) => {
+      // Generate floor name automatically from floor number
+      const floorName = data.floorNumber ? `Floor ${data.floorNumber}` : 'Floor'
+      const payload = {
+        ...data,
+        name: floorName,
+      }
+      const response = await createFloor(user.accessToken, payload)
+      return response
+    },
+    onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['floors'] })
       setSnackbar({
         open: true,
-        message: 'Floor created successfully',
+        message: response.message || 'Floor created successfully',
         severity: 'success',
       })
       setAddFloorModal(false)
@@ -362,21 +455,59 @@ const LayoutsPage = () => {
       })
     },
     onError: (error) => {
+      console.error('Error creating floor:', error)
       setSnackbar({
         open: true,
-        message: error.message || 'Failed to create floor',
+        message:
+          error.message ||
+          error.response?.data?.message ||
+          'Failed to create floor',
         severity: 'error',
       })
     },
   })
 
   const createRoomMutation = useMutation({
-    mutationFn: (data) => createRoom(user.accessToken, data),
-    onSuccess: () => {
+    mutationFn: async (data) => {
+      // Generate room name automatically from room number
+      const roomName = data.roomNumber ? `Room ${data.roomNumber}` : 'Room'
+      const payload = {
+        ...data,
+        name: roomName,
+      }
+      const response = await createRoom(user.accessToken, payload)
+
+      // Auto-create beds if totalBeds > 0
+      const roomData = response?.data || response
+      if (roomData?.id && data.totalBeds > 0) {
+        try {
+          const bedsBulkData = {
+            roomId: roomData.id,
+            bedCount: data.totalBeds,
+            bedPrefix: 'Bed',
+            startNumber: 1,
+            bedType: 'Normal',
+            charge: data.charges || 0,
+          }
+          await createBedsBulk(user.accessToken, bedsBulkData)
+        } catch (bedError) {
+          console.error('Error auto-creating beds:', bedError)
+          // Don't fail the room creation if bed creation fails
+        }
+      }
+
+      return response
+    },
+    onSuccess: (response, variables) => {
       queryClient.invalidateQueries({ queryKey: ['rooms'] })
+      queryClient.invalidateQueries({ queryKey: ['beds'] })
+      const bedMessage =
+        variables.totalBeds > 0
+          ? `Room created successfully with ${variables.totalBeds} bed(s)`
+          : 'Room created successfully'
       setSnackbar({
         open: true,
-        message: 'Room created successfully',
+        message: response.message || bedMessage,
         severity: 'success',
       })
       setAddRoomModal(false)
@@ -393,21 +524,28 @@ const LayoutsPage = () => {
       })
     },
     onError: (error) => {
+      console.error('Error creating room:', error)
       setSnackbar({
         open: true,
-        message: error.message || 'Failed to create room',
+        message:
+          error.message ||
+          error.response?.data?.message ||
+          'Failed to create room',
         severity: 'error',
       })
     },
   })
 
   const createBedMutation = useMutation({
-    mutationFn: (data) => createBed(user.accessToken, data),
-    onSuccess: () => {
+    mutationFn: async (data) => {
+      const response = await createBed(user.accessToken, data)
+      return response
+    },
+    onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['beds'] })
       setSnackbar({
         open: true,
-        message: 'Bed created successfully',
+        message: response.message || 'Bed created successfully',
         severity: 'success',
       })
       setAddBedModal(false)
@@ -424,21 +562,28 @@ const LayoutsPage = () => {
       })
     },
     onError: (error) => {
+      console.error('Error creating bed:', error)
       setSnackbar({
         open: true,
-        message: error.message || 'Failed to create bed',
+        message:
+          error.message ||
+          error.response?.data?.message ||
+          'Failed to create bed',
         severity: 'error',
       })
     },
   })
 
   const createBedsBulkMutation = useMutation({
-    mutationFn: (data) => createBedsBulk(user.accessToken, data),
-    onSuccess: () => {
+    mutationFn: async (data) => {
+      const response = await createBedsBulk(user.accessToken, data)
+      return response
+    },
+    onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['beds'] })
       setSnackbar({
         open: true,
-        message: 'Beds created successfully',
+        message: response.message || 'Beds created successfully',
         severity: 'success',
       })
       setAddBedsBulkModal(false)
@@ -452,9 +597,247 @@ const LayoutsPage = () => {
       })
     },
     onError: (error) => {
+      console.error('Error creating beds:', error)
       setSnackbar({
         open: true,
-        message: error.message || 'Failed to create beds',
+        message:
+          error.message ||
+          error.response?.data?.message ||
+          'Failed to create beds',
+        severity: 'error',
+      })
+    },
+  })
+
+  // Update Mutations
+  const updateBuildingMutation = useMutation({
+    mutationFn: async ({ id, data }) => {
+      const response = await updateBuilding(user.accessToken, id, data)
+      return response
+    },
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['buildings'] })
+      setSnackbar({
+        open: true,
+        message: response.message || 'Building updated successfully',
+        severity: 'success',
+      })
+      setAddBuildingModal(false)
+      setEditingBuilding(null)
+      setBuildingForm({
+        name: '',
+        branchId: '',
+        buildingCode: '',
+        totalFloors: '',
+        isActive: true,
+      })
+    },
+    onError: (error) => {
+      console.error('Error updating building:', error)
+      setSnackbar({
+        open: true,
+        message:
+          error.message ||
+          error.response?.data?.message ||
+          'Failed to update building',
+        severity: 'error',
+      })
+    },
+  })
+
+  const updateFloorMutation = useMutation({
+    mutationFn: async ({ id, data }) => {
+      const response = await updateFloor(user.accessToken, id, data)
+      return response
+    },
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['floors'] })
+      setSnackbar({
+        open: true,
+        message: response.message || 'Floor updated successfully',
+        severity: 'success',
+      })
+      setAddFloorModal(false)
+      setEditingFloor(null)
+      setFloorForm({
+        name: '',
+        buildingId: '',
+        floorNumber: '',
+        floorType: 'IP',
+        isActive: true,
+      })
+    },
+    onError: (error) => {
+      console.error('Error updating floor:', error)
+      setSnackbar({
+        open: true,
+        message:
+          error.message ||
+          error.response?.data?.message ||
+          'Failed to update floor',
+        severity: 'error',
+      })
+    },
+  })
+
+  const updateRoomMutation = useMutation({
+    mutationFn: async ({ id, data }) => {
+      const response = await updateRoom(user.accessToken, id, data)
+      return response
+    },
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['rooms'] })
+      setSnackbar({
+        open: true,
+        message: response.message || 'Room updated successfully',
+        severity: 'success',
+      })
+      setAddRoomModal(false)
+      setEditingRoom(null)
+      setRoomForm({
+        name: '',
+        floorId: '',
+        roomNumber: '',
+        type: 'AC',
+        roomCategory: 'General',
+        genderRestriction: 'Any',
+        totalBeds: 0,
+        charges: 0,
+        isActive: true,
+      })
+    },
+    onError: (error) => {
+      console.error('Error updating room:', error)
+      setSnackbar({
+        open: true,
+        message:
+          error.message ||
+          error.response?.data?.message ||
+          'Failed to update room',
+        severity: 'error',
+      })
+    },
+  })
+
+  const updateBedMutation = useMutation({
+    mutationFn: async ({ id, data }) => {
+      const response = await updateBed(user.accessToken, id, data)
+      return response
+    },
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['beds'] })
+      setSnackbar({
+        open: true,
+        message: response.message || 'Bed updated successfully',
+        severity: 'success',
+      })
+      setAddBedModal(false)
+      setEditingBed(null)
+      setBedForm({
+        name: '',
+        roomId: '',
+        bedNumber: '',
+        bedType: 'Normal',
+        hasOxygen: false,
+        hasVentilator: false,
+        charge: 0,
+        status: 'Available',
+        isActive: true,
+      })
+    },
+    onError: (error) => {
+      console.error('Error updating bed:', error)
+      setSnackbar({
+        open: true,
+        message:
+          error.message ||
+          error.response?.data?.message ||
+          'Failed to update bed',
+        severity: 'error',
+      })
+    },
+  })
+
+  // Delete Mutations
+  const deleteFloorMutation = useMutation({
+    mutationFn: async (id) => {
+      const response = await deleteFloor(user.accessToken, id)
+      return response
+    },
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['floors'] })
+      queryClient.invalidateQueries({ queryKey: ['rooms'] })
+      queryClient.invalidateQueries({ queryKey: ['beds'] })
+      setSnackbar({
+        open: true,
+        message: response.message || 'Floor deleted successfully',
+        severity: 'success',
+      })
+      setDeleteConfirm({ open: false, type: '', id: null, name: '' })
+    },
+    onError: (error) => {
+      console.error('Error deleting floor:', error)
+      setSnackbar({
+        open: true,
+        message:
+          error.message ||
+          error.response?.data?.message ||
+          'Failed to delete floor',
+        severity: 'error',
+      })
+    },
+  })
+
+  const deleteRoomMutation = useMutation({
+    mutationFn: async (id) => {
+      const response = await deleteRoom(user.accessToken, id)
+      return response
+    },
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['rooms'] })
+      queryClient.invalidateQueries({ queryKey: ['beds'] })
+      setSnackbar({
+        open: true,
+        message: response.message || 'Room deleted successfully',
+        severity: 'success',
+      })
+      setDeleteConfirm({ open: false, type: '', id: null, name: '' })
+    },
+    onError: (error) => {
+      console.error('Error deleting room:', error)
+      setSnackbar({
+        open: true,
+        message:
+          error.message ||
+          error.response?.data?.message ||
+          'Failed to delete room',
+        severity: 'error',
+      })
+    },
+  })
+
+  const deleteBedMutation = useMutation({
+    mutationFn: async (id) => {
+      const response = await deleteBed(user.accessToken, id)
+      return response
+    },
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['beds'] })
+      setSnackbar({
+        open: true,
+        message: response.message || 'Bed deleted successfully',
+        severity: 'success',
+      })
+      setDeleteConfirm({ open: false, type: '', id: null, name: '' })
+    },
+    onError: (error) => {
+      console.error('Error deleting bed:', error)
+      setSnackbar({
+        open: true,
+        message:
+          error.message ||
+          error.response?.data?.message ||
+          'Failed to delete bed',
         severity: 'error',
       })
     },
@@ -783,26 +1166,110 @@ const LayoutsPage = () => {
                         }}
                       >
                         {roomBeds.map((bed) => (
-                          <Tooltip
+                          <Box
                             key={bed.id}
-                            title={`Status: ${bed.status}`}
-                            arrow
+                            sx={{
+                              position: 'relative',
+                              '&:hover .bed-actions': {
+                                opacity: 1,
+                                visibility: 'visible',
+                              },
+                            }}
                           >
-                            <BedBox ownerState={{ status: bed.status }}>
-                              <Typography
-                                variant="body2"
-                                sx={{ fontWeight: 600 }}
+                            <Tooltip title={`Status: ${bed.status}`} arrow>
+                              <BedBox ownerState={{ status: bed.status }}>
+                                <Typography
+                                  variant="body2"
+                                  className="bed-name"
+                                  sx={{
+                                    fontWeight: 600,
+                                    color: '#212121',
+                                    pr: 3, // Add padding to prevent text overlap
+                                  }}
+                                >
+                                  {bed.name}
+                                </Typography>
+                                <Typography
+                                  variant="caption"
+                                  className="bed-status"
+                                  sx={{
+                                    textTransform: 'capitalize',
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  {bed.status}
+                                </Typography>
+                              </BedBox>
+                            </Tooltip>
+                            <Stack
+                              className="bed-actions"
+                              direction="row"
+                              spacing={0.5}
+                              sx={{
+                                position: 'absolute',
+                                top: 2,
+                                right: 2,
+                                opacity: 0,
+                                visibility: 'hidden',
+                                transition:
+                                  'opacity 0.2s ease, visibility 0.2s ease',
+                                backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                                borderRadius: 1,
+                                padding: '2px',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                              }}
+                            >
+                              <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setBedForm({
+                                    name: bed.name || '',
+                                    roomId: bed.roomId || room.id,
+                                    bedNumber: bed.bedNumber || '',
+                                    bedType: bed.bedType || 'Normal',
+                                    hasOxygen: bed.hasOxygen || false,
+                                    hasVentilator: bed.hasVentilator || false,
+                                    charge: bed.charge || 0,
+                                    status: bed.status || 'Available',
+                                    isActive: bed.isActive !== false,
+                                  })
+                                  setEditingBed(bed.id)
+                                  setAddBedModal(true)
+                                }}
+                                color="primary"
+                                sx={{
+                                  padding: '4px',
+                                  '&:hover': {
+                                    backgroundColor: 'rgba(25, 118, 210, 0.1)',
+                                  },
+                                }}
                               >
-                                {bed.name}
-                              </Typography>
-                              <Typography
-                                variant="caption"
-                                sx={{ textTransform: 'capitalize' }}
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                              <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setDeleteConfirm({
+                                    open: true,
+                                    type: 'bed',
+                                    id: bed.id,
+                                    name: bed.name || bed.bedNumber || 'Bed',
+                                  })
+                                }}
+                                color="error"
+                                sx={{
+                                  padding: '4px',
+                                  '&:hover': {
+                                    backgroundColor: 'rgba(211, 47, 47, 0.1)',
+                                  },
+                                }}
                               >
-                                {bed.status}
-                              </Typography>
-                            </BedBox>
-                          </Tooltip>
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Stack>
+                          </Box>
                         ))}
                       </Box>
 
@@ -811,9 +1278,32 @@ const LayoutsPage = () => {
                           fullWidth
                           variant="outlined"
                           onClick={() => {
+                            // Calculate next bed number from existing beds
+                            const existingRoomBeds = beds.filter(
+                              (b) => b.roomId === room.id,
+                            )
+                            let nextBedNumber = 1
+
+                            if (existingRoomBeds.length > 0) {
+                              // Extract numbers from bedNumber or name fields
+                              const bedNumbers = existingRoomBeds
+                                .map((bed) => {
+                                  const bedNum = bed.bedNumber || bed.name || ''
+                                  // Extract numeric part from strings like "Bed 1", "1", "Bed-1", etc.
+                                  const match = bedNum.toString().match(/\d+/)
+                                  return match ? parseInt(match[0]) : 0
+                                })
+                                .filter((num) => num > 0)
+
+                              if (bedNumbers.length > 0) {
+                                nextBedNumber = Math.max(...bedNumbers) + 1
+                              }
+                            }
+
                             setBedsBulkForm({
                               ...bedsBulkForm,
                               roomId: room.id,
+                              startNumber: nextBedNumber,
                             })
                             setAddBedsBulkModal(true)
                           }}
@@ -835,6 +1325,801 @@ const LayoutsPage = () => {
   // Modal components would go here - Add State, Add City, Add Branch, etc.
   // Due to length constraints, I'll create a separate file for modals or continue in next part
 
+  // Render Landing Page (State/City/Branch Selection)
+  const renderLandingPage = () => {
+    const selectedBranch = branches.find((b) => b.id === selectedBranchId)
+
+    return (
+      <Card elevation={2} sx={{ borderRadius: 3, p: 4 }}>
+        <Stack spacing={4}>
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={4}>
+              <FormControl fullWidth size="medium">
+                <InputLabel>State</InputLabel>
+                <Select
+                  label="State"
+                  value={selectedStateId}
+                  onChange={handleStateChange}
+                  displayEmpty={!selectedStateId}
+                  endAdornment={
+                    <IconButton
+                      size="small"
+                      onClick={() => setAddStateModal(true)}
+                      sx={{ mr: 1 }}
+                    >
+                      <AddIcon fontSize="small" />
+                    </IconButton>
+                  }
+                >
+                  {states.map((state) => (
+                    <MenuItem key={state.id} value={state.id}>
+                      {state.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12} md={4}>
+              <FormControl fullWidth size="medium" disabled={!selectedStateId}>
+                <InputLabel>City</InputLabel>
+                <Select
+                  label="City"
+                  value={selectedCityId}
+                  onChange={handleCityChange}
+                  displayEmpty={!selectedCityId}
+                  endAdornment={
+                    <IconButton
+                      size="small"
+                      onClick={() => {
+                        setCityForm({ ...cityForm, stateId: selectedStateId })
+                        setAddCityModal(true)
+                      }}
+                      disabled={!selectedStateId}
+                      sx={{ mr: 1 }}
+                    >
+                      <AddIcon fontSize="small" />
+                    </IconButton>
+                  }
+                >
+                  {cities.map((city) => (
+                    <MenuItem key={city.id} value={city.id}>
+                      {city.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12} md={4}>
+              <FormControl fullWidth size="medium" disabled={!selectedCityId}>
+                <InputLabel>Branch</InputLabel>
+                <Select
+                  label="Branch"
+                  value={selectedBranchId}
+                  onChange={handleBranchChange}
+                  displayEmpty={!selectedBranchId}
+                  endAdornment={
+                    <IconButton
+                      size="small"
+                      onClick={() => {
+                        setBranchForm({ ...branchForm, cityId: selectedCityId })
+                        setAddBranchModal(true)
+                      }}
+                      disabled={!selectedCityId}
+                      sx={{ mr: 1 }}
+                    >
+                      <AddIcon fontSize="small" />
+                    </IconButton>
+                  }
+                >
+                  {branches.map((branch) => (
+                    <MenuItem key={branch.id} value={branch.id}>
+                      {branch.name}{' '}
+                      {branch.branchCode && `(${branch.branchCode})`}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+          </Grid>
+
+          {selectedBranch && (
+            <Box>
+              <Button
+                variant="contained"
+                size="large"
+                startIcon={<BusinessIcon />}
+                onClick={() => setCurrentView('buildings')}
+                disabled={!selectedBranchId}
+                sx={{ minWidth: 200 }}
+              >
+                Manage Layout
+              </Button>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                Branch: <strong>{selectedBranch.name}</strong>
+                {selectedBranch.branchCode && ` (${selectedBranch.branchCode})`}
+              </Typography>
+            </Box>
+          )}
+        </Stack>
+      </Card>
+    )
+  }
+
+  // Render Building Management View
+  const renderBuildingManagement = () => {
+    return (
+      <Stack spacing={3}>
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="center"
+        >
+          <Box>
+            <Button
+              variant="text"
+              onClick={() => setCurrentView('landing')}
+              sx={{ mb: 1 }}
+            >
+              ← Back to Branch Selection
+            </Button>
+            <Typography variant="h5" sx={{ fontWeight: 600 }}>
+              Building Management
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {branches.find((b) => b.id === selectedBranchId)?.name ||
+                'Branch'}
+            </Typography>
+          </Box>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => {
+              const selectedBranch = branches.find(
+                (b) => b.id === selectedBranchId,
+              )
+              setBuildingForm({
+                ...buildingForm,
+                branchId: selectedBranchId,
+                name: selectedBranch?.name || '',
+              })
+              setAddBuildingModal(true)
+            }}
+            disabled={!selectedBranchId}
+          >
+            + Add Building
+          </Button>
+        </Stack>
+
+        <Grid container spacing={2}>
+          {buildings.map((building) => (
+            <Grid item xs={12} md={6} lg={4} key={building.id}>
+              <Card elevation={2} sx={{ borderRadius: 2 }}>
+                <CardContent>
+                  <Stack spacing={2}>
+                    <Stack
+                      direction="row"
+                      justifyContent="space-between"
+                      alignItems="center"
+                    >
+                      <Box>
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                          {building.name}
+                        </Typography>
+                        {building.buildingCode && (
+                          <Typography variant="body2" color="text.secondary">
+                            Code: {building.buildingCode}
+                          </Typography>
+                        )}
+                      </Box>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <Chip
+                          label={building.isActive ? 'Active' : 'Inactive'}
+                          color={building.isActive ? 'success' : 'default'}
+                          size="small"
+                        />
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            setBuildingForm({
+                              name: building.name,
+                              branchId: building.branchId || selectedBranchId,
+                              buildingCode: building.buildingCode || '',
+                              totalFloors: building.totalFloors || '',
+                              isActive: building.isActive !== false,
+                            })
+                            setEditingBuilding(building.id)
+                            setAddBuildingModal(true)
+                          }}
+                          color="primary"
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Stack>
+                    </Stack>
+                    {building.totalFloors && (
+                      <Typography variant="body2" color="text.secondary">
+                        Total Floors: {building.totalFloors}
+                      </Typography>
+                    )}
+                    <Button
+                      variant="outlined"
+                      fullWidth
+                      onClick={() => {
+                        setSelectedBuildingId(building.id)
+                        setCurrentView('floors')
+                      }}
+                    >
+                      Manage Floors
+                    </Button>
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+          {buildings.length === 0 && (
+            <Grid item xs={12}>
+              <Card
+                elevation={0}
+                sx={{
+                  border: (theme) => `1px dashed ${theme.palette.divider}`,
+                  py: 4,
+                }}
+              >
+                <CardContent>
+                  <Stack spacing={2} alignItems="center">
+                    <BusinessIcon color="disabled" sx={{ fontSize: 48 }} />
+                    <Typography variant="h6" color="text.secondary">
+                      No buildings found
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Click "Add Building" to create your first building
+                    </Typography>
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Grid>
+          )}
+        </Grid>
+      </Stack>
+    )
+  }
+
+  // Render Floor Management View
+  const renderFloorManagement = () => {
+    const selectedBuilding = buildings.find((b) => b.id === selectedBuildingId)
+
+    return (
+      <Stack spacing={3}>
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="center"
+        >
+          <Box>
+            <Button
+              variant="text"
+              onClick={() => {
+                setSelectedBuildingId('')
+                setCurrentView('buildings')
+              }}
+              sx={{ mb: 1 }}
+            >
+              ← Back to Buildings
+            </Button>
+            <Typography variant="h5" sx={{ fontWeight: 600 }}>
+              Floor Management
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {selectedBuilding?.name || 'Building'}
+            </Typography>
+          </Box>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => {
+              setFloorForm({ ...floorForm, buildingId: selectedBuildingId })
+              setAddFloorModal(true)
+            }}
+            disabled={!selectedBuildingId}
+          >
+            + Add Floor
+          </Button>
+        </Stack>
+
+        <Grid container spacing={2}>
+          {floors.map((floor) => (
+            <Grid item xs={12} md={6} lg={4} key={floor.id}>
+              <Card elevation={2} sx={{ borderRadius: 2 }}>
+                <CardContent>
+                  <Stack spacing={2}>
+                    <Stack
+                      direction="row"
+                      justifyContent="space-between"
+                      alignItems="center"
+                    >
+                      <Box>
+                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                          {floor.name}
+                        </Typography>
+                        {floor.floorNumber && (
+                          <Typography variant="body2" color="text.secondary">
+                            Floor #{floor.floorNumber}
+                          </Typography>
+                        )}
+                      </Box>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <Chip
+                          label={floor.floorType || 'IP'}
+                          color="primary"
+                          size="small"
+                        />
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            setFloorForm({
+                              name: floor.name || '',
+                              buildingId:
+                                floor.buildingId || selectedBuildingId,
+                              floorNumber: floor.floorNumber || '',
+                              floorType: floor.floorType || 'IP',
+                              isActive: floor.isActive !== false,
+                            })
+                            setEditingFloor(floor.id)
+                            setAddFloorModal(true)
+                          }}
+                          color="primary"
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton
+                          size="small"
+                          onClick={() => {
+                            setDeleteConfirm({
+                              open: true,
+                              type: 'floor',
+                              id: floor.id,
+                              name:
+                                floor.name ||
+                                `Floor ${floor.floorNumber || ''}`,
+                            })
+                          }}
+                          color="error"
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Stack>
+                    </Stack>
+                    <Chip
+                      label={floor.isActive ? 'Active' : 'Inactive'}
+                      color={floor.isActive ? 'success' : 'default'}
+                      size="small"
+                      sx={{ width: 'fit-content' }}
+                    />
+                    <Button
+                      variant="outlined"
+                      fullWidth
+                      onClick={() => {
+                        setSelectedFloorId(floor.id)
+                        setCurrentView('rooms')
+                      }}
+                    >
+                      Manage Rooms
+                    </Button>
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+          {floors.length === 0 && (
+            <Grid item xs={12}>
+              <Card
+                elevation={0}
+                sx={{
+                  border: (theme) => `1px dashed ${theme.palette.divider}`,
+                  py: 4,
+                }}
+              >
+                <CardContent>
+                  <Stack spacing={2} alignItems="center">
+                    <StairsIcon color="disabled" sx={{ fontSize: 48 }} />
+                    <Typography variant="h6" color="text.secondary">
+                      No floors found
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Click "Add Floor" to create your first floor
+                    </Typography>
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Grid>
+          )}
+        </Grid>
+      </Stack>
+    )
+  }
+
+  // Render Room Management View
+  const renderRoomManagement = () => {
+    const selectedFloor = floors.find((f) => f.id === selectedFloorId)
+    const selectedRooms = rooms.filter((r) => r.floorId === selectedFloorId)
+
+    return (
+      <Stack spacing={3}>
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="center"
+        >
+          <Box>
+            <Button
+              variant="text"
+              onClick={() => {
+                setSelectedFloorId('')
+                setCurrentView('floors')
+              }}
+              sx={{ mb: 1 }}
+            >
+              ← Back to Floors
+            </Button>
+            <Typography variant="h5" sx={{ fontWeight: 600 }}>
+              Room Management
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {selectedFloor?.name || 'Floor'}
+            </Typography>
+          </Box>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => {
+              setRoomForm({ ...roomForm, floorId: selectedFloorId })
+              setAddRoomModal(true)
+            }}
+            disabled={!selectedFloorId}
+          >
+            + Add Room
+          </Button>
+        </Stack>
+
+        <Grid container spacing={2}>
+          {selectedRooms.map((room) => {
+            const roomBeds = beds.filter((b) => b.roomId === room.id)
+            return (
+              <Grid item xs={12} md={6} lg={4} key={room.id}>
+                <Card elevation={2} sx={{ borderRadius: 2 }}>
+                  <CardContent>
+                    <Stack spacing={2}>
+                      <Stack
+                        direction="row"
+                        justifyContent="space-between"
+                        alignItems="flex-start"
+                      >
+                        <Box>
+                          <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                            {room.name || room.roomNumber}
+                          </Typography>
+                          <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                            <Chip label={room.type} size="small" />
+                            <Chip
+                              label={room.roomCategory}
+                              size="small"
+                              color="primary"
+                            />
+                          </Stack>
+                        </Box>
+                        <Stack
+                          direction="row"
+                          spacing={0.5}
+                          alignItems="center"
+                        >
+                          <Chip
+                            label={room.isActive ? 'Active' : 'Inactive'}
+                            color={room.isActive ? 'success' : 'default'}
+                            size="small"
+                          />
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              setRoomForm({
+                                name: room.name || '',
+                                floorId: room.floorId || selectedFloorId,
+                                roomNumber: room.roomNumber || '',
+                                type: room.type || 'AC',
+                                roomCategory: room.roomCategory || 'General',
+                                genderRestriction:
+                                  room.genderRestriction || 'Any',
+                                totalBeds: room.totalBeds || 0,
+                                charges: room.charges || 0,
+                                isActive: room.isActive !== false,
+                              })
+                              setEditingRoom(room.id)
+                              setAddRoomModal(true)
+                            }}
+                            color="primary"
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton
+                            size="small"
+                            onClick={() => {
+                              setDeleteConfirm({
+                                open: true,
+                                type: 'room',
+                                id: room.id,
+                                name: room.name || room.roomNumber || 'Room',
+                              })
+                            }}
+                            color="error"
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Stack>
+                      </Stack>
+
+                      <Divider />
+
+                      <Stack spacing={1}>
+                        <Typography variant="body2" color="text.secondary">
+                          Total Beds: {roomBeds.length} / {room.totalBeds || 0}
+                        </Typography>
+                        {room.charges > 0 && (
+                          <Typography variant="body2" color="text.secondary">
+                            Charges: ₹{room.charges}
+                          </Typography>
+                        )}
+                      </Stack>
+
+                      <Button
+                        variant="outlined"
+                        fullWidth
+                        onClick={() => {
+                          setSelectedRoomId(room.id)
+                          setCurrentView('beds')
+                        }}
+                      >
+                        Manage Beds
+                      </Button>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Grid>
+            )
+          })}
+          {selectedRooms.length === 0 && (
+            <Grid item xs={12}>
+              <Card
+                elevation={0}
+                sx={{
+                  border: (theme) => `1px dashed ${theme.palette.divider}`,
+                  py: 4,
+                }}
+              >
+                <CardContent>
+                  <Stack spacing={2} alignItems="center">
+                    <MeetingRoomIcon color="disabled" sx={{ fontSize: 48 }} />
+                    <Typography variant="h6" color="text.secondary">
+                      No rooms found
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Click "Add Room" to create your first room
+                    </Typography>
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Grid>
+          )}
+        </Grid>
+      </Stack>
+    )
+  }
+
+  // Render Bed Management View
+  const renderBedManagement = () => {
+    const selectedRoom = rooms.find((r) => r.id === selectedRoomId)
+    const roomBeds = beds.filter((b) => b.roomId === selectedRoomId)
+
+    return (
+      <Stack spacing={3}>
+        <Stack
+          direction="row"
+          justifyContent="space-between"
+          alignItems="center"
+        >
+          <Box>
+            <Button
+              variant="text"
+              onClick={() => {
+                setSelectedRoomId('')
+                setCurrentView('rooms')
+              }}
+              sx={{ mb: 1 }}
+            >
+              ← Back to Rooms
+            </Button>
+            <Typography variant="h5" sx={{ fontWeight: 600 }}>
+              Bed Management
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {selectedRoom?.name || selectedRoom?.roomNumber || 'Room'}
+            </Typography>
+          </Box>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => {
+              // Calculate next bed number from existing beds
+              const roomBeds = beds.filter((b) => b.roomId === selectedRoomId)
+              let nextBedNumber = 1
+
+              if (roomBeds.length > 0) {
+                // Extract numbers from bedNumber or name fields
+                const bedNumbers = roomBeds
+                  .map((bed) => {
+                    const bedNum = bed.bedNumber || bed.name || ''
+                    // Extract numeric part from strings like "Bed 1", "1", "Bed-1", etc.
+                    const match = bedNum.toString().match(/\d+/)
+                    return match ? parseInt(match[0]) : 0
+                  })
+                  .filter((num) => num > 0)
+
+                if (bedNumbers.length > 0) {
+                  nextBedNumber = Math.max(...bedNumbers) + 1
+                }
+              }
+
+              setBedsBulkForm({
+                ...bedsBulkForm,
+                roomId: selectedRoomId,
+                startNumber: nextBedNumber,
+              })
+              setAddBedsBulkModal(true)
+            }}
+            disabled={!selectedRoomId}
+          >
+            + Add Beds (Bulk)
+          </Button>
+        </Stack>
+
+        <Box
+          sx={{
+            display: 'grid',
+            gap: 2,
+            gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))',
+          }}
+        >
+          {roomBeds.map((bed) => (
+            <Box
+              key={bed.id}
+              sx={{
+                position: 'relative',
+                '&:hover .bed-actions': {
+                  opacity: 1,
+                  visibility: 'visible',
+                },
+              }}
+            >
+              <Tooltip
+                title={`Status: ${bed.status} | Type: ${bed.bedType}`}
+                arrow
+              >
+                <BedBox ownerState={{ status: bed.status }}>
+                  <Typography
+                    variant="body2"
+                    className="bed-name"
+                    sx={{
+                      fontWeight: 600,
+                      color: '#212121',
+                      pr: 3, // Add padding to prevent text overlap
+                    }}
+                  >
+                    {bed.bedNumber || bed.name}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    className="bed-status"
+                    sx={{
+                      textTransform: 'capitalize',
+                      fontWeight: 600,
+                    }}
+                  >
+                    {bed.status}
+                  </Typography>
+                </BedBox>
+              </Tooltip>
+              <Stack
+                className="bed-actions"
+                direction="row"
+                spacing={0.5}
+                sx={{
+                  position: 'absolute',
+                  top: 2,
+                  right: 2,
+                  opacity: 0,
+                  visibility: 'hidden',
+                  transition: 'opacity 0.2s ease, visibility 0.2s ease',
+                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                  borderRadius: 1,
+                  padding: '2px',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                }}
+              >
+                <IconButton
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setBedForm({
+                      name: bed.name || '',
+                      roomId: bed.roomId || selectedRoomId,
+                      bedNumber: bed.bedNumber || '',
+                      bedType: bed.bedType || 'Normal',
+                      hasOxygen: bed.hasOxygen || false,
+                      hasVentilator: bed.hasVentilator || false,
+                      charge: bed.charge || 0,
+                      status: bed.status || 'Available',
+                      isActive: bed.isActive !== false,
+                    })
+                    setEditingBed(bed.id)
+                    setAddBedModal(true)
+                  }}
+                  color="primary"
+                  sx={{
+                    padding: '4px',
+                    '&:hover': { backgroundColor: 'rgba(25, 118, 210, 0.1)' },
+                  }}
+                >
+                  <EditIcon fontSize="small" />
+                </IconButton>
+                <IconButton
+                  size="small"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setDeleteConfirm({
+                      open: true,
+                      type: 'bed',
+                      id: bed.id,
+                      name: bed.name || bed.bedNumber || 'Bed',
+                    })
+                  }}
+                  color="error"
+                  sx={{
+                    padding: '4px',
+                    '&:hover': { backgroundColor: 'rgba(211, 47, 47, 0.1)' },
+                  }}
+                >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </Stack>
+            </Box>
+          ))}
+        </Box>
+
+        {roomBeds.length === 0 && (
+          <Card
+            elevation={0}
+            sx={{
+              border: (theme) => `1px dashed ${theme.palette.divider}`,
+              py: 4,
+            }}
+          >
+            <CardContent>
+              <Stack spacing={2} alignItems="center">
+                <HotelIcon color="disabled" sx={{ fontSize: 48 }} />
+                <Typography variant="h6" color="text.secondary">
+                  No beds found
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Click "Add Beds (Bulk)" to create beds for this room
+                </Typography>
+              </Stack>
+            </CardContent>
+          </Card>
+        )}
+      </Stack>
+    )
+  }
+
   return (
     <Box className="p-5 space-y-5">
       <Breadcrumb />
@@ -843,6 +2128,7 @@ const LayoutsPage = () => {
         justifyContent="space-between"
         alignItems={{ xs: 'flex-start', sm: 'center' }}
         spacing={2}
+        sx={{ mb: 3 }}
       >
         <div>
           <Typography variant="h4" sx={{ fontWeight: 700 }}>
@@ -857,8 +2143,142 @@ const LayoutsPage = () => {
         </Button>
       </Stack>
 
-      {renderFilters()}
-      {renderLayoutVisualization()}
+      {currentView === 'landing' && (
+        <Card elevation={2} sx={{ borderRadius: 3, p: 4 }}>
+          <Stack spacing={4}>
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={4}>
+                <FormControl fullWidth size="medium">
+                  <InputLabel>State</InputLabel>
+                  <Select
+                    label="State"
+                    value={selectedStateId}
+                    onChange={handleStateChange}
+                    displayEmpty={!selectedStateId}
+                    endAdornment={
+                      <IconButton
+                        size="small"
+                        onClick={() => setAddStateModal(true)}
+                        sx={{ mr: 1 }}
+                      >
+                        <AddIcon fontSize="small" />
+                      </IconButton>
+                    }
+                  >
+                    {states.map((state) => (
+                      <MenuItem key={state.id} value={state.id}>
+                        {state.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} md={4}>
+                <FormControl
+                  fullWidth
+                  size="medium"
+                  disabled={!selectedStateId}
+                >
+                  <InputLabel>City</InputLabel>
+                  <Select
+                    label="City"
+                    value={selectedCityId}
+                    onChange={handleCityChange}
+                    displayEmpty={!selectedCityId}
+                    endAdornment={
+                      <IconButton
+                        size="small"
+                        onClick={() => {
+                          setCityForm({ ...cityForm, stateId: selectedStateId })
+                          setAddCityModal(true)
+                        }}
+                        disabled={!selectedStateId}
+                        sx={{ mr: 1 }}
+                      >
+                        <AddIcon fontSize="small" />
+                      </IconButton>
+                    }
+                  >
+                    {cities.map((city) => (
+                      <MenuItem key={city.id} value={city.id}>
+                        {city.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} md={4}>
+                <FormControl fullWidth size="medium" disabled={!selectedCityId}>
+                  <InputLabel>Branch</InputLabel>
+                  <Select
+                    label="Branch"
+                    value={selectedBranchId}
+                    onChange={handleBranchChange}
+                    displayEmpty={!selectedBranchId}
+                    endAdornment={
+                      <IconButton
+                        size="small"
+                        onClick={() => {
+                          setBranchForm({
+                            ...branchForm,
+                            cityId: selectedCityId,
+                          })
+                          setAddBranchModal(true)
+                        }}
+                        disabled={!selectedCityId}
+                        sx={{ mr: 1 }}
+                      >
+                        <AddIcon fontSize="small" />
+                      </IconButton>
+                    }
+                  >
+                    {branches.map((branch) => (
+                      <MenuItem key={branch.id} value={branch.id}>
+                        {branch.name}{' '}
+                        {branch.branchCode && `(${branch.branchCode})`}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+            </Grid>
+
+            {selectedBranchId && (
+              <Box>
+                <Button
+                  variant="contained"
+                  size="large"
+                  startIcon={<BusinessIcon />}
+                  onClick={() => setCurrentView('buildings')}
+                  disabled={!selectedBranchId}
+                  sx={{ minWidth: 200 }}
+                >
+                  Manage Layout
+                </Button>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mt: 1 }}
+                >
+                  Branch:{' '}
+                  <strong>
+                    {branches.find((b) => b.id === selectedBranchId)?.name}
+                  </strong>
+                  {branches.find((b) => b.id === selectedBranchId)
+                    ?.branchCode &&
+                    ` (${branches.find((b) => b.id === selectedBranchId).branchCode})`}
+                </Typography>
+              </Box>
+            )}
+          </Stack>
+        </Card>
+      )}
+      {currentView === 'buildings' && renderBuildingManagement()}
+      {currentView === 'floors' && renderFloorManagement()}
+      {currentView === 'rooms' && renderRoomManagement()}
+      {currentView === 'beds' && renderBedManagement()}
 
       {/* Modals will be added in continuation */}
       {/* Add State Modal */}
@@ -1101,7 +2521,14 @@ const LayoutsPage = () => {
               variant="contained"
               startIcon={<AddIcon />}
               onClick={() => {
-                setBuildingForm({ ...buildingForm, branchId: selectedBranchId })
+                const selectedBranch = branches.find(
+                  (b) => b.id === selectedBranchId,
+                )
+                setBuildingForm({
+                  ...buildingForm,
+                  branchId: selectedBranchId,
+                  name: selectedBranch?.name || '',
+                })
                 setAddBuildingModal(true)
               }}
             >
@@ -1132,10 +2559,20 @@ const LayoutsPage = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Add Building Modal */}
+      {/* Add/Edit Building Modal */}
       <Dialog
         open={addBuildingModal}
-        onClose={() => setAddBuildingModal(false)}
+        onClose={() => {
+          setAddBuildingModal(false)
+          setEditingBuilding(null)
+          setBuildingForm({
+            name: '',
+            branchId: '',
+            buildingCode: '',
+            totalFloors: '',
+            isActive: true,
+          })
+        }}
         maxWidth="sm"
         fullWidth
       >
@@ -1145,8 +2582,22 @@ const LayoutsPage = () => {
             justifyContent="space-between"
             alignItems="center"
           >
-            <Typography variant="h6">Add New Building</Typography>
-            <IconButton onClick={() => setAddBuildingModal(false)}>
+            <Typography variant="h6">
+              {editingBuilding ? 'Edit Building' : 'Add New Building'}
+            </Typography>
+            <IconButton
+              onClick={() => {
+                setAddBuildingModal(false)
+                setEditingBuilding(null)
+                setBuildingForm({
+                  name: '',
+                  branchId: '',
+                  buildingCode: '',
+                  totalFloors: '',
+                  isActive: true,
+                })
+              }}
+            >
               <CloseIcon />
             </IconButton>
           </Stack>
@@ -1202,21 +2653,54 @@ const LayoutsPage = () => {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setAddBuildingModal(false)}>Cancel</Button>
+          <Button
+            onClick={() => {
+              setAddBuildingModal(false)
+              setEditingBuilding(null)
+              setBuildingForm({
+                name: '',
+                branchId: '',
+                buildingCode: '',
+                totalFloors: '',
+                isActive: true,
+              })
+            }}
+          >
+            Cancel
+          </Button>
           <Button
             variant="contained"
-            onClick={() => createBuildingMutation.mutate(buildingForm)}
+            onClick={() => {
+              if (editingBuilding) {
+                updateBuildingMutation.mutate({
+                  id: editingBuilding,
+                  data: buildingForm,
+                })
+              } else {
+                createBuildingMutation.mutate(buildingForm)
+              }
+            }}
             disabled={!buildingForm.name.trim() || !buildingForm.branchId}
           >
-            Create
+            {editingBuilding ? 'Update' : 'Create'}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Add Floor Modal */}
+      {/* Add/Edit Floor Modal */}
       <Dialog
         open={addFloorModal}
-        onClose={() => setAddFloorModal(false)}
+        onClose={() => {
+          setAddFloorModal(false)
+          setEditingFloor(null)
+          setFloorForm({
+            name: '',
+            buildingId: '',
+            floorNumber: '',
+            floorType: 'IP',
+            isActive: true,
+          })
+        }}
         maxWidth="sm"
         fullWidth
       >
@@ -1226,23 +2710,28 @@ const LayoutsPage = () => {
             justifyContent="space-between"
             alignItems="center"
           >
-            <Typography variant="h6">Add New Floor</Typography>
-            <IconButton onClick={() => setAddFloorModal(false)}>
+            <Typography variant="h6">
+              {editingFloor ? 'Edit Floor' : 'Add New Floor'}
+            </Typography>
+            <IconButton
+              onClick={() => {
+                setAddFloorModal(false)
+                setEditingFloor(null)
+                setFloorForm({
+                  name: '',
+                  buildingId: '',
+                  floorNumber: '',
+                  floorType: 'IP',
+                  isActive: true,
+                })
+              }}
+            >
               <CloseIcon />
             </IconButton>
           </Stack>
         </DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField
-              label="Floor Name"
-              fullWidth
-              required
-              value={floorForm.name}
-              onChange={(e) =>
-                setFloorForm({ ...floorForm, name: e.target.value })
-              }
-            />
             <TextField
               label="Floor Number"
               type="number"
@@ -1283,21 +2772,58 @@ const LayoutsPage = () => {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setAddFloorModal(false)}>Cancel</Button>
+          <Button
+            onClick={() => {
+              setAddFloorModal(false)
+              setEditingFloor(null)
+              setFloorForm({
+                name: '',
+                buildingId: '',
+                floorNumber: '',
+                floorType: 'IP',
+                isActive: true,
+              })
+            }}
+          >
+            Cancel
+          </Button>
           <Button
             variant="contained"
-            onClick={() => createFloorMutation.mutate(floorForm)}
-            disabled={!floorForm.name.trim() || !floorForm.buildingId}
+            onClick={() => {
+              if (editingFloor) {
+                updateFloorMutation.mutate({
+                  id: editingFloor,
+                  data: floorForm,
+                })
+              } else {
+                createFloorMutation.mutate(floorForm)
+              }
+            }}
+            disabled={!floorForm.buildingId}
           >
-            Create
+            {editingFloor ? 'Update' : 'Create'}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Add Room Modal */}
+      {/* Add/Edit Room Modal */}
       <Dialog
         open={addRoomModal}
-        onClose={() => setAddRoomModal(false)}
+        onClose={() => {
+          setAddRoomModal(false)
+          setEditingRoom(null)
+          setRoomForm({
+            name: '',
+            floorId: '',
+            roomNumber: '',
+            type: 'AC',
+            roomCategory: 'General',
+            genderRestriction: 'Any',
+            totalBeds: 0,
+            charges: 0,
+            isActive: true,
+          })
+        }}
         maxWidth="sm"
         fullWidth
       >
@@ -1307,23 +2833,32 @@ const LayoutsPage = () => {
             justifyContent="space-between"
             alignItems="center"
           >
-            <Typography variant="h6">Add New Room</Typography>
-            <IconButton onClick={() => setAddRoomModal(false)}>
+            <Typography variant="h6">
+              {editingRoom ? 'Edit Room' : 'Add New Room'}
+            </Typography>
+            <IconButton
+              onClick={() => {
+                setAddRoomModal(false)
+                setEditingRoom(null)
+                setRoomForm({
+                  name: '',
+                  floorId: '',
+                  roomNumber: '',
+                  type: 'AC',
+                  roomCategory: 'General',
+                  genderRestriction: 'Any',
+                  totalBeds: 0,
+                  charges: 0,
+                  isActive: true,
+                })
+              }}
+            >
               <CloseIcon />
             </IconButton>
           </Stack>
         </DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField
-              label="Room Name"
-              fullWidth
-              required
-              value={roomForm.name}
-              onChange={(e) =>
-                setRoomForm({ ...roomForm, name: e.target.value })
-              }
-            />
             <TextField
               label="Room Number"
               fullWidth
@@ -1415,21 +2950,59 @@ const LayoutsPage = () => {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setAddRoomModal(false)}>Cancel</Button>
+          <Button
+            onClick={() => {
+              setAddRoomModal(false)
+              setEditingRoom(null)
+              setRoomForm({
+                name: '',
+                floorId: '',
+                roomNumber: '',
+                type: 'AC',
+                roomCategory: 'General',
+                genderRestriction: 'Any',
+                totalBeds: 0,
+                charges: 0,
+                isActive: true,
+              })
+            }}
+          >
+            Cancel
+          </Button>
           <Button
             variant="contained"
-            onClick={() => createRoomMutation.mutate(roomForm)}
-            disabled={!roomForm.name.trim() || !roomForm.floorId}
+            onClick={() => {
+              if (editingRoom) {
+                updateRoomMutation.mutate({ id: editingRoom, data: roomForm })
+              } else {
+                createRoomMutation.mutate(roomForm)
+              }
+            }}
+            disabled={!roomForm.floorId}
           >
-            Create
+            {editingRoom ? 'Update' : 'Create'}
           </Button>
         </DialogActions>
       </Dialog>
 
-      {/* Add Bed Modal */}
+      {/* Add/Edit Bed Modal */}
       <Dialog
         open={addBedModal}
-        onClose={() => setAddBedModal(false)}
+        onClose={() => {
+          setAddBedModal(false)
+          setEditingBed(null)
+          setBedForm({
+            name: '',
+            roomId: '',
+            bedNumber: '',
+            bedType: 'Normal',
+            hasOxygen: false,
+            hasVentilator: false,
+            charge: 0,
+            status: 'Available',
+            isActive: true,
+          })
+        }}
         maxWidth="sm"
         fullWidth
       >
@@ -1439,8 +3012,26 @@ const LayoutsPage = () => {
             justifyContent="space-between"
             alignItems="center"
           >
-            <Typography variant="h6">Add New Bed</Typography>
-            <IconButton onClick={() => setAddBedModal(false)}>
+            <Typography variant="h6">
+              {editingBed ? 'Edit Bed' : 'Add New Bed'}
+            </Typography>
+            <IconButton
+              onClick={() => {
+                setAddBedModal(false)
+                setEditingBed(null)
+                setBedForm({
+                  name: '',
+                  roomId: '',
+                  bedNumber: '',
+                  bedType: 'Normal',
+                  hasOxygen: false,
+                  hasVentilator: false,
+                  charge: 0,
+                  status: 'Available',
+                  isActive: true,
+                })
+              }}
+            >
               <CloseIcon />
             </IconButton>
           </Stack>
@@ -1538,13 +3129,37 @@ const LayoutsPage = () => {
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setAddBedModal(false)}>Cancel</Button>
+          <Button
+            onClick={() => {
+              setAddBedModal(false)
+              setEditingBed(null)
+              setBedForm({
+                name: '',
+                roomId: '',
+                bedNumber: '',
+                bedType: 'Normal',
+                hasOxygen: false,
+                hasVentilator: false,
+                charge: 0,
+                status: 'Available',
+                isActive: true,
+              })
+            }}
+          >
+            Cancel
+          </Button>
           <Button
             variant="contained"
-            onClick={() => createBedMutation.mutate(bedForm)}
-            disabled={!bedForm.name.trim() || !bedForm.roomId}
+            onClick={() => {
+              if (editingBed) {
+                updateBedMutation.mutate({ id: editingBed, data: bedForm })
+              } else {
+                createBedMutation.mutate(bedForm)
+              }
+            }}
+            disabled={!bedForm.roomId}
           >
-            Create
+            {editingBed ? 'Update' : 'Create'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1591,18 +3206,6 @@ const LayoutsPage = () => {
                 setBedsBulkForm({ ...bedsBulkForm, bedPrefix: e.target.value })
               }
             />
-            <TextField
-              label="Start Number"
-              type="number"
-              fullWidth
-              value={bedsBulkForm.startNumber}
-              onChange={(e) =>
-                setBedsBulkForm({
-                  ...bedsBulkForm,
-                  startNumber: parseInt(e.target.value) || 1,
-                })
-              }
-            />
             <FormControl fullWidth>
               <InputLabel>Bed Type</InputLabel>
               <Select
@@ -1638,6 +3241,54 @@ const LayoutsPage = () => {
             disabled={!bedsBulkForm.roomId || bedsBulkForm.bedCount < 1}
           >
             Create Beds
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={deleteConfirm.open}
+        onClose={() =>
+          setDeleteConfirm({ open: false, type: '', id: null, name: '' })
+        }
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Typography variant="h6">Confirm Delete</Typography>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Typography>
+            Are you sure you want to delete{' '}
+            <strong>{deleteConfirm.name}</strong>?
+            {deleteConfirm.type === 'floor' &&
+              ' This will also delete all rooms and beds in this floor.'}
+            {deleteConfirm.type === 'room' &&
+              ' This will also delete all beds in this room.'}
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() =>
+              setDeleteConfirm({ open: false, type: '', id: null, name: '' })
+            }
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() => {
+              if (deleteConfirm.type === 'floor') {
+                deleteFloorMutation.mutate(deleteConfirm.id)
+              } else if (deleteConfirm.type === 'room') {
+                deleteRoomMutation.mutate(deleteConfirm.id)
+              } else if (deleteConfirm.type === 'bed') {
+                deleteBedMutation.mutate(deleteConfirm.id)
+              }
+            }}
+          >
+            Delete
           </Button>
         </DialogActions>
       </Dialog>
