@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { DataGrid } from '@mui/x-data-grid'
 import {
   Button,
@@ -50,6 +50,15 @@ const Expenses = () => {
   const user = useSelector((store) => store.user)
   const dropdowns = useSelector((store) => store.dropdowns)
   const { branches } = dropdowns
+
+  // Filter out specific branches from dropdown
+  const filteredBranches = useMemo(() => {
+    const excludedBranchNames = ['OBH', '02', 'kmm03', 'HYD-KKT']
+    return (branches || []).filter(
+      (branch) => !excludedBranchNames.includes(branch.name),
+    )
+  }, [branches])
+
   const paymentMode = [
     { id: 1, name: 'CASH' },
     { id: 2, name: 'ONLINE' },
@@ -534,10 +543,10 @@ const Expenses = () => {
           </FormControl>
           <FormControl>
             <Autocomplete
-              options={branches || []}
+              options={filteredBranches}
               getOptionLabel={(option) => option.name}
               value={
-                branches?.find(
+                filteredBranches?.find(
                   (branch) => branch.id === expenseForm?.branchId,
                 ) || null
               }

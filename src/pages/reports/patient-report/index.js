@@ -10,7 +10,6 @@ import {
   Grid,
   Autocomplete,
   Chip,
-  Breadcrumbs,
   CircularProgress,
   Skeleton,
 } from '@mui/material'
@@ -31,7 +30,7 @@ import dayjs from 'dayjs'
 import Breadcrumb from '@/components/Breadcrumb'
 import { getPatientReport } from '@/constants/apis'
 import { exportAsExcel, exportAsPDF } from '@/utils/reportExport'
-import { Search, FilterList, Refresh, GetApp } from '@mui/icons-material'
+import { FilterList, Refresh, GetApp } from '@mui/icons-material'
 
 // Register Chart.js components
 ChartJS.register(
@@ -44,12 +43,17 @@ ChartJS.register(
   Legend,
 )
 
-const STATUS_OPTIONS = ['Active', 'Completed', 'Dropped', 'On Hold']
-const UPT_RESULT_OPTIONS = ['Positive', 'Negative', 'Pending']
-
 function PatientReport() {
   const userDetails = useSelector((store) => store.user)
   const dropdowns = useSelector((store) => store.dropdowns)
+
+  // Filter out specific branches from dropdown
+  const filteredBranches = useMemo(() => {
+    const excludedBranchNames = ['OBH', '02', 'kmm03', 'HYD-KKT']
+    return (dropdowns?.branches || []).filter(
+      (branch) => !excludedBranchNames.includes(branch.name),
+    )
+  }, [dropdowns?.branches])
 
   // Filter states
   const [fromDate, setFromDate] = useState(
@@ -57,17 +61,6 @@ function PatientReport() {
   )
   const [toDate, setToDate] = useState(dayjs().format('YYYY-MM-DD'))
   const [selectedBranches, setSelectedBranches] = useState([])
-  const [referralSource, setReferralSource] = useState(null)
-  const [treatmentType, setTreatmentType] = useState(null)
-  const [packageName, setPackageName] = useState(null)
-  const [cycle, setCycle] = useState(null)
-  const [status, setStatus] = useState(null)
-  const [uptResult, setUptResult] = useState(null)
-  const [paidAmountMin, setPaidAmountMin] = useState('')
-  const [paidAmountMax, setPaidAmountMax] = useState('')
-  const [pendingAmountMin, setPendingAmountMin] = useState('')
-  const [pendingAmountMax, setPendingAmountMax] = useState('')
-  const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(50)
 
@@ -82,45 +75,30 @@ function PatientReport() {
     if (selectedBranches.length > 0) {
       params.branchIds = selectedBranches.map((b) => b.id)
     }
-    if (referralSource) params.referralSource = referralSource.id
-    if (treatmentType) params.treatmentType = treatmentType.id
-    if (packageName) params.packageName = packageName.id
-    if (cycle) params.cycle = cycle
-    if (status) params.status = status
-    if (uptResult) params.uptResult = uptResult
-    if (paidAmountMin) params.paidAmountMin = parseFloat(paidAmountMin)
-    if (paidAmountMax) params.paidAmountMax = parseFloat(paidAmountMax)
-    if (pendingAmountMin) params.pendingAmountMin = parseFloat(pendingAmountMin)
-    if (pendingAmountMax) params.pendingAmountMax = parseFloat(pendingAmountMax)
-    if (search.trim()) params.search = search.trim()
     return params
-  }, [
-    fromDate,
-    toDate,
-    selectedBranches,
-    referralSource,
-    treatmentType,
-    packageName,
-    cycle,
-    status,
-    uptResult,
-    paidAmountMin,
-    paidAmountMax,
-    pendingAmountMin,
-    pendingAmountMax,
-    search,
-    page,
-    pageSize,
-  ])
+  }, [fromDate, toDate, selectedBranches, page, pageSize])
 
   // Fetch data
   const {
     data: reportData,
     isLoading,
     refetch,
+    error: reportError,
   } = useQuery({
     queryKey: ['patientReport', queryParams],
-    queryFn: () => getPatientReport(userDetails?.accessToken, queryParams),
+    queryFn: async () => {
+      try {
+        const result = await getPatientReport(
+          userDetails?.accessToken,
+          queryParams,
+        )
+        console.log('Patient Report Response:', result)
+        return result
+      } catch (error) {
+        console.error('Error fetching patient report:', error)
+        throw error
+      }
+    },
     enabled: !!userDetails?.accessToken && !!fromDate && !!toDate,
   })
 
@@ -133,17 +111,6 @@ function PatientReport() {
     setFromDate(dayjs().subtract(1, 'year').format('YYYY-MM-DD'))
     setToDate(dayjs().format('YYYY-MM-DD'))
     setSelectedBranches([])
-    setReferralSource(null)
-    setTreatmentType(null)
-    setPackageName(null)
-    setCycle(null)
-    setStatus(null)
-    setUptResult(null)
-    setPaidAmountMin('')
-    setPaidAmountMax('')
-    setPendingAmountMin('')
-    setPendingAmountMax('')
-    setSearch('')
     setPage(1)
   }
 
@@ -314,6 +281,22 @@ function PatientReport() {
         Patient Report
       </Typography>
 
+      {reportError && (
+        <Box
+          sx={{
+            p: 2,
+            mb: 2,
+            bgcolor: 'error.light',
+            color: 'error.contrastText',
+            borderRadius: 1,
+          }}
+        >
+          <Typography variant="body2">
+            Error loading data: {reportError?.message || 'Unknown error'}
+          </Typography>
+        </Box>
+      )}
+
       {/* Filters Section */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" sx={{ mb: 2 }}>
@@ -346,7 +329,7 @@ function PatientReport() {
           <Grid item xs={12} md={3}>
             <Autocomplete
               multiple
-              options={dropdowns?.branches || []}
+              options={filteredBranches}
               getOptionLabel={(option) => option.name || ''}
               value={selectedBranches}
               onChange={(event, newValue) => setSelectedBranches(newValue)}
@@ -365,145 +348,8 @@ function PatientReport() {
             />
           </Grid>
 
-          {/* Referral Source */}
-          <Grid item xs={12} md={3}>
-            <Autocomplete
-              options={dropdowns?.referralTypes || []}
-              getOptionLabel={(option) => option.name || ''}
-              value={referralSource}
-              onChange={(event, newValue) => setReferralSource(newValue)}
-              renderInput={(params) => (
-                <TextField {...params} label="Referral Source" size="small" />
-              )}
-            />
-          </Grid>
-
-          {/* Treatment Type */}
-          <Grid item xs={12} md={3}>
-            <Autocomplete
-              options={dropdowns?.treatmentTypes || []}
-              getOptionLabel={(option) => option.name || ''}
-              value={treatmentType}
-              onChange={(event, newValue) => setTreatmentType(newValue)}
-              renderInput={(params) => (
-                <TextField {...params} label="Treatment Type" size="small" />
-              )}
-            />
-          </Grid>
-
-          {/* Package */}
-          <Grid item xs={12} md={3}>
-            <Autocomplete
-              options={dropdowns?.packages || []}
-              getOptionLabel={(option) => option.name || ''}
-              value={packageName}
-              onChange={(event, newValue) => setPackageName(newValue)}
-              renderInput={(params) => (
-                <TextField {...params} label="Package" size="small" />
-              )}
-            />
-          </Grid>
-
-          {/* Cycle */}
-          <Grid item xs={12} md={3}>
-            <TextField
-              label="Cycle"
-              type="number"
-              value={cycle || ''}
-              onChange={(e) =>
-                setCycle(e.target.value ? parseInt(e.target.value) : null)
-              }
-              size="small"
-              fullWidth
-            />
-          </Grid>
-
-          {/* Status */}
-          <Grid item xs={12} md={3}>
-            <Autocomplete
-              options={STATUS_OPTIONS}
-              value={status}
-              onChange={(event, newValue) => setStatus(newValue)}
-              renderInput={(params) => (
-                <TextField {...params} label="Status" size="small" />
-              )}
-            />
-          </Grid>
-
-          {/* UPT Result */}
-          <Grid item xs={12} md={3}>
-            <Autocomplete
-              options={UPT_RESULT_OPTIONS}
-              value={uptResult}
-              onChange={(event, newValue) => setUptResult(newValue)}
-              renderInput={(params) => (
-                <TextField {...params} label="UPT Result" size="small" />
-              )}
-            />
-          </Grid>
-
-          {/* Paid Amount Range */}
-          <Grid item xs={12} md={3}>
-            <TextField
-              label="Paid Amount (Min)"
-              type="number"
-              value={paidAmountMin}
-              onChange={(e) => setPaidAmountMin(e.target.value)}
-              size="small"
-              fullWidth
-            />
-          </Grid>
-          <Grid item xs={12} md={3}>
-            <TextField
-              label="Paid Amount (Max)"
-              type="number"
-              value={paidAmountMax}
-              onChange={(e) => setPaidAmountMax(e.target.value)}
-              size="small"
-              fullWidth
-            />
-          </Grid>
-
-          {/* Pending Amount Range */}
-          <Grid item xs={12} md={3}>
-            <TextField
-              label="Pending Amount (Min)"
-              type="number"
-              value={pendingAmountMin}
-              onChange={(e) => setPendingAmountMin(e.target.value)}
-              size="small"
-              fullWidth
-            />
-          </Grid>
-          <Grid item xs={12} md={3}>
-            <TextField
-              label="Pending Amount (Max)"
-              type="number"
-              value={pendingAmountMax}
-              onChange={(e) => setPendingAmountMax(e.target.value)}
-              size="small"
-              fullWidth
-            />
-          </Grid>
-
-          {/* Search */}
-          <Grid item xs={12} md={6}>
-            <TextField
-              label="Search (Patient Name / Number)"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              size="small"
-              fullWidth
-              InputProps={{
-                startAdornment: (
-                  <Search sx={{ mr: 1, color: 'text.secondary' }} />
-                ),
-              }}
-            />
-          </Grid>
-
           {/* Action Buttons */}
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12} md={9}>
             <Box sx={{ display: 'flex', gap: 2 }}>
               <Button
                 variant="contained"

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import {
   Button,
   FormControl,
@@ -23,6 +23,14 @@ const ExpensesFilter = ({ onFilterChange, onClearFilters, filters = {} }) => {
   const user = useSelector((store) => store.user)
   const dropdowns = useSelector((store) => store.dropdowns)
   const { branches, expenseCategories } = dropdowns
+
+  // Filter out specific branches from dropdown
+  const filteredBranches = useMemo(() => {
+    const excludedBranchNames = ['OBH', '02', 'kmm03', 'HYD-KKT']
+    return (branches || []).filter(
+      (branch) => !excludedBranchNames.includes(branch.name),
+    )
+  }, [branches])
 
   const paymentMode = [
     { id: 'CASH', name: 'CASH' },
@@ -206,11 +214,12 @@ const ExpensesFilter = ({ onFilterChange, onClearFilters, filters = {} }) => {
         {/* Branch Filter */}
         <FormControl fullWidth size="small">
           <Autocomplete
-            options={branches || []}
+            options={filteredBranches}
             getOptionLabel={(option) => option.name}
             value={
-              branches?.find((branch) => branch.id === localFilters.branchId) ||
-              null
+              filteredBranches?.find(
+                (branch) => branch.id === localFilters.branchId,
+              ) || null
             }
             onChange={(_, value) =>
               handleFilterChange('branchId', value?.id || '')
