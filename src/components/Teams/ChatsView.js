@@ -120,6 +120,14 @@ function ChatsView() {
       return []
     },
     enabled: !!selectedChat && !!userDetails?.accessToken,
+    refetchInterval: (query) => {
+      // Only poll when chat is selected and not loading
+      return query.state.data && selectedChat?.id ? 3000 : false
+    },
+    refetchIntervalInBackground: true, // Continue polling even when tab is in background
+    refetchOnWindowFocus: true, // Refetch when window regains focus
+    refetchOnMount: true, // Refetch when component mounts
+    staleTime: 0, // Always consider data stale to ensure fresh fetches
   })
 
   // Fetch all users for new chat
@@ -249,8 +257,24 @@ function ChatsView() {
 
   // Scroll to bottom when messages change
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (messagesData && messagesData.length > 0) {
+      // Small delay to ensure DOM is updated
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+      }, 100)
+    }
   }, [messagesData])
+
+  // Refetch messages when chat is selected
+  useEffect(() => {
+    if (selectedChat?.id) {
+      // Refetch messages immediately when chat is selected
+      refetchMessages()
+    }
+  }, [selectedChat?.id, refetchMessages])
+
+  // Note: Polling is handled by refetchInterval in useQuery above
+  // This ensures messages are automatically refreshed every 3 seconds
 
   // Cleanup long press timer on unmount
   useEffect(() => {
