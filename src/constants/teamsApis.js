@@ -32,7 +32,14 @@ export const createChat = async (token, payload) => {
       credentials: 'include',
     },
   )
-  return response.json()
+  const data = await response.json()
+  return {
+    status: response.status,
+    statusText: response.statusText,
+    data: data.data || data,
+    message: data.message,
+    ok: response.ok,
+  }
 }
 
 export const getChatMessages = async (
@@ -114,12 +121,17 @@ export const editMessage = async (token, chatId, messageId, message) => {
   return response.json()
 }
 
-export const deleteMessage = async (token, chatId, messageId) => {
+export const deleteMessage = async (
+  token,
+  chatId,
+  messageId,
+  deleteForEveryone = false,
+) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
   const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.DELETE_MESSAGE}/${chatId}/messages/${messageId}`,
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.DELETE_MESSAGE}/${chatId}/messages/${messageId}?deleteForEveryone=${deleteForEveryone}`,
     {
       method: 'DELETE',
       headers: myHeaders,
@@ -127,7 +139,14 @@ export const deleteMessage = async (token, chatId, messageId) => {
       credentials: 'include',
     },
   )
-  return response.json()
+  const data = await response.json()
+  return {
+    status: response.status,
+    statusText: response.statusText,
+    data: data.data || data,
+    message: data.message,
+    ok: response.ok,
+  }
 }
 
 export const addChatMembers = async (token, chatId, memberIds) => {

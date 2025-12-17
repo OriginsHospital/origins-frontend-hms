@@ -32,6 +32,10 @@ import {
   PersonAdd,
   History,
   GroupAdd,
+  Delete,
+  Forward,
+  CheckCircle,
+  RadioButtonUnchecked,
 } from '@mui/icons-material'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSelector } from 'react-redux'
@@ -42,6 +46,7 @@ import {
   createChat,
   initiateCall,
   updateCallStatus,
+  deleteMessage,
 } from '@/constants/teamsApis'
 import { getValidUsersList } from '@/constants/apis'
 // Socket.io disabled - using REST API only
@@ -68,6 +73,12 @@ function ChatsView() {
     selectedUsers: [],
   })
 
+  // Message selection state
+  const [selectedMessages, setSelectedMessages] = useState(new Set())
+  const [isSelectionMode, setIsSelectionMode] = useState(false)
+  const [openDeleteDialog, setOpenDeleteDialog] = useState(false)
+  const longPressTimerRef = useRef(null)
+
   // WebRTC refs
   const localAudioRef = useRef(null)
   const remoteAudioRef = useRef(null)
@@ -91,8 +102,12 @@ function ChatsView() {
   })
 
   // Fetch messages for selected chat
-  const { data: messagesData, isLoading: isLoadingMessages } = useQuery({
-    queryKey: ['chatMessages', selectedChat, userDetails?.accessToken],
+  const {
+    data: messagesData,
+    isLoading: isLoadingMessages,
+    refetch: refetchMessages,
+  } = useQuery({
+    queryKey: ['chatMessages', selectedChat?.id, userDetails?.accessToken],
     queryFn: async () => {
       if (!selectedChat) return []
       const res = await getChatMessages(
@@ -134,17 +149,28 @@ function ChatsView() {
   // Create chat mutation
   const createChatMutation = useMutation({
     mutationFn: async (payload) => {
-      return await createChat(userDetails?.accessToken, payload)
+      const response = await createChat(userDetails?.accessToken, payload)
+      // If response is not ok, throw an error
+      if (!response.ok && response.status !== 201 && response.status !== 200) {
+        throw new Error(response.message || 'Failed to create chat')
+      }
+      return response
     },
     onSuccess: async (res) => {
-      if (res.status === 201) {
+      // Check both HTTP status and response body status
+      const isSuccess =
+        res.ok || res.status === 201 || (res.status === 200 && res.data)
+
+      if (isSuccess) {
         // Close all dialogs
         setOpenNewChatDialog(false)
         setOpenNewGroupDialog(false)
         setSearchUserQuery('')
 
         // Format the created chat to match the expected structure
-        const createdChatData = res.data
+        const createdChatData = res.data || res
+
+        console.log('Chat created successfully:', createdChatData)
 
         // For direct chats, extract otherUser from members
         let formattedChat = { ...createdChatData }
@@ -185,10 +211,17 @@ function ChatsView() {
             ? 'Group chat created successfully'
             : 'Chat opened successfully'
         toast.success(successMessage)
+      } else {
+        console.warn('Unexpected response status:', res.status, res)
+        toast.error('Unexpected response from server')
       }
     },
     onError: (error) => {
-      toast.error('Failed to create chat. Please try again.')
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        'Failed to create chat. Please try again.'
+      toast.error(errorMessage)
       console.error('Error creating chat:', error)
     },
   })
@@ -219,6 +252,15 @@ function ChatsView() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messagesData])
 
+  // Cleanup long press timer on unmount
+  useEffect(() => {
+    return () => {
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current)
+      }
+    }
+  }, [])
+
   const handleSendMessage = async () => {
     if (!messageText.trim() || !selectedChat) return
 
@@ -242,6 +284,128 @@ function ChatsView() {
 
   const handleChatClick = (chat) => {
     setSelectedChat(chat)
+    // Clear selection when switching chats
+    setSelectedMessages(new Set())
+    setIsSelectionMode(false)
+  }
+
+  // Long press handler for message selection
+  const handleMessageLongPress = (messageId) => {
+    if (!isSelectionMode) {
+      setIsSelectionMode(true)
+    }
+    setSelectedMessages((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(messageId)) {
+        newSet.delete(messageId)
+      } else {
+        newSet.add(messageId)
+      }
+      if (newSet.size === 0) {
+        setIsSelectionMode(false)
+      }
+      return newSet
+    })
+  }
+
+  // Click handler for message selection
+  const handleMessageClick = (messageId, e) => {
+    if (isSelectionMode) {
+      e.preventDefault()
+      setSelectedMessages((prev) => {
+        const newSet = new Set(prev)
+        if (newSet.has(messageId)) {
+          newSet.delete(messageId)
+        } else {
+          newSet.add(messageId)
+        }
+        if (newSet.size === 0) {
+          setIsSelectionMode(false)
+        }
+        return newSet
+      })
+    }
+  }
+
+  // Start long press timer
+  const handleMessageMouseDown = (messageId) => {
+    longPressTimerRef.current = setTimeout(() => {
+      handleMessageLongPress(messageId)
+    }, 500) // 500ms for long press
+  }
+
+  // Cancel long press timer
+  const handleMessageMouseUp = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+  }
+
+  // Touch handlers for mobile
+  const handleMessageTouchStart = (messageId) => {
+    longPressTimerRef.current = setTimeout(() => {
+      handleMessageLongPress(messageId)
+    }, 500)
+  }
+
+  const handleMessageTouchEnd = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+  }
+
+  // Clear selection
+  const handleClearSelection = () => {
+    setSelectedMessages(new Set())
+    setIsSelectionMode(false)
+  }
+
+  // Delete messages
+  const handleDeleteMessages = () => {
+    if (selectedMessages.size === 0) return
+    setOpenDeleteDialog(true)
+  }
+
+  // Delete mutation
+  const deleteMessagesMutation = useMutation({
+    mutationFn: async ({ messageIds, deleteForEveryone }) => {
+      const deletePromises = Array.from(messageIds).map(async (messageId) => {
+        const response = await deleteMessage(
+          userDetails?.accessToken,
+          selectedChat.id,
+          messageId,
+          deleteForEveryone,
+        )
+        // Check if response is successful
+        if (!response.ok && response.status !== 200) {
+          throw new Error(response.message || 'Failed to delete message')
+        }
+        return response
+      })
+      return Promise.all(deletePromises)
+    },
+    onSuccess: async () => {
+      // Invalidate and refetch messages immediately
+      queryClient.invalidateQueries(['chatMessages', selectedChat?.id])
+      await refetchMessages()
+      queryClient.invalidateQueries(['userChats'])
+      await queryClient.refetchQueries(['userChats'])
+      handleClearSelection()
+      setOpenDeleteDialog(false)
+      toast.success('Messages deleted successfully')
+    },
+    onError: (error) => {
+      toast.error(error?.message || 'Failed to delete messages')
+      console.error('Error deleting messages:', error)
+    },
+  })
+
+  // Forward messages (placeholder)
+  const handleForwardMessages = () => {
+    toast.info('Forward feature coming soon')
+    // TODO: Implement forward functionality
   }
 
   const getChatDisplayName = (chat) => {
@@ -753,36 +917,69 @@ function ChatsView() {
               elevation={1}
               className="p-4 flex items-center justify-between border-b border-gray-200"
             >
-              <Box className="flex items-center gap-3">
-                <Avatar>{getChatAvatar(selectedChat)}</Avatar>
-                <Box>
-                  <Typography variant="h6">
-                    {getChatDisplayName(selectedChat)}
-                  </Typography>
-                  <Typography variant="caption" className="text-gray-500">
-                    {selectedChat.chatType === 'direct'
-                      ? 'Direct chat'
-                      : selectedChat.chatType}
-                  </Typography>
+              {isSelectionMode ? (
+                <Box className="flex items-center justify-between w-full">
+                  <Box className="flex items-center gap-3">
+                    <IconButton onClick={handleClearSelection} size="small">
+                      <Close />
+                    </IconButton>
+                    <Typography variant="h6">
+                      {selectedMessages.size} selected
+                    </Typography>
+                  </Box>
+                  <Box className="flex items-center gap-2">
+                    <IconButton
+                      color="primary"
+                      onClick={handleDeleteMessages}
+                      disabled={selectedMessages.size === 0}
+                      title="Delete"
+                    >
+                      <Delete />
+                    </IconButton>
+                    <IconButton
+                      color="primary"
+                      onClick={handleForwardMessages}
+                      disabled={selectedMessages.size === 0}
+                      title="Forward"
+                    >
+                      <Forward />
+                    </IconButton>
+                  </Box>
                 </Box>
-              </Box>
-              <Box>
-                <IconButton
-                  size="small"
-                  color="primary"
-                  onClick={handleInitiateVoiceCall}
-                  disabled={activeCall !== null}
-                  title="Voice Call"
-                >
-                  <Phone />
-                </IconButton>
-                <IconButton size="small" color="primary" title="Video Call">
-                  <Videocam />
-                </IconButton>
-                <IconButton size="small">
-                  <MoreVert />
-                </IconButton>
-              </Box>
+              ) : (
+                <>
+                  <Box className="flex items-center gap-3">
+                    <Avatar>{getChatAvatar(selectedChat)}</Avatar>
+                    <Box>
+                      <Typography variant="h6">
+                        {getChatDisplayName(selectedChat)}
+                      </Typography>
+                      <Typography variant="caption" className="text-gray-500">
+                        {selectedChat.chatType === 'direct'
+                          ? 'Direct chat'
+                          : selectedChat.chatType}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Box>
+                    <IconButton
+                      size="small"
+                      color="primary"
+                      onClick={handleInitiateVoiceCall}
+                      disabled={activeCall !== null}
+                      title="Voice Call"
+                    >
+                      <Phone />
+                    </IconButton>
+                    <IconButton size="small" color="primary" title="Video Call">
+                      <Videocam />
+                    </IconButton>
+                    <IconButton size="small">
+                      <MoreVert />
+                    </IconButton>
+                  </Box>
+                </>
+              )}
             </Paper>
 
             {/* Messages Area */}
@@ -798,17 +995,46 @@ function ChatsView() {
               ) : (
                 messagesData?.map((message) => {
                   const isOwnMessage = message.senderId === userDetails?.id
+                  const isSelected = selectedMessages.has(message.id)
                   return (
                     <Box
                       key={message.id}
                       className={`mb-3 flex ${
                         isOwnMessage ? 'justify-end' : 'justify-start'
-                      }`}
+                      } ${isSelectionMode ? 'cursor-pointer' : ''}`}
+                      onClick={(e) => handleMessageClick(message.id, e)}
+                      onMouseDown={() =>
+                        !isSelectionMode && handleMessageMouseDown(message.id)
+                      }
+                      onMouseUp={handleMessageMouseUp}
+                      onMouseLeave={handleMessageMouseUp}
+                      onTouchStart={() =>
+                        !isSelectionMode && handleMessageTouchStart(message.id)
+                      }
+                      onTouchEnd={handleMessageTouchEnd}
                     >
                       <Box
-                        className={`flex items-end gap-2 max-w-md ${isOwnMessage ? 'flex-row-reverse' : ''}`}
+                        className={`flex items-end gap-2 max-w-md ${isOwnMessage ? 'flex-row-reverse' : ''} ${
+                          isSelected ? 'opacity-70' : ''
+                        }`}
                       >
-                        {!isOwnMessage && (
+                        {isSelectionMode && (
+                          <IconButton
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleMessageClick(message.id, e)
+                            }}
+                            className="self-center"
+                          >
+                            {isSelected ? (
+                              <CheckCircle color="primary" />
+                            ) : (
+                              <RadioButtonUnchecked />
+                            )}
+                          </IconButton>
+                        )}
+                        {!isOwnMessage && !isSelectionMode && (
                           <Avatar className="w-8 h-8 bg-gray-400 text-sm">
                             {message.sender?.fullName
                               ?.charAt(0)
@@ -818,7 +1044,7 @@ function ChatsView() {
                         <Box
                           className={`flex flex-col ${isOwnMessage ? 'items-end' : 'items-start'}`}
                         >
-                          {!isOwnMessage && (
+                          {!isOwnMessage && !isSelectionMode && (
                             <Typography
                               variant="caption"
                               className="text-gray-600 mb-1 px-1"
@@ -827,27 +1053,45 @@ function ChatsView() {
                             </Typography>
                           )}
                           <Paper
-                            elevation={1}
-                            className={`px-4 py-2 rounded-2xl ${
+                            elevation={isSelected ? 3 : 1}
+                            className={`px-4 py-2 rounded-2xl transition-all ${
+                              isSelected ? 'ring-2 ring-blue-500' : ''
+                            } ${
                               isOwnMessage
                                 ? 'bg-blue-500 text-white rounded-br-sm'
                                 : 'bg-white text-gray-800 rounded-bl-sm'
                             }`}
                           >
-                            <Typography
-                              variant="body2"
-                              className="whitespace-pre-wrap break-words"
-                            >
-                              {message.message}
-                            </Typography>
-                            <Typography
-                              variant="caption"
-                              className={`block mt-1 ${
-                                isOwnMessage ? 'text-blue-100' : 'text-gray-500'
-                              }`}
-                            >
-                              {dayjs(message.createdAt).format('HH:mm')}
-                            </Typography>
+                            {message.isDeleted ? (
+                              <Typography
+                                variant="body2"
+                                className="italic text-gray-400"
+                              >
+                                This message was deleted
+                              </Typography>
+                            ) : (
+                              <>
+                                <Typography
+                                  variant="body2"
+                                  className="whitespace-pre-wrap break-words"
+                                >
+                                  {message.message}
+                                </Typography>
+                                <Typography
+                                  variant="caption"
+                                  className={`block mt-1 ${
+                                    isOwnMessage
+                                      ? 'text-blue-100'
+                                      : 'text-gray-500'
+                                  }`}
+                                >
+                                  {dayjs(message.createdAt).format('HH:mm')}
+                                  {message.isEdited && (
+                                    <span className="ml-1">(edited)</span>
+                                  )}
+                                </Typography>
+                              </>
+                            )}
                           </Paper>
                         </Box>
                       </Box>
@@ -1182,6 +1426,55 @@ function ChatsView() {
           >
             {createChatMutation.isLoading ? 'Creating...' : 'Create Group'}
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Messages Dialog */}
+      <Dialog
+        open={openDeleteDialog}
+        onClose={() => setOpenDeleteDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Delete Messages</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" className="mb-3">
+            Delete {selectedMessages.size} message
+            {selectedMessages.size > 1 ? 's' : ''}?
+          </Typography>
+          <Box className="flex flex-col gap-2">
+            <Button
+              variant="outlined"
+              color="error"
+              fullWidth
+              onClick={() => {
+                deleteMessagesMutation.mutate({
+                  messageIds: selectedMessages,
+                  deleteForEveryone: false,
+                })
+              }}
+              disabled={deleteMessagesMutation.isLoading}
+            >
+              Delete for me
+            </Button>
+            <Button
+              variant="contained"
+              color="error"
+              fullWidth
+              onClick={() => {
+                deleteMessagesMutation.mutate({
+                  messageIds: selectedMessages,
+                  deleteForEveryone: true,
+                })
+              }}
+              disabled={deleteMessagesMutation.isLoading}
+            >
+              Delete for everyone
+            </Button>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenDeleteDialog(false)}>Cancel</Button>
         </DialogActions>
       </Dialog>
 

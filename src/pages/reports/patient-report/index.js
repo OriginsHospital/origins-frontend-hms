@@ -102,9 +102,21 @@ function PatientReport() {
     enabled: !!userDetails?.accessToken && !!fromDate && !!toDate,
   })
 
+  // Handle response structure: { status, message, data: { data: [...], pagination: {...}, charts: {...} } }
   const reportRows = reportData?.data?.data || []
   const charts = reportData?.data?.charts || {}
-  const pagination = reportData?.data?.pagination || { total: 0, page: 1 }
+  const pagination = reportData?.data?.pagination || {
+    total: 0,
+    page: 1,
+    limit: pageSize,
+  }
+
+  console.log('Report Data Structure:', {
+    reportData,
+    rows: reportRows.length,
+    charts,
+    pagination,
+  })
 
   // Reset filters
   const handleResetFilters = () => {
@@ -163,6 +175,26 @@ function PatientReport() {
   const revenueChartData = useMemo(() => {
     const revenueData = charts.revenueByBranch || {}
     const branches = Object.keys(revenueData)
+
+    // If no branches, return empty chart data
+    if (branches.length === 0) {
+      return {
+        labels: [],
+        datasets: [
+          {
+            label: 'Paid Amount',
+            data: [],
+            backgroundColor: '#4CAF50',
+          },
+          {
+            label: 'Pending Amount',
+            data: [],
+            backgroundColor: '#FF9800',
+          },
+        ],
+      }
+    }
+
     return {
       labels: branches,
       datasets: [
@@ -466,7 +498,13 @@ function PatientReport() {
           </Box>
         ) : (
           <DataGrid
-            rows={reportRows}
+            rows={reportRows.map((row, index) => ({
+              ...row,
+              id:
+                row.patientId ||
+                `${row.patientNumber || index}-${row.visitId || ''}` ||
+                index,
+            }))}
             columns={columns}
             pageSize={pageSize}
             rowsPerPageOptions={[25, 50, 100]}
@@ -476,9 +514,10 @@ function PatientReport() {
             }}
             pagination
             paginationMode="server"
-            rowCount={pagination.total}
+            rowCount={pagination.total || 0}
             page={page - 1}
             onPageChange={(newPage) => setPage(newPage + 1)}
+            loading={isLoading}
             autoHeight
             disableSelectionOnClick
             sx={{ border: 'none' }}
