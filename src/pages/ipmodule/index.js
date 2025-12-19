@@ -38,6 +38,8 @@ import {
   DoorFront as RoomIcon,
   SingleBed as BedIcon,
   Close as CloseIcon,
+  Build as MaintenanceIcon,
+  Person as PersonIcon,
 } from '@mui/icons-material'
 import {
   getStates,
@@ -178,6 +180,10 @@ function IPModule() {
   const [rooms, setRooms] = useState([])
   const [beds, setBeds] = useState([])
 
+  // Visual bed selection states - stores all floors with their rooms and beds
+  const [floorsWithRoomsAndBeds, setFloorsWithRoomsAndBeds] = useState([])
+  const [loadingFloorsData, setLoadingFloorsData] = useState(false)
+
   // Fetch data using react-query
   const { data: activeIPData } = useQuery({
     queryKey: ['activeIP', selectedBranch],
@@ -286,6 +292,7 @@ function IPModule() {
     setFloors([])
     setRooms([])
     setBeds([])
+    setFloorsWithRoomsAndBeds([])
     setSelectedPatient('')
     setSelectedProcedure('')
     setDateOfAdmission(null)
@@ -332,6 +339,70 @@ function IPModule() {
     handleStepClick(activeStep - 1)
   }
 
+  // Fetch all floors with rooms and beds for visual interface
+  const fetchFloorsWithRoomsAndBeds = async (buildingId) => {
+    if (!buildingId || !user.accessToken) return
+
+    setLoadingFloorsData(true)
+    try {
+      // Fetch all floors
+      const floorsResponse = await getFloors(user.accessToken, buildingId)
+      const floorsData = floorsResponse?.data || floorsResponse
+
+      if (!Array.isArray(floorsData)) {
+        setFloorsWithRoomsAndBeds([])
+        setLoadingFloorsData(false)
+        return
+      }
+
+      // For each floor, fetch all rooms
+      const floorsWithRooms = await Promise.all(
+        floorsData.map(async (floor) => {
+          try {
+            const roomsResponse = await getRooms(user.accessToken, floor.id)
+            const roomsData = roomsResponse?.data || roomsResponse
+
+            if (!Array.isArray(roomsData)) {
+              return { ...floor, rooms: [] }
+            }
+
+            // For each room, fetch all beds
+            const roomsWithBeds = await Promise.all(
+              roomsData.map(async (room) => {
+                try {
+                  const bedsResponse = await getBeds(user.accessToken, room.id)
+                  const bedsData = bedsResponse?.data || bedsResponse
+                  return {
+                    ...room,
+                    beds: Array.isArray(bedsData) ? bedsData : [],
+                  }
+                } catch (error) {
+                  console.error(
+                    `Error fetching beds for room ${room.id}:`,
+                    error,
+                  )
+                  return { ...room, beds: [] }
+                }
+              }),
+            )
+
+            return { ...floor, rooms: roomsWithBeds }
+          } catch (error) {
+            console.error(`Error fetching rooms for floor ${floor.id}:`, error)
+            return { ...floor, rooms: [] }
+          }
+        }),
+      )
+
+      setFloorsWithRoomsAndBeds(floorsWithRooms)
+    } catch (error) {
+      console.error('Error fetching floors with rooms and beds:', error)
+      setFloorsWithRoomsAndBeds([])
+    } finally {
+      setLoadingFloorsData(false)
+    }
+  }
+
   const handleBuildingChange = async (event) => {
     const buildingId = event.target.value
     setSelectedBuilding(buildingId)
@@ -341,12 +412,15 @@ function IPModule() {
     setFloors([])
     setRooms([])
     setBeds([])
+    setFloorsWithRoomsAndBeds([])
     try {
       const response = await getFloors(user.accessToken, buildingId)
       const floorsData = response?.data || response
       if (Array.isArray(floorsData)) {
         setFloors(floorsData)
       }
+      // Also fetch all data for visual interface
+      await fetchFloorsWithRoomsAndBeds(buildingId)
     } catch (error) {
       console.error('Error fetching floors:', error)
     }
@@ -530,12 +604,36 @@ function IPModule() {
     )
 
     switch (step) {
-      // Step 0: Location (Building, Floor, Room)
+      // Step 0: Location (Building, Floor, Room) - Visual Bed Selection
       case 0:
+        const getBedStatusColor = (bed) => {
+          if (selectedBed === bed.id) return '#2196F3' // Blue - Selected
+          if (bed.status === 'Available' && bed.isActive) return '#4CAF50' // Green - Available
+          if (bed.status === 'Occupied' || bed.isBooked) return '#9E9E9E' // Grey - Occupied
+          if (bed.status === 'Maintenance') return '#FF9800' // Orange - Maintenance
+          return '#E0E0E0' // Default grey
+        }
+
+        const getBedStatusTextColor = (bed) => {
+          if (selectedBed === bed.id) return '#FFFFFF' // White text for selected
+          if (bed.status === 'Available' && bed.isActive) return '#FFFFFF' // White text for available
+          return '#000000' // Black text for others
+        }
+
+        const handleBedClick = (bed, room, floor) => {
+          if (bed.status === 'Available' && bed.isActive && !bed.isBooked) {
+            setSelectedBed(bed.id)
+            setSelectedRoom(room.id)
+            setSelectedFloor(floor.id)
+            setSelectedBuilding(selectedBuilding) // Keep current building
+            setErrors({ ...errors, bed: null, room: null, floor: null })
+          }
+        }
+
         return (
           <>
             <Grid container spacing={3}>
-              {/* State Selection */}
+              {/* State, City, Branch Selection */}
               <Grid item xs={12} md={4}>
                 <FormControl fullWidth error={!!errors.state}>
                   <InputLabel>State *</InputLabel>
@@ -556,7 +654,6 @@ function IPModule() {
                 </FormControl>
               </Grid>
 
-              {/* City Selection */}
               <Grid item xs={12} md={4}>
                 <FormControl
                   fullWidth
@@ -581,7 +678,6 @@ function IPModule() {
                 </FormControl>
               </Grid>
 
-              {/* Branch Selection */}
               <Grid item xs={12} md={4}>
                 <FormControl
                   fullWidth
@@ -637,65 +733,388 @@ function IPModule() {
                 )}
               </Grid>
 
-              <Grid item xs={12}>
-                <Typography variant="subtitle1" sx={{ mb: 1 }}>
-                  Select Floor
-                </Typography>
-                <Grid container spacing={2} justifyContent="flex-start">
-                  {floors.map((floor) => (
-                    <Grid item key={floor.id}>
-                      <SelectionTile
-                        icon={<FloorIcon sx={{ fontSize: 40 }} />}
-                        label={floor.name}
-                        selected={selectedFloor === floor.id}
-                        onClick={() => {
-                          handleFloorChange({ target: { value: floor.id } })
-                          setErrors({ ...errors, floor: null })
-                        }}
-                        disabled={!selectedBuilding}
-                      />
-                    </Grid>
-                  ))}
-                </Grid>
-                {errors.floor && (
-                  <Typography color="error" sx={{ mt: 1 }}>
-                    {errors.floor}
-                  </Typography>
-                )}
-              </Grid>
+              {/* Visual Bed Selection Interface */}
+              {selectedBuilding && (
+                <Grid item xs={12}>
+                  {(() => {
+                    const currentBranch = branchesList.find(
+                      (b) => b.id === selectedBranch,
+                    )
+                    const currentCity = cities.find(
+                      (c) => c.id === selectedCityId,
+                    )
+                    return (
+                      currentBranch && (
+                        <Typography
+                          variant="h6"
+                          sx={{
+                            mb: 2,
+                            fontWeight: 600,
+                            color: 'text.primary',
+                          }}
+                        >
+                          {currentCity?.name && `${currentCity.name} - `}
+                          {currentBranch.name}
+                        </Typography>
+                      )
+                    )
+                  })()}
+                  {loadingFloorsData ? (
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        minHeight: '200px',
+                      }}
+                    >
+                      <CircularProgress />
+                    </Box>
+                  ) : (
+                    <Box sx={{ mt: 2 }}>
+                      {floorsWithRoomsAndBeds.length === 0 ? (
+                        <Typography
+                          variant="body2"
+                          color="text.secondary"
+                          sx={{ textAlign: 'center', py: 4 }}
+                        >
+                          No floors found. Please select a building.
+                        </Typography>
+                      ) : (
+                        floorsWithRoomsAndBeds.map((floor) => (
+                          <Box key={floor.id} sx={{ mb: 4 }}>
+                            <Typography
+                              variant="h6"
+                              sx={{
+                                mb: 2,
+                                fontWeight: 600,
+                                color: 'text.primary',
+                                borderBottom: '2px solid',
+                                borderColor: 'primary.main',
+                                pb: 1,
+                              }}
+                            >
+                              {floor.name}
+                            </Typography>
+                            <Grid container spacing={2}>
+                              {floor.rooms && floor.rooms.length > 0 ? (
+                                floor.rooms.map((room) => (
+                                  <Grid
+                                    item
+                                    xs={12}
+                                    sm={6}
+                                    md={4}
+                                    lg={3}
+                                    key={room.id}
+                                  >
+                                    <Paper
+                                      elevation={2}
+                                      sx={{
+                                        p: 2,
+                                        bgcolor: 'background.paper',
+                                        borderRadius: 2,
+                                        border:
+                                          selectedRoom === room.id
+                                            ? '2px solid #2196F3'
+                                            : '1px solid #E0E0E0',
+                                      }}
+                                    >
+                                      <Typography
+                                        variant="subtitle1"
+                                        sx={{ fontWeight: 600, mb: 1 }}
+                                      >
+                                        Room {room.name || room.roomNumber}
+                                      </Typography>
+                                      <Box sx={{ mb: 1 }}>
+                                        <Typography
+                                          variant="caption"
+                                          sx={{
+                                            display: 'inline-block',
+                                            bgcolor:
+                                              room.type === 'AC'
+                                                ? '#E3F2FD'
+                                                : '#FFF3E0',
+                                            color:
+                                              room.type === 'AC'
+                                                ? '#1976D2'
+                                                : '#F57C00',
+                                            px: 1,
+                                            py: 0.5,
+                                            borderRadius: 1,
+                                            mr: 1,
+                                            fontWeight: 600,
+                                          }}
+                                        >
+                                          {room.type}
+                                        </Typography>
+                                        {room.roomCategory && (
+                                          <Typography
+                                            variant="caption"
+                                            sx={{
+                                              display: 'inline-block',
+                                              bgcolor: '#F3E5F5',
+                                              color: '#7B1FA2',
+                                              px: 1,
+                                              py: 0.5,
+                                              borderRadius: 1,
+                                              fontWeight: 600,
+                                            }}
+                                          >
+                                            {room.roomCategory}
+                                          </Typography>
+                                        )}
+                                      </Box>
+                                      <Box
+                                        sx={{
+                                          mb: 1,
+                                          display: 'flex',
+                                          flexWrap: 'wrap',
+                                          gap: 1,
+                                        }}
+                                      >
+                                        {room.charges > 0 && (
+                                          <Typography
+                                            variant="body2"
+                                            color="text.secondary"
+                                            sx={{
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              gap: 0.5,
+                                            }}
+                                          >
+                                            {room.type === 'Non-AC' && (
+                                              <>Non-AC ₹{room.charges}</>
+                                            )}
+                                            {room.type === 'AC' && (
+                                              <>
+                                                ₹{room.charges}
+                                                <PersonIcon
+                                                  sx={{ fontSize: 14 }}
+                                                />
+                                              </>
+                                            )}
+                                            {!room.type && `₹${room.charges}`}
+                                          </Typography>
+                                        )}
+                                        {room.beds &&
+                                          room.beds.length > 0 &&
+                                          room.beds.some(
+                                            (bed) => bed.charge > 0,
+                                          ) && (
+                                            <Typography
+                                              variant="body2"
+                                              color="text.secondary"
+                                              sx={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                              }}
+                                            >
+                                              ₹
+                                              {Math.max(
+                                                ...room.beds
+                                                  .filter(
+                                                    (bed) => bed.charge > 0,
+                                                  )
+                                                  .map((bed) => bed.charge),
+                                              )}
+                                            </Typography>
+                                          )}
+                                      </Box>
+                                      <Box
+                                        sx={{
+                                          display: 'flex',
+                                          flexWrap: 'wrap',
+                                          gap: 1,
+                                          mt: 2,
+                                        }}
+                                      >
+                                        {room.beds && room.beds.length > 0 ? (
+                                          room.beds.map((bed) => (
+                                            <Box
+                                              key={bed.id}
+                                              onClick={() =>
+                                                handleBedClick(bed, room, floor)
+                                              }
+                                              sx={{
+                                                minWidth: '50px',
+                                                height: '40px',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                borderRadius: 1,
+                                                cursor:
+                                                  bed.status === 'Available' &&
+                                                  bed.isActive &&
+                                                  !bed.isBooked
+                                                    ? 'pointer'
+                                                    : 'not-allowed',
+                                                bgcolor: getBedStatusColor(bed),
+                                                color:
+                                                  getBedStatusTextColor(bed),
+                                                border:
+                                                  selectedBed === bed.id
+                                                    ? '2px solid #1976D2'
+                                                    : '1px solid transparent',
+                                                transition: 'all 0.2s',
+                                                opacity:
+                                                  bed.status === 'Available' &&
+                                                  bed.isActive &&
+                                                  !bed.isBooked
+                                                    ? 1
+                                                    : 0.7,
+                                                '&:hover': {
+                                                  transform:
+                                                    bed.status ===
+                                                      'Available' &&
+                                                    bed.isActive &&
+                                                    !bed.isBooked
+                                                      ? 'scale(1.05)'
+                                                      : 'none',
+                                                  boxShadow:
+                                                    bed.status ===
+                                                      'Available' &&
+                                                    bed.isActive &&
+                                                    !bed.isBooked
+                                                      ? 2
+                                                      : 0,
+                                                },
+                                                position: 'relative',
+                                              }}
+                                            >
+                                              {bed.status === 'Maintenance' && (
+                                                <MaintenanceIcon
+                                                  sx={{
+                                                    position: 'absolute',
+                                                    top: 2,
+                                                    right: 2,
+                                                    fontSize: 14,
+                                                  }}
+                                                />
+                                              )}
+                                              <Typography
+                                                variant="caption"
+                                                sx={{
+                                                  fontWeight: 600,
+                                                  fontSize: '0.75rem',
+                                                }}
+                                              >
+                                                {bed.bedNumber || bed.name}
+                                              </Typography>
+                                            </Box>
+                                          ))
+                                        ) : (
+                                          <Typography
+                                            variant="caption"
+                                            color="text.secondary"
+                                          >
+                                            No beds available
+                                          </Typography>
+                                        )}
+                                      </Box>
+                                    </Paper>
+                                  </Grid>
+                                ))
+                              ) : (
+                                <Grid item xs={12}>
+                                  <Typography
+                                    variant="body2"
+                                    color="text.secondary"
+                                    sx={{ textAlign: 'center', py: 2 }}
+                                  >
+                                    No rooms found on this floor
+                                  </Typography>
+                                </Grid>
+                              )}
+                            </Grid>
+                          </Box>
+                        ))
+                      )}
+                    </Box>
+                  )}
 
-              <Grid item xs={12}>
-                <Typography variant="subtitle1" sx={{ mb: 1 }}>
-                  Select Room
-                </Typography>
-                <Grid container spacing={2} justifyContent="flex-start">
-                  {rooms.map((room) => (
-                    <Grid item key={room.id}>
-                      <SelectionTile
-                        icon={<RoomIcon sx={{ fontSize: 40 }} />}
-                        label={`${room.name || room.roomNumber} (${room.type})`}
-                        selected={selectedRoom === room.id}
-                        onClick={() => {
-                          handleRoomChange({ target: { value: room.id } })
-                          setErrors({ ...errors, room: null })
+                  {/* Legend */}
+                  <Box
+                    sx={{
+                      mt: 4,
+                      pt: 2,
+                      borderTop: '1px solid #E0E0E0',
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: 3,
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Box
+                        sx={{
+                          width: 24,
+                          height: 24,
+                          bgcolor: '#4CAF50',
+                          borderRadius: 1,
+                          border: '1px solid #388E3C',
                         }}
-                        disabled={!selectedFloor}
                       />
-                    </Grid>
-                  ))}
+                      <Typography variant="caption">Available</Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Box
+                        sx={{
+                          width: 24,
+                          height: 24,
+                          bgcolor: '#2196F3',
+                          borderRadius: 1,
+                          border: '1px solid #1976D2',
+                        }}
+                      />
+                      <Typography variant="caption">Selected</Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Box
+                        sx={{
+                          width: 24,
+                          height: 24,
+                          bgcolor: '#9E9E9E',
+                          borderRadius: 1,
+                          border: '1px solid #616161',
+                        }}
+                      />
+                      <Typography variant="caption">Occupied</Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Box
+                        sx={{
+                          width: 24,
+                          height: 24,
+                          bgcolor: '#FF9800',
+                          borderRadius: 1,
+                          border: '1px solid #F57C00',
+                          position: 'relative',
+                        }}
+                      >
+                        <MaintenanceIcon
+                          sx={{
+                            position: 'absolute',
+                            top: '50%',
+                            left: '50%',
+                            transform: 'translate(-50%, -50%)',
+                            fontSize: 14,
+                            color: '#FFFFFF',
+                          }}
+                        />
+                      </Box>
+                      <Typography variant="caption">Maintenance</Typography>
+                    </Box>
+                  </Box>
                 </Grid>
-                {errors.room && (
-                  <Typography color="error" sx={{ mt: 1 }}>
-                    {errors.room}
-                  </Typography>
-                )}
-              </Grid>
+              )}
             </Grid>
             {renderNextButton(
               !selectedStateId ||
                 !selectedCityId ||
                 !selectedBranch ||
-                !selectedRoom,
+                !selectedBuilding ||
+                !selectedRoom ||
+                !selectedBed,
             )}
           </>
         )

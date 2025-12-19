@@ -22,7 +22,7 @@ const subNav = [
   },
   {
     path: '/reports/revenueNew',
-    title: 'Revenue New',
+    title: 'Revenue',
     relatedModule: null,
     icon: TbFileAnalytics,
     requiresRevenueNewAccess: true, // Revenue New requires specific access
