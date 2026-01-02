@@ -239,10 +239,21 @@ const LayoutsPage = () => {
     enabled: !!user.accessToken && !!selectedStateId,
   })
 
+  // Fetch branches filtered by cityId
   const { data: branchesData, refetch: refetchBranches } = useQuery({
     queryKey: ['branches', selectedCityId],
     queryFn: () => getBranches(user.accessToken, selectedCityId),
     enabled: !!user.accessToken && !!selectedCityId,
+  })
+
+  // Fallback: Fetch all branches if cityId filtering returns empty (for backward compatibility)
+  const { data: allBranchesData } = useQuery({
+    queryKey: ['branches', 'all'],
+    queryFn: () => getBranches(user.accessToken),
+    enabled:
+      !!user.accessToken &&
+      !!selectedCityId &&
+      (!branchesData?.data || branchesData.data.length === 0),
   })
 
   const { data: buildingsData } = useQuery({
@@ -283,11 +294,90 @@ const LayoutsPage = () => {
     enabled: !!user.accessToken && !!selectedRoomId && currentView === 'beds',
   })
 
+  // City to Branch Code Mapping (Business Rule)
+  // City          → Branch Codes
+  // Hanumakonda   → HNK
+  // Khammam       → KMM, SPL
+  // Hyderabad     → HYD
+  const cityBranchMap = {
+    Hanumakonda: ['HNK'],
+    Khammam: ['KMM', 'SPL'],
+    Hyderabad: ['HYD'],
+  }
+
+  // Helper function to get allowed branch codes for a city
+  const getAllowedBranchCodes = (cityName) => {
+    if (!cityName) return []
+    // Case-insensitive matching for city names
+    const normalizedCityName = Object.keys(cityBranchMap).find(
+      (key) => key.toLowerCase() === cityName.toLowerCase(),
+    )
+    return normalizedCityName ? cityBranchMap[normalizedCityName] : []
+  }
+
+  // Get selected city name
+  const selectedCity = useMemo(() => {
+    return citiesData?.data?.find((city) => city.id === selectedCityId)
+  }, [citiesData?.data, selectedCityId])
+
+  const selectedCityName = selectedCity?.name || ''
+
+  // Filter branches based on city selection and branch codes
+  const branches = useMemo(() => {
+    // If no city selected, return empty array
+    if (!selectedCityId) return []
+
+    // Use branches from API (filtered by cityId) or fallback to all branches
+    const sourceBranches =
+      branchesData?.data && branchesData.data.length > 0
+        ? branchesData.data
+        : allBranchesData?.data || []
+
+    if (!sourceBranches || sourceBranches.length === 0) return []
+
+    // Filter by cityId as a safety check
+    // Include branch if it has cityId matching selectedCityId, or if it doesn't have cityId (backward compatibility)
+    let cityBranches = sourceBranches.filter((branch) => {
+      // Include branch if:
+      // 1. It has cityId and matches selectedCityId, OR
+      // 2. It doesn't have cityId (for backward compatibility with old data)
+      return !branch.cityId || branch.cityId === selectedCityId
+    })
+
+    // If no branches found, return empty array
+    if (cityBranches.length === 0) return []
+
+    // If no city name, return all branches for the city
+    if (!selectedCityName) return cityBranches
+
+    const allowedCodes = getAllowedBranchCodes(selectedCityName)
+
+    // If city is not in mapping, return all branches for the city
+    if (allowedCodes.length === 0) return cityBranches
+
+    // Filter by branch code if available, otherwise include branch
+    // This allows branches without branchCode to still show up
+    return cityBranches.filter((branch) => {
+      // If branch has no branchCode, include it (for backward compatibility)
+      if (!branch.branchCode || branch.branchCode.trim() === '') {
+        return true
+      }
+
+      // If branch has branchCode, check if it matches allowed codes (case-insensitive)
+      const branchCodeUpper = branch.branchCode.toUpperCase().trim()
+      return allowedCodes.includes(branchCodeUpper)
+    })
+  }, [
+    branchesData?.data,
+    allBranchesData?.data,
+    selectedCityId,
+    selectedCityName,
+  ])
+
   const states = (statesData?.data || []).filter(
     (state) => state.name?.toLowerCase() !== 'telagana',
   )
   const cities = citiesData?.data || []
-  const branches = branchesData?.data || []
   const buildings = buildingsData?.data || []
   const floors = floorsData?.data || []
   const rooms = roomsData?.data || []
@@ -857,11 +947,34 @@ const LayoutsPage = () => {
   const handleCityChange = (event) => {
     const value = event.target.value
     setSelectedCityId(value)
+    // Clear branch and dependent selections when city changes
     setSelectedBranchId('')
     setSelectedBuildingId('')
     setSelectedFloorId('')
     setSelectedRoomId('')
   }
+
+  // Validate and clear branch if it becomes invalid when city changes
+  useEffect(() => {
+    if (selectedBranchId && selectedCityId && branches.length > 0) {
+      const isValidBranch = branches.some(
+        (branch) => branch.id === selectedBranchId,
+      )
+      if (!isValidBranch) {
+        // Clear invalid branch selection
+        setSelectedBranchId('')
+        setSelectedBuildingId('')
+        setSelectedFloorId('')
+        setSelectedRoomId('')
+      }
+    } else if (selectedBranchId && selectedCityId && branches.length === 0) {
+      // If city is selected but no valid branches, clear branch selection
+      setSelectedBranchId('')
+      setSelectedBuildingId('')
+      setSelectedFloorId('')
+      setSelectedRoomId('')
+    }
+  }, [selectedCityId, selectedBranchId, branches])
 
   const handleBranchChange = (event) => {
     const value = event.target.value
@@ -969,6 +1082,11 @@ const LayoutsPage = () => {
                 value={selectedBranchId}
                 onChange={handleBranchChange}
                 displayEmpty={!selectedBranchId}
+                renderValue={(value) => {
+                  if (!value) return 'Select Branch'
+                  const branch = branches.find((b) => b.id === value)
+                  return branch ? branch.name : 'Select Branch'
+                }}
                 endAdornment={
                   <IconButton
                     size="small"
@@ -983,11 +1101,18 @@ const LayoutsPage = () => {
                   </IconButton>
                 }
               >
-                {branches.map((branch) => (
-                  <MenuItem key={branch.id} value={branch.id}>
-                    {branch.name}
+                {branches.length === 0 && selectedCityId ? (
+                  <MenuItem disabled value="">
+                    No branches available
                   </MenuItem>
-                ))}
+                ) : (
+                  branches.map((branch) => (
+                    <MenuItem key={branch.id} value={branch.id}>
+                      {branch.name}
+                      {branch.branchCode && ` (${branch.branchCode})`}
+                    </MenuItem>
+                  ))
+                )}
               </Select>
             </FormControl>
           </Grid>
@@ -1368,6 +1493,11 @@ const LayoutsPage = () => {
                   value={selectedCityId}
                   onChange={handleCityChange}
                   displayEmpty={!selectedCityId}
+                  renderValue={(value) => {
+                    if (!value) return 'Select City'
+                    const city = cities.find((c) => c.id === value)
+                    return city ? city.name : 'Select City'
+                  }}
                   endAdornment={
                     <IconButton
                       size="small"
@@ -1399,6 +1529,11 @@ const LayoutsPage = () => {
                   value={selectedBranchId}
                   onChange={handleBranchChange}
                   displayEmpty={!selectedBranchId}
+                  renderValue={(value) => {
+                    if (!value) return 'Select Branch'
+                    const branch = branches.find((b) => b.id === value)
+                    return branch ? branch.name : 'Select Branch'
+                  }}
                   endAdornment={
                     <IconButton
                       size="small"
@@ -1413,12 +1548,18 @@ const LayoutsPage = () => {
                     </IconButton>
                   }
                 >
-                  {branches.map((branch) => (
-                    <MenuItem key={branch.id} value={branch.id}>
-                      {branch.name}{' '}
-                      {branch.branchCode && `(${branch.branchCode})`}
+                  {branches.length === 0 && selectedCityId ? (
+                    <MenuItem disabled value="">
+                      No branches available
                     </MenuItem>
-                  ))}
+                  ) : (
+                    branches.map((branch) => (
+                      <MenuItem key={branch.id} value={branch.id}>
+                        {branch.name}{' '}
+                        {branch.branchCode && `(${branch.branchCode})`}
+                      </MenuItem>
+                    ))
+                  )}
                 </Select>
               </FormControl>
             </Grid>
@@ -2186,6 +2327,11 @@ const LayoutsPage = () => {
                     value={selectedCityId}
                     onChange={handleCityChange}
                     displayEmpty={!selectedCityId}
+                    renderValue={(value) => {
+                      if (!value) return 'Select City'
+                      const city = cities.find((c) => c.id === value)
+                      return city ? city.name : 'Select City'
+                    }}
                     endAdornment={
                       <IconButton
                         size="small"
@@ -2217,6 +2363,11 @@ const LayoutsPage = () => {
                     value={selectedBranchId}
                     onChange={handleBranchChange}
                     displayEmpty={!selectedBranchId}
+                    renderValue={(value) => {
+                      if (!value) return 'Select Branch'
+                      const branch = branches.find((b) => b.id === value)
+                      return branch ? branch.name : 'Select Branch'
+                    }}
                     endAdornment={
                       <IconButton
                         size="small"
@@ -2234,12 +2385,18 @@ const LayoutsPage = () => {
                       </IconButton>
                     }
                   >
-                    {branches.map((branch) => (
-                      <MenuItem key={branch.id} value={branch.id}>
-                        {branch.name}{' '}
-                        {branch.branchCode && `(${branch.branchCode})`}
+                    {branches.length === 0 && selectedCityId ? (
+                      <MenuItem disabled value="">
+                        No branches available
                       </MenuItem>
-                    ))}
+                    ) : (
+                      branches.map((branch) => (
+                        <MenuItem key={branch.id} value={branch.id}>
+                          {branch.name}{' '}
+                          {branch.branchCode && `(${branch.branchCode})`}
+                        </MenuItem>
+                      ))
+                    )}
                   </Select>
                 </FormControl>
               </Grid>

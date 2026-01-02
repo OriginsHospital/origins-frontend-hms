@@ -29,30 +29,44 @@ export default function NotificationBell() {
     useQuery({
       queryKey: ['notifications', userDetails?.accessToken],
       queryFn: async () => {
-        if (!userDetails?.accessToken) return { data: [] }
-        const res = await getNotifications(userDetails.accessToken)
-        if (res.status === 200) {
-          return res.data || []
+        if (!userDetails?.accessToken) return []
+        try {
+          const res = await getNotifications(userDetails.accessToken)
+          if (res.status === 200 && res.data) {
+            return res.data || []
+          }
+          return []
+        } catch (error) {
+          // Handle 404 or other errors gracefully
+          console.warn('Failed to fetch notifications:', error)
+          return []
         }
-        return []
       },
       enabled: !!userDetails?.accessToken,
       refetchInterval: 30000, // Refetch every 30 seconds
+      retry: false, // Don't retry on 404
     })
 
   // Fetch unread count
   const { data: unreadCountData } = useQuery({
     queryKey: ['unreadNotificationsCount', userDetails?.accessToken],
     queryFn: async () => {
-      if (!userDetails?.accessToken) return { data: { count: 0 } }
-      const res = await getUnreadNotificationsCount(userDetails.accessToken)
-      if (res.status === 200) {
-        return res.data || { count: 0 }
+      if (!userDetails?.accessToken) return { count: 0 }
+      try {
+        const res = await getUnreadNotificationsCount(userDetails.accessToken)
+        if (res.status === 200 && res.data) {
+          return res.data || { count: 0 }
+        }
+        return { count: 0 }
+      } catch (error) {
+        // Handle 404 or other errors gracefully
+        console.warn('Failed to fetch unread notifications count:', error)
+        return { count: 0 }
       }
-      return { count: 0 }
     },
     enabled: !!userDetails?.accessToken,
     refetchInterval: 30000, // Refetch every 30 seconds
+    retry: false, // Don't retry on 404
   })
 
   const notifications = notificationsData || []

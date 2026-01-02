@@ -32,6 +32,7 @@ import { LuCalendarDays } from 'react-icons/lu'
 import { FiUser, FiUsers } from 'react-icons/fi'
 import { LuLayoutDashboard, LuBedDouble } from 'react-icons/lu'
 import { HiUsers } from 'react-icons/hi2'
+import { TbTicket } from 'react-icons/tb'
 
 import Image from 'next/image'
 import originslogo from '../../public/origins-new-logo.png'
@@ -301,6 +302,12 @@ function SideNav(props) {
         Iconn: GrSchedule,
       },
       {
+        path: '/ticketing',
+        name: 'Ticketing',
+        relatedModule: 'ticketing',
+        Iconn: TbTicket,
+      },
+      {
         path: '/patient',
         name: 'Patient',
         relatedModule: 'patients',
@@ -315,6 +322,11 @@ function SideNav(props) {
           {
             path: '/patient',
             name: 'All Patients',
+            relatedModule: 'allPatients',
+          },
+          {
+            path: '/patient/management',
+            name: 'Patient Management',
             relatedModule: 'allPatients',
           },
           {

@@ -51,15 +51,65 @@ import dynamic from 'next/dynamic'
 const JoditEditor = dynamic(() => import('jodit-react'), {
   ssr: false,
 })
+
+// Category and Sub-Category mapping
+const CATEGORY_SUBCATEGORY_MAP = {
+  'IVF Package': [
+    'Registration Fee',
+    'D1',
+    'Trigger',
+    'Middle',
+    'FET',
+    'UPT',
+    'Donor Booking',
+  ],
+  'Embryo Freezing': [
+    '1 Embryo – 1 Year',
+    '1 Embryo – 6 Months',
+    '1 Embryo – 3 Months',
+    '2 Embryos – 1 Year',
+    '2 Embryos – 6 Months',
+    '2 Embryos – 3 Months',
+    '3 Embryos – 1 Year',
+    '3 Embryos – 6 Months',
+    '3 Embryos – 3 Months',
+    '4 Embryos – 1 Year',
+    '4 Embryos – 6 Months',
+    '4 Embryos – 3 Months',
+  ],
+  PGTA: ['1 Embryo', '2 Embryos', '3 Embryos', '4 Embryos'],
+  ERA: [],
+  Procedures: [
+    'Hysteroscopy / Laparoscopy / Polypectomy',
+    'Cervical Cerclage',
+    'Emergency LSCS',
+    'Elective LSCS',
+    'Consultation Fees (Antenatal)',
+    'Consultation Fees (Gynec)',
+    'Dated Payments',
+    'Observation Amount',
+  ],
+  'Donor Sperm': [],
+  Microfluidics: [],
+  Others: [],
+}
+
+const CATEGORIES = Object.keys(CATEGORY_SUBCATEGORY_MAP)
+
 function AdvancePayments({ formData }) {
   const userDetails = useSelector((store) => store.user)
   const dispatch = useDispatch()
-  const [appointmentReason, setAppointmentReason] = useState('')
+  const [category, setCategory] = useState('')
+  const [subCategory, setSubCategory] = useState('')
+  const [description, setDescription] = useState('')
   const [amount, setAmount] = useState('')
   const [selectedPayment, setSelectedPayment] = useState(null)
   const [editablePayableAmount, setEditablePayableAmount] = useState(0)
   const [invoiceHtml, setInvoiceHtml] = useState('')
   const [showInvoicePreview, setShowInvoicePreview] = useState(false)
+
+  // Validation errors
+  const [errors, setErrors] = useState({})
 
   // Check if user is admin (role ID 1 or 7)
   const isAdmin =
@@ -92,22 +142,86 @@ function AdvancePayments({ formData }) {
         return await addOtherPayment(userDetails.accessToken, payload)
       },
       onSuccess: () => {
+        setCategory('')
+        setSubCategory('')
+        setDescription('')
+        setAmount('')
+        setErrors({})
         dispatch(closeModal('advance-payment-modal'))
         queryClient.invalidateQueries({
           queryKey: ['otherPaymentsStatus', formData.id],
         })
+        toast.success('Advance payment added successfully', toastconfig)
       },
     })
+  // Get sub-categories for selected category
+  const getSubCategories = () => {
+    if (!category) return []
+    return CATEGORY_SUBCATEGORY_MAP[category] || []
+  }
+
+  // Check if sub-category is required
+  const isSubCategoryRequired = () => {
+    const subCategories = getSubCategories()
+    return subCategories.length > 0
+  }
+
+  // Handle category change - reset sub-category
+  const handleCategoryChange = (newCategory) => {
+    setCategory(newCategory)
+    setSubCategory('') // Reset sub-category when category changes
+    setErrors((prev) => ({ ...prev, category: '', subCategory: '' }))
+  }
+
+  // Check if form is valid (for button disable state)
+  const isFormValid = () => {
+    if (!category) return false
+    if (isSubCategoryRequired() && !subCategory) return false
+    if (!description || description.trim().length < 10) return false
+    if (!amount || parseFloat(amount) <= 0) return false
+    return true
+  }
+
+  // Validate form
+  const validateForm = () => {
+    const newErrors = {}
+
+    if (!category) {
+      newErrors.category = 'Category is required'
+    }
+
+    if (isSubCategoryRequired() && !subCategory) {
+      newErrors.subCategory = 'Sub-Category is required'
+    }
+
+    if (!description || description.trim().length < 10) {
+      newErrors.description =
+        'Description is required and must be at least 10 characters'
+    }
+
+    if (!amount || parseFloat(amount) <= 0) {
+      newErrors.amount = 'Amount is required and must be greater than 0'
+    }
+
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
   const handleAddOtherPayment = () => {
-    if (!appointmentReason || !amount) {
-      toast.error('Please fill in all required fields', toastconfig)
+    if (!validateForm()) {
+      toast.error('Please fill in all required fields correctly', toastconfig)
       return
     }
-    addOtherPaymentMutation({
+
+    const payload = {
       patientId: formData.id,
-      appointmentReason: appointmentReason,
-      amount: amount,
-    })
+      category: category,
+      subCategory: isSubCategoryRequired() ? subCategory : null,
+      description: description.trim(),
+      amount: parseFloat(amount),
+    }
+
+    addOtherPaymentMutation(payload)
   }
 
   // Payment handling functions
@@ -273,8 +387,11 @@ function AdvancePayments({ formData }) {
           color="primary"
           className="capitalize"
           onClick={() => {
-            setAppointmentReason('')
+            setCategory('')
+            setSubCategory('')
+            setDescription('')
             setAmount('')
+            setErrors({})
             dispatch(openModal('advance-payment-modal'))
           }}
         >
@@ -620,36 +737,120 @@ function AdvancePayments({ formData }) {
 
       <Modal
         uniqueKey="advance-payment-modal"
-        maxWidth={'xs'}
-        onClose={() => dispatch(closeModal('advance-payment-modal'))}
+        maxWidth={'sm'}
+        onClose={() => {
+          setCategory('')
+          setSubCategory('')
+          setDescription('')
+          setAmount('')
+          setErrors({})
+          dispatch(closeModal('advance-payment-modal'))
+        }}
       >
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold">Advance Payment</h1>
           <IconButton
-            onClick={() => dispatch(closeModal('advance-payment-modal'))}
+            onClick={() => {
+              setCategory('')
+              setSubCategory('')
+              setDescription('')
+              setAmount('')
+              setErrors({})
+              dispatch(closeModal('advance-payment-modal'))
+            }}
           >
             <Close />
           </IconButton>
         </div>
 
         <div className="flex flex-col gap-4 mt-4">
+          {/* Category Dropdown */}
+          <FormControl fullWidth required error={!!errors.category}>
+            <InputLabel id="category-label">Category</InputLabel>
+            <Select
+              labelId="category-label"
+              label="Category"
+              value={category}
+              onChange={(e) => handleCategoryChange(e.target.value)}
+            >
+              {CATEGORIES.map((cat) => (
+                <MenuItem key={cat} value={cat}>
+                  {cat}
+                </MenuItem>
+              ))}
+            </Select>
+            {errors.category && (
+              <Typography variant="caption" color="error" className="mt-1 ml-2">
+                {errors.category}
+              </Typography>
+            )}
+          </FormControl>
+
+          {/* Sub-Category Dropdown - Conditional */}
+          {isSubCategoryRequired() && (
+            <FormControl fullWidth required error={!!errors.subCategory}>
+              <InputLabel id="subcategory-label">Sub-Category</InputLabel>
+              <Select
+                labelId="subcategory-label"
+                label="Sub-Category"
+                value={subCategory}
+                onChange={(e) => {
+                  setSubCategory(e.target.value)
+                  setErrors((prev) => ({ ...prev, subCategory: '' }))
+                }}
+              >
+                {getSubCategories().map((subCat) => (
+                  <MenuItem key={subCat} value={subCat}>
+                    {subCat}
+                  </MenuItem>
+                ))}
+              </Select>
+              {errors.subCategory && (
+                <Typography
+                  variant="caption"
+                  color="error"
+                  className="mt-1 ml-2"
+                >
+                  {errors.subCategory}
+                </Typography>
+              )}
+            </FormControl>
+          )}
+
+          {/* Description Field */}
           <TextField
-            label="Appointment Reason"
-            value={appointmentReason}
-            onChange={(e) => setAppointmentReason(e.target.value)}
+            label="Description"
+            value={description}
+            onChange={(e) => {
+              setDescription(e.target.value)
+              setErrors((prev) => ({ ...prev, description: '' }))
+            }}
             fullWidth
             required
-            placeholder="Enter appointment reason"
+            multiline
+            rows={3}
+            placeholder="Enter description (minimum 10 characters)"
+            error={!!errors.description}
+            helperText={
+              errors.description ||
+              `${description.length}/10 characters minimum`
+            }
           />
 
+          {/* Amount Field */}
           <TextField
             label="Amount"
             type="number"
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            onChange={(e) => {
+              setAmount(e.target.value)
+              setErrors((prev) => ({ ...prev, amount: '' }))
+            }}
             fullWidth
             required
             placeholder="Enter amount"
+            error={!!errors.amount}
+            helperText={errors.amount}
             InputProps={{
               startAdornment: <span className="text-gray-500 mr-1">₹</span>,
               inputProps: {
@@ -665,7 +866,7 @@ function AdvancePayments({ formData }) {
               color="primary"
               className="capitalize"
               onClick={() => handleAddOtherPayment()}
-              disabled={addOtherPaymentLoading}
+              disabled={addOtherPaymentLoading || !isFormValid()}
             >
               {addOtherPaymentLoading ? 'Adding...' : 'Add'}
             </Button>

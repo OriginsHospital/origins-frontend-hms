@@ -645,6 +645,11 @@ export const createGuardianRecord = async (token, payload) => {
   return response.json()
 }
 export const getVisitsByPatientId = async (token, patientId) => {
+  // Prevent API call with null or invalid patient ID
+  if (!patientId || patientId === 'null' || patientId === null) {
+    return { status: 200, data: [] }
+  }
+
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -657,6 +662,12 @@ export const getVisitsByPatientId = async (token, patientId) => {
       credentials: 'include',
     },
   )
+
+  // Handle 404 gracefully
+  if (response.status === 404) {
+    return { status: 200, data: [] }
+  }
+
   return response.json()
 }
 
@@ -4424,35 +4435,62 @@ export const getAllAlerts = async (token) => {
 }
 
 export const getNotifications = async (token, limit = 50, offset = 0) => {
-  const myHeaders = new Headers()
-  myHeaders.append('Authorization', `Bearer ${token}`)
-  myHeaders.append('Content-Type', 'application/json')
-  const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_NOTIFICATIONS}?limit=${limit}&offset=${offset}`,
-    {
-      method: 'GET',
-      headers: myHeaders,
-      redirect: 'follow',
-      credentials: 'include',
-    },
-  )
-  return response.json()
+  try {
+    const myHeaders = new Headers()
+    myHeaders.append('Authorization', `Bearer ${token}`)
+    myHeaders.append('Content-Type', 'application/json')
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_NOTIFICATIONS}?limit=${limit}&offset=${offset}`,
+      {
+        method: 'GET',
+        headers: myHeaders,
+        redirect: 'follow',
+        credentials: 'include',
+      },
+    )
+
+    // Handle 404 gracefully - return empty array
+    if (response.status === 404) {
+      return { status: 200, data: [] }
+    }
+
+    return response.json()
+  } catch (error) {
+    // Return empty data on any error
+    console.warn('Notifications endpoint not available:', error.message)
+    return { status: 200, data: [] }
+  }
 }
 
 export const getUnreadNotificationsCount = async (token) => {
-  const myHeaders = new Headers()
-  myHeaders.append('Authorization', `Bearer ${token}`)
-  myHeaders.append('Content-Type', 'application/json')
-  const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_UNREAD_NOTIFICATIONS_COUNT}`,
-    {
-      method: 'GET',
-      headers: myHeaders,
-      redirect: 'follow',
-      credentials: 'include',
-    },
-  )
-  return response.json()
+  try {
+    const myHeaders = new Headers()
+    myHeaders.append('Authorization', `Bearer ${token}`)
+    myHeaders.append('Content-Type', 'application/json')
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_UNREAD_NOTIFICATIONS_COUNT}`,
+      {
+        method: 'GET',
+        headers: myHeaders,
+        redirect: 'follow',
+        credentials: 'include',
+      },
+    )
+
+    // Handle 404 gracefully - return count of 0
+    if (response.status === 404) {
+      return { status: 200, data: { count: 0 } }
+    }
+
+    return response.json()
+  } catch (error) {
+    // Return zero count on any error
+    console.warn(
+      'Unread notifications count endpoint not available:',
+      error.message,
+    )
+    return { status: 200, data: { count: 0 } }
+  }
 }
 
 export const markNotificationAsRead = async (token, notificationId) => {
@@ -5614,6 +5652,156 @@ export const getBedDetails = async (token, bedId) => {
   myHeaders.append('Content-Type', 'application/json')
   const response = await fetch(
     `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_BED_DETAILS}/${bedId}`,
+    {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+// ========== TICKETS API FUNCTIONS ==========
+
+// Get all tickets with filters and pagination
+export const getTickets = async (token, filters = {}) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+
+  const queryParams = new URLSearchParams()
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== null && value !== undefined && value !== '') {
+      queryParams.append(key, value.toString())
+    }
+  })
+
+  const queryString = queryParams.toString()
+  const url = `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_TICKETS}${queryString ? `?${queryString}` : ''}`
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: myHeaders,
+    redirect: 'follow',
+    credentials: 'include',
+  })
+  return response.json()
+}
+
+// Get ticket details by ID
+export const getTicketDetails = async (token, ticketId) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_TICKET_DETAILS}/${ticketId}`,
+    {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+// Create new ticket
+export const createTicket = async (token, payload) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.CREATE_TICKET}`,
+    {
+      method: 'POST',
+      headers: myHeaders,
+      body: JSON.stringify(payload),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+// Update ticket
+export const updateTicket = async (token, payload) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.UPDATE_TICKET}`,
+    {
+      method: 'PUT',
+      headers: myHeaders,
+      body: JSON.stringify(payload),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+// Update ticket status
+export const updateTicketStatus = async (token, ticketId, status) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.UPDATE_TICKET_STATUS}/${ticketId}/status`,
+    {
+      method: 'PATCH',
+      headers: myHeaders,
+      body: JSON.stringify({ ticketId, status }),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+// Delete ticket
+export const deleteTicket = async (token, ticketId) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.DELETE_TICKET}/${ticketId}`,
+    {
+      method: 'DELETE',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+// Create ticket comment
+export const createTicketComment = async (token, ticketId, commentText) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.CREATE_TICKET_COMMENT}/${ticketId}/comments`,
+    {
+      method: 'POST',
+      headers: myHeaders,
+      body: JSON.stringify({ ticketId, commentText }),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+// Get active staff for assignment dropdown
+export const getActiveStaff = async (token) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_ACTIVE_STAFF}`,
     {
       method: 'GET',
       headers: myHeaders,

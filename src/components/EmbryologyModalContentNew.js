@@ -12,6 +12,8 @@ import {
   TextField,
   CircularProgress,
   IconButton,
+  Checkbox,
+  FormControlLabel,
 } from '@mui/material'
 import {
   CameraAlt,
@@ -70,6 +72,7 @@ function EmbryologyModalContentNew({
   const [selectedImages, setSelectedImages] = useState([])
   const [uploadingImages, setUploadingImages] = useState(false)
   const [editSelectedImages, setEditSelectedImages] = useState([])
+  const [updateTemplateForAll, setUpdateTemplateForAll] = useState(false)
   const imgInputRef = useRef(null)
   const editorNew = useRef(null)
   const editorEdit = useRef(null)
@@ -155,18 +158,31 @@ function EmbryologyModalContentNew({
 
   const handleSaveChanges = () => {
     console.log('save changes', editData)
+
+    // Get embryology type name to check if it's Semen Analysis
+    // embryologyTypes contains objects with embryologyId and embryologyName
+    const currentEmbryologyType = embryologyTypes?.find(
+      (type) => type.embryologyId === activeEmbryologyType,
+    )
+    const isSemenAnalysis =
+      currentEmbryologyType?.embryologyName?.toLowerCase().includes('semen') ||
+      currentEmbryologyType?.embryologyName?.toLowerCase().includes('seman')
+
     let data = {
       categoryType: editData?.categoryType,
       template: editData?.template,
       id: editData?.id,
       type: selectedRow?.type,
       embryologyType: activeEmbryologyType,
+      updateTemplateForAll:
+        isSemenAnalysis && updateTemplateForAll ? true : false,
     }
     // console.log('handleSaveChanges payload', payload, selectedRow?.type, editData?.id)
 
     // Use edit API for template changes only
     editEmbryologyMutation.mutate(data)
     setEditMode(null)
+    setUpdateTemplateForAll(false) // Reset checkbox after save
     // setEditData({})
     // setEditSelectedImages([]) // Clear selected images after saving
   }
@@ -613,6 +629,53 @@ function EmbryologyModalContentNew({
                             : 'Save Template'}
                         </Button>
                       </div>
+                      {/* Show "Save for all formats" option only for Semen Analysis */}
+                      {(() => {
+                        // embryologyTypes contains objects with embryologyId and embryologyName
+                        const currentEmbryologyType = embryologyTypes?.find(
+                          (type) => type.embryologyId === activeEmbryologyType,
+                        )
+                        const isSemenAnalysis =
+                          currentEmbryologyType?.embryologyName
+                            ?.toLowerCase()
+                            .includes('semen') ||
+                          currentEmbryologyType?.embryologyName
+                            ?.toLowerCase()
+                            .includes('seman')
+
+                        return isSemenAnalysis ? (
+                          <Box className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                            <FormControlLabel
+                              control={
+                                <Checkbox
+                                  checked={updateTemplateForAll}
+                                  onChange={(e) =>
+                                    setUpdateTemplateForAll(e.target.checked)
+                                  }
+                                  color="primary"
+                                />
+                              }
+                              label={
+                                <Typography
+                                  variant="body2"
+                                  className="font-medium"
+                                >
+                                  Save for all formats - Update template for all
+                                  Semen Analysis reports
+                                </Typography>
+                              }
+                            />
+                            <Typography
+                              variant="caption"
+                              className="text-gray-600 ml-8 block mt-1"
+                            >
+                              When checked, this will update the base template
+                              and apply changes to all existing Semen Analysis
+                              reports
+                            </Typography>
+                          </Box>
+                        ) : null
+                      })()}
                       {
                         // <TextJoedit
                         //   contents={editData.template}

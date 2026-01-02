@@ -690,12 +690,20 @@ function IPModule() {
                     onChange={handleBranchChange}
                     label="Branch *"
                   >
-                    {branchesList.map((branch) => (
-                      <MenuItem key={branch.id} value={branch.id}>
-                        {branch.name}{' '}
-                        {branch.branchCode && `(${branch.branchCode})`}
-                      </MenuItem>
-                    ))}
+                    {branchesList
+                      .filter(
+                        (branch) =>
+                          branch.name !== 'OBH' &&
+                          branch.name !== '02' &&
+                          branch.name !== 'kmm03' &&
+                          branch.name !== 'HYD-KKT',
+                      )
+                      .map((branch) => (
+                        <MenuItem key={branch.id} value={branch.id}>
+                          {branch.name}{' '}
+                          {branch.branchCode && `(${branch.branchCode})`}
+                        </MenuItem>
+                      ))}
                   </Select>
                   {errors.branch && (
                     <FormHelperText>{errors.branch}</FormHelperText>
@@ -1515,11 +1523,19 @@ function IPModule() {
               onChange={handleBranchChange}
               label="Branch"
             >
-              {branches?.map((branch) => (
-                <MenuItem key={branch.id} value={branch.id}>
-                  {branch.name}
-                </MenuItem>
-              ))}
+              {branches
+                ?.filter(
+                  (branch) =>
+                    branch.name !== 'OBH' &&
+                    branch.name !== '02' &&
+                    branch.name !== 'kmm03' &&
+                    branch.name !== 'HYD-KKT',
+                )
+                .map((branch) => (
+                  <MenuItem key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </MenuItem>
+                ))}
             </Select>
           </FormControl>
           <Button variant="contained" color="primary" onClick={handleOpen}>

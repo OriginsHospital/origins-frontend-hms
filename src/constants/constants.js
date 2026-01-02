@@ -357,6 +357,15 @@ export const API_ROUTES = {
   CREATE_TASK_COMMENT: '/taskTracker/createComment',
   CREATE_NEW_TASK: '/taskTracker/createTask',
   EDIT_TASK: '/taskTracker/editTask',
+  // Tickets API Routes
+  GET_TICKETS: '/tickets',
+  GET_TICKET_DETAILS: '/tickets',
+  CREATE_TICKET: '/tickets',
+  UPDATE_TICKET: '/tickets',
+  UPDATE_TICKET_STATUS: '/tickets',
+  DELETE_TICKET: '/tickets',
+  CREATE_TICKET_COMMENT: '/tickets',
+  GET_ACTIVE_STAFF: '/tickets/staff/active',
   APPLY_OPT_OUT: '/appointments/applyOptOut',
 
   TREATMENT_CYCLES_REPORT: '/reports/treatmentCyclesPaymentsReport',

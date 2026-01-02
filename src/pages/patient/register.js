@@ -200,7 +200,13 @@ export default function Register() {
     setPhoto(defaultProfile)
     setUploadedDocuments([])
     setAgeValidationState({ isValid: true, message: '', requiresAdult: false })
-    router.push('/patient/register')
+    try {
+      router.push('/patient/register')
+    } catch (error) {
+      console.warn('Navigation error:', error)
+      // Fallback to window.location if router.push fails
+      window.location.href = '/patient/register'
+    }
     setSearchValue('')
   }
   const { data: cities } = useQuery({
@@ -215,10 +221,27 @@ export default function Register() {
     },
     enabled: !!formData?.stateId, // Query runs only if userId is truthy
   })
+
+  // Validate cityId when cities data changes - reset if invalid
+  useEffect(() => {
+    if (cities?.data && formData?.cityId) {
+      const cityExists = cities.data.some((city) => city.id === formData.cityId)
+      if (!cityExists) {
+        // Reset cityId if it doesn't exist in the current cities list
+        setFormData((prev) => ({ ...prev, cityId: '' }))
+      }
+    }
+  }, [cities?.data, formData?.stateId])
   const { data: visits } = useQuery({
     queryKey: ['visits', formData?.id],
-    queryFn: () => getVisitsByPatientId(userDetails?.accessToken, formData?.id),
-    enabled: !!formData?.id,
+    queryFn: () => {
+      // Prevent API call with null or invalid patient ID
+      if (!formData?.id || formData?.id === 'null' || formData?.id === null) {
+        return Promise.resolve({ status: 200, data: [] })
+      }
+      return getVisitsByPatientId(userDetails?.accessToken, formData?.id)
+    },
+    enabled: !!formData?.id && formData?.id !== 'null' && formData?.id !== null,
   })
   useEffect(() => {
     console.log(visits?.data)

@@ -42,6 +42,11 @@ const HoverDevCards = () => {
             relatedModule: 'allPatients',
           },
           {
+            path: '/patient/management',
+            name: 'Patient Management',
+            relatedModule: 'allPatients',
+          },
+          {
             path: '/patient/donor',
             name: 'Donor',
             relatedModule: 'donorModule',

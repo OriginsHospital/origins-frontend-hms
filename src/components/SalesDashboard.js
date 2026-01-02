@@ -27,6 +27,107 @@ const FALLBACK_COLORS = [
   '#7f8c8d',
 ]
 
+// Map service names (productType) to advance payment categories
+const getCategoryFromServiceName = (serviceName) => {
+  if (!serviceName) return 'Others'
+
+  const upperServiceName = String(serviceName).toUpperCase().trim()
+
+  // IVF Package - Registration Fee, D1, Trigger, Middle, FET, UPT, Donor Booking
+  if (
+    upperServiceName.includes('REGISTRATION') ||
+    upperServiceName.includes('DAY1') ||
+    upperServiceName === 'D1' ||
+    upperServiceName.includes('TRIGGER') ||
+    upperServiceName.includes('PICKUP') ||
+    upperServiceName.includes('PICK UP') ||
+    upperServiceName.includes('PICK-UP') ||
+    upperServiceName.includes('FET') ||
+    (upperServiceName.includes('UPT') &&
+      !upperServiceName.includes('UPTPOSITIVE')) ||
+    upperServiceName.includes('DONOR_BOOKING') ||
+    upperServiceName.includes('DONOR BOOKING') ||
+    upperServiceName === 'DONOR_BOOKING_AMOUNT' ||
+    upperServiceName === 'DAY1_AMOUNT' ||
+    upperServiceName === 'REGISTRATION_FEE' ||
+    upperServiceName === 'FET_AMOUNT' ||
+    upperServiceName === 'PICKUP_AMOUNT' ||
+    upperServiceName.includes('MIDDLE')
+  ) {
+    return 'IVF Package'
+  }
+
+  // Embryo Freezing - All freezing-related services
+  if (
+    upperServiceName.includes('FREEZING') ||
+    upperServiceName.includes('EMBRYO FREEZING') ||
+    upperServiceName.includes('DAY5FREEZING') ||
+    upperServiceName.includes('DAY5 FREEZING') ||
+    upperServiceName === 'DAY5FREEZING_AMOUNT' ||
+    (upperServiceName.includes('EMBRYO') &&
+      upperServiceName.includes('FREEZING'))
+  ) {
+    return 'Embryo Freezing'
+  }
+
+  // PGTA - Preimplantation Genetic Testing
+  if (
+    upperServiceName.includes('PGTA') ||
+    upperServiceName.includes('PGT') ||
+    upperServiceName.includes('EMBRYOS FOR PGTA') ||
+    (upperServiceName.includes('EMBRYO') &&
+      upperServiceName.includes('PGTA')) ||
+    upperServiceName.includes('PGT-A')
+  ) {
+    return 'PGTA'
+  }
+
+  // ERA - Endometrial Receptivity Analysis
+  if (upperServiceName.includes('ERA') || upperServiceName === 'ERA_AMOUNT') {
+    return 'ERA'
+  }
+
+  // Procedures - LSCS, Hysteroscopy, Consultation, Scan, Observation, etc.
+  if (
+    upperServiceName.includes('LSCS') ||
+    upperServiceName.includes('HYSTEROSCOPY') ||
+    upperServiceName.includes('HYTEROSCOPY') ||
+    upperServiceName.includes('LAPAROSCOPY') ||
+    upperServiceName.includes('POLYPECTOMY') ||
+    upperServiceName.includes('CERCLAGE') ||
+    upperServiceName.includes('CONSULTATION') ||
+    upperServiceName.includes('OBSERVATION') ||
+    upperServiceName.includes('OP FEE') ||
+    upperServiceName === 'SCAN' ||
+    upperServiceName.includes('SONOGRAPHY') ||
+    upperServiceName.includes('OVULATION SCAN') ||
+    upperServiceName.includes('DISCHARGE')
+  ) {
+    return 'Procedures'
+  }
+
+  // Donor Sperm
+  if (
+    upperServiceName.includes('DONOR SPERM') ||
+    upperServiceName.includes('DONOR_SPERM')
+  ) {
+    return 'Donor Sperm'
+  }
+
+  // Microfluidics
+  if (
+    upperServiceName.includes('MICROFLUIDICS') ||
+    upperServiceName.includes('MICRO FLUIDS') ||
+    upperServiceName.includes('MICROFLUIDS') ||
+    upperServiceName === 'MICRO FLUIDS'
+  ) {
+    return 'Microfluidics'
+  }
+
+  // Default to Others (Pharmacy, Lab Test, Medication, etc.)
+  return 'Others'
+}
+
 const SalesDashboard = ({
   data,
   branchId,
@@ -105,7 +206,8 @@ const SalesDashboard = ({
     }
     // Otherwise, filter by branchId
     return (dataNormalizedSales || []).filter(
-      (row) => row.branchId === branchId || String(row.branchId) === String(branchId),
+      (row) =>
+        row.branchId === branchId || String(row.branchId) === String(branchId),
     )
   }, [dataNormalizedSales, branchId])
 
@@ -116,7 +218,8 @@ const SalesDashboard = ({
     }
     // Otherwise, filter by branchId
     return (dataNormalizedReturns || []).filter(
-      (row) => row.branchId === branchId || String(row.branchId) === String(branchId),
+      (row) =>
+        row.branchId === branchId || String(row.branchId) === String(branchId),
     )
   }, [dataNormalizedReturns, branchId])
 
@@ -420,24 +523,65 @@ const SalesDashboard = ({
       return { labels: [], amounts: [], colors: [] }
     }
 
-    const totalsByService = visibleSalesRows.reduce((acc, row) => {
-      const key = String(row.productType || 'Unknown').toUpperCase()
-      if (!acc[key]) {
-        acc[key] = 0
+    // Group by advance payment category instead of individual service names
+    const totalsByCategory = visibleSalesRows.reduce((acc, row) => {
+      const serviceName = String(row.productType || 'Unknown')
+      const category = getCategoryFromServiceName(serviceName)
+
+      if (!acc[category]) {
+        acc[category] = 0
       }
-      acc[key] += Number(row.amount) || 0
+      acc[category] += Number(row.amount) || 0
       return acc
     }, {})
 
-    const labels = Object.keys(totalsByService)
-    const amounts = labels.map((label) => totalsByService[label])
+    // Define category order and colors
+    const categoryOrder = [
+      'IVF Package',
+      'Embryo Freezing',
+      'PGTA',
+      'ERA',
+      'Procedures',
+      'Donor Sperm',
+      'Microfluidics',
+      'Others',
+    ]
 
-    const assignedColors = labels.map((label, index) => {
-      if (SERVICE_COLORS[label]) {
-        return SERVICE_COLORS[label]
+    const categoryColors = {
+      'IVF Package': '#27ae60',
+      'Embryo Freezing': '#3498db',
+      PGTA: '#9b59b6',
+      ERA: '#f1c40f',
+      Procedures: '#e67e22',
+      'Donor Sperm': '#e74c3c',
+      Microfluidics: '#2ecc71',
+      Others: '#34495e',
+    }
+
+    // Sort labels by predefined order, then by amount (descending)
+    const labels = Object.keys(totalsByCategory).sort((a, b) => {
+      const indexA = categoryOrder.indexOf(a)
+      const indexB = categoryOrder.indexOf(b)
+
+      // If both are in the order list, sort by index
+      if (indexA !== -1 && indexB !== -1) {
+        return indexA - indexB
       }
-      const fallbackIndex = index % FALLBACK_COLORS.length
-      return FALLBACK_COLORS[fallbackIndex]
+      // If only one is in the order list, prioritize it
+      if (indexA !== -1) return -1
+      if (indexB !== -1) return 1
+      // If neither is in the order list, sort by amount (descending)
+      return totalsByCategory[b] - totalsByCategory[a]
+    })
+
+    const amounts = labels.map((label) => totalsByCategory[label])
+
+    const assignedColors = labels.map((label) => {
+      if (categoryColors[label]) {
+        return categoryColors[label]
+      }
+      // Fallback color for unknown categories
+      return '#7f8c8d'
     })
 
     return { labels, amounts, colors: assignedColors }

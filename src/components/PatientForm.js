@@ -534,11 +534,12 @@ const PatientForm = forwardRef(
                 <Select
                   label="City"
                   name="cityId"
-                  value={formData.cityId}
+                  value={formData.cityId || ''}
                   onChange={(e) => handleChange('cityId', e.target.value)}
                   disabled={isEdit === 'noneditable'}
                   error={!!errors.cityId}
                   helperText={errors.cityId}
+                  displayEmpty
                 >
                   {cities?.data?.map((city) => (
                     <MenuItem key={city.id} value={city.id}>
