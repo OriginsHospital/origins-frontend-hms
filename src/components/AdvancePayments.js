@@ -9,7 +9,7 @@ import {
   downloadOtherPaymentsInvoice,
   downloadPDF,
 } from '@/constants/apis'
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useDispatch, useSelector } from 'react-redux'
 import Button from '@mui/material/Button'
@@ -107,6 +107,8 @@ function AdvancePayments({ formData }) {
   const [editablePayableAmount, setEditablePayableAmount] = useState(0)
   const [invoiceHtml, setInvoiceHtml] = useState('')
   const [showInvoicePreview, setShowInvoicePreview] = useState(false)
+  const [expandedPaymentIndex, setExpandedPaymentIndex] = useState(null)
+  const [newlyAddedPayment, setNewlyAddedPayment] = useState(null)
 
   // Validation errors
   const [errors, setErrors] = useState({})
@@ -119,6 +121,7 @@ function AdvancePayments({ formData }) {
     data: otherPaymentsStatus,
     isLoading,
     error,
+    refetch: refetchPayments,
   } = useQuery({
     queryKey: ['otherPaymentsStatus', formData.id],
     queryFn: async () => {
@@ -138,20 +141,43 @@ function AdvancePayments({ formData }) {
   const queryClient = useQueryClient()
   const { mutate: addOtherPaymentMutation, isPending: addOtherPaymentLoading } =
     useMutation({
-      mutationFn: async (payload) => {
-        return await addOtherPayment(userDetails.accessToken, payload)
+      mutationFn: async ({ payload, paymentDetails }) => {
+        const response = await addOtherPayment(userDetails.accessToken, payload)
+        return { response, paymentDetails }
       },
-      onSuccess: () => {
+      onSuccess: async ({ response, paymentDetails }) => {
+        // Check if the response indicates success
+        if (response.status !== 200) {
+          toast.error('Failed to add advance payment', toastconfig)
+          return
+        }
+
+        // Store the newly added payment details to identify it after refetch
+        setNewlyAddedPayment(paymentDetails)
         setCategory('')
         setSubCategory('')
         setDescription('')
         setAmount('')
         setErrors({})
         dispatch(closeModal('advance-payment-modal'))
-        queryClient.invalidateQueries({
-          queryKey: ['otherPaymentsStatus', formData.id],
-        })
+
         toast.success('Advance payment added successfully', toastconfig)
+
+        // Small delay to ensure backend has processed the request
+        setTimeout(async () => {
+          // Invalidate and refetch to get the latest data
+          await queryClient.invalidateQueries({
+            queryKey: ['otherPaymentsStatus', formData.id],
+          })
+          await refetchPayments()
+        }, 500)
+      },
+      onError: (error) => {
+        console.error('Error adding payment:', error)
+        toast.error(
+          'Failed to add advance payment. Please try again.',
+          toastconfig,
+        )
       },
     })
   // Get sub-categories for selected category
@@ -213,15 +239,28 @@ function AdvancePayments({ formData }) {
       return
     }
 
+    // Construct appointmentReason from category, subCategory, and description
+    let appointmentReason = category
+    if (isSubCategoryRequired() && subCategory) {
+      appointmentReason += ` - ${subCategory}`
+    }
+    appointmentReason += `: ${description.trim()}`
+
     const payload = {
       patientId: formData.id,
+      appointmentReason: appointmentReason,
+      amount: parseFloat(amount).toString(), // Backend expects string
+    }
+
+    // Store for matching after refetch
+    const paymentDetails = {
       category: category,
       subCategory: isSubCategoryRequired() ? subCategory : null,
       description: description.trim(),
       amount: parseFloat(amount),
     }
 
-    addOtherPaymentMutation(payload)
+    addOtherPaymentMutation({ payload, paymentDetails })
   }
 
   // Payment handling functions
@@ -364,6 +403,79 @@ function AdvancePayments({ formData }) {
     }
   }
 
+  // Handle different response structures - MUST be before early returns
+  const payments = useMemo(() => {
+    if (!otherPaymentsStatus) return []
+    // Handle both direct array and nested data structure
+    if (Array.isArray(otherPaymentsStatus)) {
+      return otherPaymentsStatus
+    }
+    if (otherPaymentsStatus.data && Array.isArray(otherPaymentsStatus.data)) {
+      return otherPaymentsStatus.data
+    }
+    return []
+  }, [otherPaymentsStatus])
+
+  // Auto-expand and open payment modal for newly added payment - MUST be before early returns
+  useEffect(() => {
+    if (newlyAddedPayment && payments.length > 0) {
+      // Find the newly added payment by matching amount and checking if it's unpaid
+      // Newly added payments typically have no payment history and match the amount
+      const matchingPaymentIndex = payments.findIndex((payment) => {
+        const paymentAmount = parseFloat(
+          payment.totalAmount || payment.amount || 0,
+        )
+        const matchesAmount =
+          Math.abs(paymentAmount - parseFloat(newlyAddedPayment.amount)) < 0.01
+        const isUnpaid =
+          !payment.paidAmount ||
+          payment.paidAmount === 0 ||
+          parseFloat(payment.totalAmount || payment.amount || 0) -
+            (payment.paidAmount || 0) >
+            0
+        const paymentReason = (
+          payment.paymentReason ||
+          payment.description ||
+          ''
+        ).toLowerCase()
+        // Try to match by category or description in paymentReason as additional check
+        const matchesCategory = newlyAddedPayment.category
+          ? paymentReason.includes(newlyAddedPayment.category.toLowerCase())
+          : true
+        const matchesDescription = newlyAddedPayment.description
+          ? paymentReason.includes(
+              newlyAddedPayment.description.substring(0, 20).toLowerCase(),
+            )
+          : true
+
+        return (
+          matchesAmount && isUnpaid && (matchesCategory || matchesDescription)
+        )
+      })
+
+      if (matchingPaymentIndex !== -1) {
+        const matchingPayment = payments[matchingPaymentIndex]
+        // Auto-expand the accordion
+        setExpandedPaymentIndex(matchingPaymentIndex)
+        // Auto-open payment modal
+        setSelectedPayment(matchingPayment)
+        const totalAmount = parseFloat(
+          matchingPayment.totalAmount || matchingPayment.amount || 0,
+        )
+        const paidAmount = matchingPayment.paidAmount || 0
+        setEditablePayableAmount(totalAmount - paidAmount)
+        dispatch(openModal('payment-modal'))
+        // Clear the newly added payment flag
+        setNewlyAddedPayment(null)
+      } else if (payments.length > 0) {
+        // If we can't find exact match but have payments, just expand the first one (most recent)
+        // This handles cases where matching might fail due to data format differences
+        setExpandedPaymentIndex(0)
+        setNewlyAddedPayment(null)
+      }
+    }
+  }, [payments, newlyAddedPayment, dispatch])
+
   if (isLoading) {
     return <div className="p-4">Loading payment data...</div>
   }
@@ -375,8 +487,6 @@ function AdvancePayments({ formData }) {
       </div>
     )
   }
-
-  const payments = otherPaymentsStatus?.data || []
 
   return (
     <div className="p-4">
@@ -414,7 +524,14 @@ function AdvancePayments({ formData }) {
       ) : (
         <div className="space-y-4">
           {payments.map((payment, index) => (
-            <Accordion key={index} className="shadow-sm border border-gray-200">
+            <Accordion
+              key={index}
+              className="shadow-sm border border-gray-200"
+              expanded={expandedPaymentIndex === index}
+              onChange={(event, isExpanded) => {
+                setExpandedPaymentIndex(isExpanded ? index : null)
+              }}
+            >
               <AccordionSummary
                 expandIcon={<ExpandMore />}
                 className="bg-gray-50 hover:bg-gray-100 transition-colors"

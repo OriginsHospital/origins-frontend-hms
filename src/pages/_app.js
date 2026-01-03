@@ -50,12 +50,12 @@ export default function App({ Component, pageProps }) {
               router.pathname === '/register' ||
               router.pathname.startsWith('/resetpassword') ? (
                 <PreLoginContainer>
-                  <Component {...pageProps} />
+                  <Component key={router.asPath} {...pageProps} />
                 </PreLoginContainer>
               ) : (
-                <PageMiddleware>
+                <PageMiddleware key={router.pathname}>
                   <Header />
-                  <Component {...pageProps} />
+                  <Component key={router.pathname} {...pageProps} />
                 </PageMiddleware>
               )}
             </Loader>

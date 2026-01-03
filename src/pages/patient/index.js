@@ -119,8 +119,19 @@ function PatientRegistration() {
         patientId: patientHistoryId,
         activeVisitId: activeVisitId,
       })
+    } else {
+      // Clear selectedPatient if patientHistoryId is not in query
+      setSelectedPatient(null)
     }
   }, [router.query])
+
+  // Effect to clear selectedPatient when navigating away from patient routes
+  useEffect(() => {
+    // Clear selectedPatient if we're not on a patient route
+    if (!router.pathname.startsWith('/patient')) {
+      setSelectedPatient(null)
+    }
+  }, [router.pathname])
 
   const baseColumns = [
     {

@@ -70,6 +70,74 @@ const bloodGroupOptions = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
 
 export default function Register() {
   const router = useRouter()
+
+  // Use window.location as the source of truth - most reliable for detecting route changes
+  const [currentPath, setCurrentPath] = useState(() => {
+    if (typeof window === 'undefined') return ''
+    return window.location.pathname
+  })
+
+  // Listen to route changes using both Next.js router and window.location
+  useEffect(() => {
+    const updatePath = () => {
+      if (typeof window !== 'undefined') {
+        const newPath = window.location.pathname
+        setCurrentPath((prevPath) => {
+          // Only update if path actually changed
+          if (prevPath !== newPath) {
+            return newPath
+          }
+          return prevPath
+        })
+      }
+    }
+
+    // Update immediately
+    updatePath()
+
+    // Listen to Next.js router events
+    if (router.events) {
+      router.events.on('routeChangeComplete', updatePath)
+      router.events.on('routeChangeStart', updatePath)
+    }
+
+    // Also listen to browser popstate (back/forward buttons)
+    if (typeof window !== 'undefined') {
+      window.addEventListener('popstate', updatePath)
+    }
+
+    // Poll window.location as a fallback (in case events don't fire)
+    // Use shorter interval for faster detection
+    const interval = setInterval(() => {
+      if (typeof window !== 'undefined') {
+        const newPath = window.location.pathname
+        setCurrentPath((prevPath) => {
+          if (prevPath !== newPath) {
+            return newPath
+          }
+          return prevPath
+        })
+      }
+    }, 50) // Check every 50ms for route changes
+
+    return () => {
+      if (router.events) {
+        router.events.off('routeChangeComplete', updatePath)
+        router.events.off('routeChangeStart', updatePath)
+      }
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('popstate', updatePath)
+      }
+      clearInterval(interval)
+    }
+  }, [router.events])
+
+  // ============================================
+  // ALL HOOKS MUST BE DECLARED BEFORE EARLY RETURN
+  // React Rules of Hooks: hooks must be called in the same order every render
+  // ============================================
+
+  // State hooks
   const [searchValue, setSearchValue] = useState('')
   const [photo, setPhoto] = useState(defaultProfile)
   const [formData, setFormData] = useState({
@@ -95,9 +163,6 @@ export default function Register() {
     createActiveVisit: true,
   })
   const [tab, setTab] = useState('patientRecord')
-  const handleChangeTab = (event, newTab) => {
-    setTab(newTab)
-  }
   const [isEdit, setIsEdit] = useState('create')
   const [uploadedDocuments, setUploadedDocuments] = useState([])
   const [ageValidationState, setAgeValidationState] = useState({
@@ -105,16 +170,173 @@ export default function Register() {
     message: '',
     requiresAdult: false,
   })
+  const [imagePreview, setImagePreview] = useState(null)
+  const [selectedVisit, setSelectedVisit] = useState({ id: '' })
+  const [showTab, setShowTab] = useState('consultations')
+  const [selectedTab, setSelectedTab] = useState({
+    type: null,
+    id: null,
+  })
+  const [isEditing, setIsEditing] = useState(true)
 
-  // initially it will be 'create' ---> actions : reset ,create
-  // if patient already exists after search  'noneditable' ---> actions : edit
-  // if user wants to edit patient record 'edit-patient' and if added or edited guardian 'edit-all' ---> actions : Save Changes
-
+  // Redux hooks
   const userDetails = useSelector((store) => store.user)
   // const dropdowns = useSelector((store) => store.dropdowns)
   const dispatch = useDispatch()
   const QueryClient = useQueryClient()
-  // console.log(dropdowns)
+
+  // React Query hooks - must be before early return
+  const { mutate: fetchPatientMutate, isLoading: fetchPatientLoading } =
+    useMutation({
+      mutationFn: async (aadhar) => {
+        try {
+          console.log('fetchPatientMutate', aadhar)
+          dispatch(showLoader())
+          await fetchPatient(aadhar)
+          setTab('patientRecord')
+        } catch (error) {
+          console.log(error)
+        } finally {
+          dispatch(hideLoader())
+        }
+      },
+      onSuccess: () => {
+        QueryClient.invalidateQueries('visits', 'packageData')
+      },
+    })
+
+  const { data: cities } = useQuery({
+    queryKey: ['cities', formData?.stateId],
+    queryFn: async () => {
+      const responsejson = await getCities(
+        userDetails?.accessToken,
+        formData?.stateId,
+      )
+      return responsejson ? responsejson : []
+    },
+    enabled: !!formData?.stateId,
+  })
+
+  const { data: visits } = useQuery({
+    queryKey: ['visits', formData?.id],
+    queryFn: () => {
+      if (!formData?.id || formData?.id === 'null' || formData?.id === null) {
+        return Promise.resolve({ status: 200, data: [] })
+      }
+      return getVisitsByPatientId(userDetails?.accessToken, formData?.id)
+    },
+    enabled: !!formData?.id && formData?.id !== 'null' && formData?.id !== null,
+  })
+
+  const { data: visitInfo } = useQuery({
+    queryKey: ['visitInfo', selectedVisit?.id],
+    queryFn: () =>
+      getVisitInfoById(userDetails?.accessToken, selectedVisit?.id),
+    enabled: !!selectedVisit?.id,
+  })
+
+  const { data: PackageData } = useQuery({
+    queryKey: ['PackageData', selectedVisit?.id],
+    queryFn: async () => {
+      const res = await getPackageData(
+        userDetails?.accessToken,
+        selectedVisit?.id,
+      )
+      if (res.status === 400) {
+        toast.error(res.message)
+      } else if (res.status === 200) {
+        setIsEditing(!!res.data.registrationDate ? false : true)
+        return res
+      }
+    },
+    enabled: !!selectedVisit?.id,
+  })
+
+  const createPackageMutate = useMutation({
+    mutationFn: async (payload) => {
+      const res = await createPackage(userDetails.accessToken, {
+        ...payload,
+        visitId: selectedVisit?.id,
+      })
+      console.log('under mutation fn', res)
+      if (res.status === 400) {
+        toast.error(res.message)
+      } else if (res.status == 200) {
+        toast.success(res.message)
+        setIsEditing(false)
+      }
+    },
+    onSuccess: () => {
+      QueryClient.invalidateQueries('packageData')
+    },
+  })
+
+  const editPackageMutate = useMutation({
+    mutationFn: async (payload) => {
+      const { updatedAt, createdAt, ...newPayload } = payload
+      const res = await editPackage(userDetails.accessToken, {
+        ...newPayload,
+        visitId: selectedVisit?.id,
+      })
+      console.log('under mutation fn', res)
+      if (res.status === 400) {
+        toast.error(res.message)
+      } else if (res.status == 200) {
+        toast.success(res.message)
+        setIsEditing(false)
+      }
+    },
+    onSuccess: () => {
+      QueryClient.invalidateQueries('packageData')
+    },
+  })
+
+  // Ref hooks
+  const patientFormRef = useRef(null)
+  const guardianFormRef = useRef(null)
+
+  // Effect hooks
+  useEffect(() => {
+    if (cities?.data && formData?.cityId) {
+      const cityExists = cities.data.some((city) => city.id === formData.cityId)
+      if (!cityExists) {
+        setFormData((prev) => ({ ...prev, cityId: '' }))
+      }
+    }
+  }, [cities?.data, formData?.stateId])
+
+  useEffect(() => {
+    console.log(visits?.data)
+    if (visits?.data?.length > 0) {
+      let activeVisit = visits?.data.filter((visit) => visit.isActive === 1)
+      setSelectedVisit(activeVisit[0])
+    } else {
+      console.log('no vists')
+      setSelectedVisit({ id: '' })
+    }
+  }, [visits?.data])
+
+  useEffect(() => {
+    const { search } = router.query
+    if (search) {
+      setSearchValue(search)
+      fetchPatientMutate(search)
+    }
+  }, [router.query])
+
+  // Check if we're on the register page - AFTER ALL HOOKS
+  const isRegisterPage = currentPath === '/patient/register'
+
+  // Early return if not on register page - AFTER ALL HOOKS
+  if (!isRegisterPage) {
+    return null
+  }
+
+  // Helper functions and handlers - can be declared after early return
+  const handleChangeTab = (event, newTab) => {
+    setTab(newTab)
+  }
+
   const fetchPatient = async (aadhar) => {
     // console.log(String(aadhar).length)
     if (
@@ -153,25 +375,6 @@ export default function Register() {
       toast.error('Aadhar Number should be 12 digits')
     }
   }
-  //useMutateforFetchPatient
-  const { mutate: fetchPatientMutate, isLoading: fetchPatientLoading } =
-    useMutation({
-      mutationFn: async (aadhar) => {
-        try {
-          console.log('fetchPatientMutate', aadhar)
-          dispatch(showLoader())
-          await fetchPatient(aadhar)
-          setTab('patientRecord')
-        } catch (error) {
-          console.log(error)
-        } finally {
-          dispatch(hideLoader())
-        }
-      },
-      onSuccess: () => {
-        QueryClient.invalidateQueries('visits', 'packageData')
-      },
-    })
   const resetForm = () => {
     setFormData({
       branchId: '',
@@ -200,59 +403,9 @@ export default function Register() {
     setPhoto(defaultProfile)
     setUploadedDocuments([])
     setAgeValidationState({ isValid: true, message: '', requiresAdult: false })
-    try {
-      router.push('/patient/register')
-    } catch (error) {
-      console.warn('Navigation error:', error)
-      // Fallback to window.location if router.push fails
-      window.location.href = '/patient/register'
-    }
     setSearchValue('')
   }
-  const { data: cities } = useQuery({
-    queryKey: ['cities', formData?.stateId],
-    queryFn: async () => {
-      const responsejson = await getCities(
-        userDetails?.accessToken,
-        formData?.stateId,
-      )
 
-      return responsejson ? responsejson : []
-    },
-    enabled: !!formData?.stateId, // Query runs only if userId is truthy
-  })
-
-  // Validate cityId when cities data changes - reset if invalid
-  useEffect(() => {
-    if (cities?.data && formData?.cityId) {
-      const cityExists = cities.data.some((city) => city.id === formData.cityId)
-      if (!cityExists) {
-        // Reset cityId if it doesn't exist in the current cities list
-        setFormData((prev) => ({ ...prev, cityId: '' }))
-      }
-    }
-  }, [cities?.data, formData?.stateId])
-  const { data: visits } = useQuery({
-    queryKey: ['visits', formData?.id],
-    queryFn: () => {
-      // Prevent API call with null or invalid patient ID
-      if (!formData?.id || formData?.id === 'null' || formData?.id === null) {
-        return Promise.resolve({ status: 200, data: [] })
-      }
-      return getVisitsByPatientId(userDetails?.accessToken, formData?.id)
-    },
-    enabled: !!formData?.id && formData?.id !== 'null' && formData?.id !== null,
-  })
-  useEffect(() => {
-    console.log(visits?.data)
-    if (visits?.data?.length > 0) {
-      let activeVisit = visits?.data.filter((visit) => visit.isActive === 1)
-      setSelectedVisit(activeVisit[0])
-    } else {
-      console.log('no vists')
-      setSelectedVisit({ id: '' })
-    }
-  }, [visits?.data])
   // const validation = () => {
   //   var temp = {}
   //   let valid = true
@@ -453,7 +606,6 @@ export default function Register() {
       }
     }
   }
-  const [imagePreview, setImagePreview] = useState(null)
 
   const uploadProfile = (event) => {
     const file = event.target.files[0]
@@ -470,83 +622,6 @@ export default function Register() {
     }
     dispatch(hideLoader())
   }
-  const [selectedVisit, setSelectedVisit] = useState({ id: '' })
-  // useEffect(() => {
-  //     // console.log('visits', visits);
-
-  //     // else {
-  //     //     console.log('no vists')
-  //     //     setSelectedVisit({ id: '' })
-  //     // }
-  //     // console.log(activeVisit)
-  // }, [])
-  const [showTab, setShowTab] = useState('consultations')
-  const [selectedTab, setSelectedTab] = useState({
-    type: null,
-    id: null,
-  })
-  const { data: visitInfo } = useQuery({
-    queryKey: ['visitInfo', selectedVisit?.id],
-    queryFn: () =>
-      getVisitInfoById(userDetails?.accessToken, selectedVisit?.id),
-    enabled: !!selectedVisit?.id,
-  })
-  const [isEditing, setIsEditing] = useState(true)
-
-  // /visits/getPackages/1
-  const { data: PackageData } = useQuery({
-    queryKey: ['PackageData', selectedVisit?.id],
-    queryFn: async () => {
-      const res = await getPackageData(
-        userDetails?.accessToken,
-        selectedVisit?.id,
-      )
-      if (res.status === 400) {
-        toast.error(res.message)
-      } else if (res.status === 200) {
-        setIsEditing(!!res.data.registrationDate ? false : true)
-        return res
-      }
-    },
-    enabled: !!selectedVisit?.id,
-  })
-  const createPackageMutate = useMutation({
-    mutationFn: async (payload) => {
-      const res = await createPackage(userDetails.accessToken, {
-        ...payload,
-        visitId: selectedVisit?.id,
-      })
-      console.log('under mutation fn', res)
-      if (res.status === 400) {
-        toast.error(res.message)
-      } else if (res.status == 200) {
-        toast.success(res.message)
-        setIsEditing(false)
-      }
-    },
-    onSuccess: () => {
-      QueryClient.invalidateQueries('packageData')
-    },
-  })
-  const editPackageMutate = useMutation({
-    mutationFn: async (payload) => {
-      const { updatedAt, createdAt, ...newPayload } = payload
-      const res = await editPackage(userDetails.accessToken, {
-        ...newPayload,
-        visitId: selectedVisit?.id,
-      })
-      console.log('under mutation fn', res)
-      if (res.status === 400) {
-        toast.error(res.message)
-      } else if (res.status == 200) {
-        toast.success(res.message)
-        setIsEditing(false)
-      }
-    },
-    onSuccess: () => {
-      QueryClient.invalidateQueries('packageData')
-    },
-  })
   const handleChangeVisit = (e) => {
     console.log(e.target.value, visits)
     if (e.target.value == 'createVisit') {
@@ -561,16 +636,6 @@ export default function Register() {
   const handleChangeSubTab = (event, newTab) => {
     setShowTab(newTab)
   }
-
-  // Add useEffect to handle route changes
-  useEffect(() => {
-    // Get search param from URL
-    const { search } = router.query
-    if (search) {
-      setSearchValue(search)
-      fetchPatientMutate(search)
-    }
-  }, [router.query])
 
   // Modify the search field handlers
   const handleSearchChange = (e) => {
@@ -587,9 +652,6 @@ export default function Register() {
       { shallow: true },
     )
   }
-
-  const patientFormRef = useRef(null)
-  const guardianFormRef = useRef(null)
 
   const handleSubmit = async (e) => {
     e.preventDefault()

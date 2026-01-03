@@ -54,18 +54,21 @@ function NavItem({
   const [anchorEl, setAnchorEl] = useState(null)
   function handleClick() {
     setClickedNavItem(name)
+    // Set anchorEl when button is clicked
+    if (buttonRef.current) {
+      setAnchorEl(buttonRef.current)
+    }
   }
 
   function handleClose() {
     setClickedNavItem('')
+    setAnchorEl(null)
   }
-  useEffect(() => {
-    // const bb = document.getElementById(name)
-    // setAnchorEl(bb)
 
-    if (buttonRef.current != '') {
+  useEffect(() => {
+    // Set anchorEl when component mounts and buttonRef is available
+    if (buttonRef.current) {
       setAnchorEl(buttonRef.current)
-      // console.log(buttonRef, 'bikjb')
     }
   }, [])
 
@@ -102,13 +105,17 @@ function NavItem({
             </div>
           </button>
           <Popover
-            open={name == clickedNavItem}
+            open={Boolean(anchorEl) && name == clickedNavItem}
             onClose={handleClose}
             anchorEl={anchorEl}
             elevation={4}
             anchorOrigin={{
-              vertical: 'up',
+              vertical: 'top',
               horizontal: 'right',
+            }}
+            transformOrigin={{
+              vertical: 'top',
+              horizontal: 'left',
             }}
           >
             {subRoutes.map((eachSubRouteObj, i) => {
@@ -321,8 +328,8 @@ function SideNav(props) {
           },
           {
             path: '/patient',
-            name: 'All Patients',
-            relatedModule: 'allPatients',
+            name: 'Patients',
+            relatedModule: 'Patients',
           },
           {
             path: '/patient/management',

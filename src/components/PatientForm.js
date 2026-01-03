@@ -17,6 +17,7 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
+  FormHelperText,
   Grid,
   Card,
   CardContent,
@@ -509,7 +510,12 @@ const PatientForm = forwardRef(
               />
             </Grid>
             <Grid item xs={12} sm={3}>
-              <FormControl fullWidth variant="outlined" className="bg-white">
+              <FormControl
+                fullWidth
+                variant="outlined"
+                className="bg-white"
+                error={!!errors.stateId}
+              >
                 <InputLabel>State</InputLabel>
                 <Select
                   label="State"
@@ -517,8 +523,6 @@ const PatientForm = forwardRef(
                   value={formData.stateId}
                   onChange={(e) => handleChange('stateId', e.target.value)}
                   disabled={isEdit === 'noneditable'}
-                  error={!!errors.stateId}
-                  helperText={errors.stateId}
                 >
                   {dropdowns?.states?.map((state) => (
                     <MenuItem key={state.id} value={state.id}>
@@ -526,10 +530,18 @@ const PatientForm = forwardRef(
                     </MenuItem>
                   ))}
                 </Select>
+                {!!errors.stateId && (
+                  <FormHelperText>{errors.stateId}</FormHelperText>
+                )}
               </FormControl>
             </Grid>
             <Grid item xs={12} sm={3}>
-              <FormControl fullWidth variant="outlined" className="bg-white">
+              <FormControl
+                fullWidth
+                variant="outlined"
+                className="bg-white"
+                error={!!errors.cityId}
+              >
                 <InputLabel>City</InputLabel>
                 <Select
                   label="City"
@@ -537,8 +549,6 @@ const PatientForm = forwardRef(
                   value={formData.cityId || ''}
                   onChange={(e) => handleChange('cityId', e.target.value)}
                   disabled={isEdit === 'noneditable'}
-                  error={!!errors.cityId}
-                  helperText={errors.cityId}
                   displayEmpty
                 >
                   {cities?.data?.map((city) => (
@@ -547,6 +557,9 @@ const PatientForm = forwardRef(
                     </MenuItem>
                   ))}
                 </Select>
+                {!!errors.cityId && (
+                  <FormHelperText>{errors.cityId}</FormHelperText>
+                )}
               </FormControl>
             </Grid>
             <Grid item xs={12} sm={3}>
@@ -564,7 +577,12 @@ const PatientForm = forwardRef(
               />
             </Grid>
             <Grid item xs={12} sm={3}>
-              <FormControl fullWidth variant="outlined" className="bg-white">
+              <FormControl
+                fullWidth
+                variant="outlined"
+                className="bg-white"
+                error={!!errors.maritalStatus}
+              >
                 <InputLabel>Marital Status</InputLabel>
                 <Select
                   label="Marital Status"
@@ -574,8 +592,6 @@ const PatientForm = forwardRef(
                     handleChange('maritalStatus', e.target.value)
                   }
                   disabled={isEdit === 'noneditable'}
-                  error={!!errors.maritalStatus}
-                  helperText={errors.maritalStatus}
                 >
                   {dropdowns?.maritalStatus?.map((status) => (
                     <MenuItem key={status} value={status}>
@@ -583,10 +599,18 @@ const PatientForm = forwardRef(
                     </MenuItem>
                   ))}
                 </Select>
+                {!!errors.maritalStatus && (
+                  <FormHelperText>{errors.maritalStatus}</FormHelperText>
+                )}
               </FormControl>
             </Grid>
             <Grid item xs={12} sm={3}>
-              <FormControl fullWidth variant="outlined" className="bg-white">
+              <FormControl
+                fullWidth
+                variant="outlined"
+                className="bg-white"
+                error={!!errors.referralId}
+              >
                 <InputLabel>Referral</InputLabel>
                 <Select
                   label="Referral"
@@ -594,8 +618,6 @@ const PatientForm = forwardRef(
                   value={formData.referralId}
                   onChange={(e) => handleChange('referralId', e.target.value)}
                   disabled={isEdit === 'noneditable'}
-                  error={!!errors.referralId}
-                  helperText={errors.referralId}
                 >
                   {dropdowns?.referralTypes?.map((referral) => (
                     <MenuItem key={referral.id} value={referral.id}>
@@ -603,6 +625,9 @@ const PatientForm = forwardRef(
                     </MenuItem>
                   ))}
                 </Select>
+                {!!errors.referralId && (
+                  <FormHelperText>{errors.referralId}</FormHelperText>
+                )}
               </FormControl>
             </Grid>
             {/* Referral Name text field */}
@@ -621,7 +646,12 @@ const PatientForm = forwardRef(
               </Grid>
             )}
             <Grid item xs={12} sm={3}>
-              <FormControl fullWidth variant="outlined" className="bg-white">
+              <FormControl
+                fullWidth
+                variant="outlined"
+                className="bg-white"
+                error={!!errors.branchId}
+              >
                 <InputLabel>Branch</InputLabel>
                 <Select
                   label="Branch"
@@ -629,8 +659,6 @@ const PatientForm = forwardRef(
                   value={formData.branchId}
                   onChange={(e) => handleChange('branchId', e.target.value)}
                   disabled={isEdit === 'noneditable'}
-                  error={!!errors.branchId}
-                  helperText={errors.branchId}
                 >
                   {dropdowns?.branches?.map((branch) => (
                     <MenuItem key={branch.id} value={branch.id}>
@@ -638,10 +666,18 @@ const PatientForm = forwardRef(
                     </MenuItem>
                   ))}
                 </Select>
+                {!!errors.branchId && (
+                  <FormHelperText>{errors.branchId}</FormHelperText>
+                )}
               </FormControl>
             </Grid>
             <Grid item xs={12} sm={3}>
-              <FormControl fullWidth variant="outlined" className="bg-white">
+              <FormControl
+                fullWidth
+                variant="outlined"
+                className="bg-white"
+                error={!!errors.patientTypeId}
+              >
                 <InputLabel>Patient Type</InputLabel>
                 <Select
                   label="Patient Type"
@@ -651,8 +687,6 @@ const PatientForm = forwardRef(
                     handleChange('patientTypeId', e.target.value)
                   }
                   disabled={isEdit === 'noneditable'}
-                  error={!!errors.patientTypeId}
-                  helperText={errors.patientTypeId}
                 >
                   {dropdowns?.patientTypeList?.map((patientType) => (
                     <MenuItem key={patientType.id} value={patientType.id}>
@@ -660,6 +694,9 @@ const PatientForm = forwardRef(
                     </MenuItem>
                   ))}
                 </Select>
+                {!!errors.patientTypeId && (
+                  <FormHelperText>{errors.patientTypeId}</FormHelperText>
+                )}
               </FormControl>
             </Grid>
             <Grid item xs={12} sm={3}>

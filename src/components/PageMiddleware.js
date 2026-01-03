@@ -16,7 +16,7 @@ import { requestInterceptor } from '@/utils/requestInterceptor'
 import { setCoupon } from '@/redux/couponSlice'
 
 export default function PageMiddleware(props) {
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const dispatch = useDispatch()
   const router = useRouter()
 
@@ -51,7 +51,7 @@ export default function PageMiddleware(props) {
 
   const { data: userInfo, mutate } = useMutation({
     mutationKey: ['loggedUserInfo'],
-    mutationFn: async token => {
+    mutationFn: async (token) => {
       const responsejson = await getLoggedUserInfo(token)
       if (responsejson.status == 200) {
         const {
@@ -136,7 +136,7 @@ export default function PageMiddleware(props) {
     onSuccess: () => {
       requestInterceptor()
     },
-    onError: error => {
+    onError: (error) => {
       console.log(error)
       localStorage.clear()
       router.push('/login')
@@ -144,29 +144,40 @@ export default function PageMiddleware(props) {
   })
 
   useEffect(() => {
+    // Wait for router to be ready before checking auth
+    if (!router.isReady) return
+
     const token = localStorage.getItem('token')
     if (!user.isAuthenticated && !token) {
       // Store current path before redirecting
-      const currentPath = window.location.pathname + window.location.search
+      const currentPath =
+        router.asPath || window.location.pathname + window.location.search
       if (currentPath !== '/login') {
         sessionStorage.setItem('redirectPath', currentPath)
       }
-      router.push('/login')
+      router.replace('/login')
     } else if (!user.isAuthenticated && token) {
       mutate(token)
     }
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router.isReady, user.isAuthenticated])
+
+  // Don't render until router is ready
+  if (!router.isReady) {
+    return null
+  }
+
+  // Only render children if authenticated, otherwise show nothing (redirect will happen)
+  if (!user.isAuthenticated) {
+    return null
+  }
 
   return (
-    <>
-      {user.isAuthenticated && (
-        <div className="flex flex-row ">
-          <SideNav />
-          <div className="pt-[60px] self-stretch h-screen overflow-scroll grow relative">
-            <div className="">{props.children}</div>
-          </div>
-        </div>
-      )}
-    </>
+    <div className="flex flex-row ">
+      <SideNav />
+      <div className="pt-[60px] self-stretch h-screen overflow-scroll grow relative">
+        <div className="">{props.children}</div>
+      </div>
+    </div>
   )
 }

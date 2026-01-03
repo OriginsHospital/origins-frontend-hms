@@ -67,18 +67,19 @@ export default function Header() {
         </div>
 
         <div className="items-center gap-3 block">
-          <CgProfile
-            size={30}
-            color="#06aee9"
-            className="cursor-pointer "
-            onClick={handleOpen}
-            ref={anchorEl}
-          />
+          <div ref={anchorEl}>
+            <CgProfile
+              size={30}
+              color="#06aee9"
+              className="cursor-pointer "
+              onClick={handleOpen}
+            />
+          </div>
           <Popover
             anchorEl={anchorEl.current}
             anchorOrigin={{ horizontal: 'right', vertical: 'top' }}
             onClose={onClose}
-            open={open}
+            open={Boolean(anchorEl.current) && open}
             slotProps={{ paper: { sx: { width: '240px', marginTop: '30px' } } }}
           >
             <Box sx={{ p: '16px 20px ' }}>
