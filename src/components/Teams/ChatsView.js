@@ -59,6 +59,8 @@ function ChatsView() {
   const queryClient = useQueryClient()
   const [selectedChat, setSelectedChat] = useState(null)
   const [messageText, setMessageText] = useState('')
+  const [selectedFile, setSelectedFile] = useState(null)
+  const fileInputRef = useRef(null)
   // Socket.io disabled
   // const [socket, setSocket] = useState(null)
   const messagesEndRef = useRef(null)
@@ -286,23 +288,64 @@ function ChatsView() {
   }, [])
 
   const handleSendMessage = async () => {
-    if (!messageText.trim() || !selectedChat) return
+    if ((!messageText.trim() && !selectedFile) || !selectedChat) return
 
     try {
-      const res = await sendMessage(userDetails?.accessToken, selectedChat.id, {
-        message: messageText,
-        messageType: 'text',
-      })
+      const payload = {
+        message: messageText || '',
+        messageType: selectedFile ? 'file' : 'text',
+      }
+
+      if (selectedFile) {
+        payload.fileName = selectedFile.name
+        payload.fileSize = selectedFile.size
+      }
+
+      const res = await sendMessage(
+        userDetails?.accessToken,
+        selectedChat.id,
+        payload,
+        selectedFile, // Pass file as 4th parameter
+      )
 
       if (res.status === 201) {
         // Socket.io disabled - just refresh queries
         setMessageText('')
+        setSelectedFile(null)
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''
+        }
         queryClient.invalidateQueries(['chatMessages', selectedChat])
         queryClient.invalidateQueries(['userChats'])
+        toast.success('Message sent successfully')
       }
     } catch (error) {
       console.error('Error sending message:', error)
       toast.error('Failed to send message')
+    }
+  }
+
+  const handleFileSelect = (event) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      // Check file size (e.g., max 10MB)
+      const maxSize = 10 * 1024 * 1024 // 10MB
+      if (file.size > maxSize) {
+        toast.error('File size must be less than 10MB')
+        return
+      }
+      setSelectedFile(file)
+    }
+  }
+
+  const handleAttachmentClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleRemoveFile = () => {
+    setSelectedFile(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
     }
   }
 
@@ -960,9 +1003,14 @@ function ChatsView() {
                   {chat.messages?.[0] ? (
                     <Typography
                       variant="caption"
-                      className="text-gray-500 truncate block"
+                      className="text-gray-500 truncate block flex items-center gap-1"
                     >
-                      {chat.messages[0].message}
+                      {chat.messages[0].fileUrl && (
+                        <AttachFile fontSize="inherit" />
+                      )}
+                      {chat.messages[0].fileUrl
+                        ? chat.messages[0].fileName || 'File attachment'
+                        : chat.messages[0].message}
                     </Typography>
                   ) : (
                     <Typography
@@ -1184,12 +1232,43 @@ function ChatsView() {
                               </Typography>
                             ) : (
                               <>
-                                <Typography
-                                  variant="body2"
-                                  className="whitespace-pre-wrap break-words"
-                                >
-                                  {message.message}
-                                </Typography>
+                                {message.fileUrl && (
+                                  <Box className="mb-2">
+                                    <Button
+                                      variant="outlined"
+                                      size="small"
+                                      startIcon={<AttachFile />}
+                                      href={message.fileUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className={`${
+                                        isOwnMessage
+                                          ? 'text-white border-white hover:bg-blue-600'
+                                          : 'text-gray-800 border-gray-300 hover:bg-gray-100'
+                                      }`}
+                                    >
+                                      {message.fileName || 'Download File'}
+                                      {message.fileSize && (
+                                        <Typography
+                                          variant="caption"
+                                          className="ml-2"
+                                        >
+                                          (
+                                          {(message.fileSize / 1024).toFixed(1)}{' '}
+                                          KB)
+                                        </Typography>
+                                      )}
+                                    </Button>
+                                  </Box>
+                                )}
+                                {message.message && (
+                                  <Typography
+                                    variant="body2"
+                                    className="whitespace-pre-wrap break-words"
+                                  >
+                                    {message.message}
+                                  </Typography>
+                                )}
                                 <Typography
                                   variant="caption"
                                   className={`block mt-1 ${
@@ -1217,8 +1296,47 @@ function ChatsView() {
 
             {/* Message Input */}
             <Paper elevation={2} className="p-4 border-t border-gray-200">
+              {/* Hidden file input */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+                style={{ display: 'none' }}
+                accept="*/*"
+              />
+
+              {/* Selected file display */}
+              {selectedFile && (
+                <Box className="mb-2 p-2 bg-blue-50 rounded-lg flex items-center justify-between">
+                  <Box className="flex items-center gap-2 flex-1 min-w-0">
+                    <AttachFile className="text-blue-600" />
+                    <Typography
+                      variant="body2"
+                      className="text-blue-800 truncate"
+                      title={selectedFile.name}
+                    >
+                      {selectedFile.name}
+                    </Typography>
+                    <Typography variant="caption" className="text-blue-600">
+                      ({(selectedFile.size / 1024).toFixed(1)} KB)
+                    </Typography>
+                  </Box>
+                  <IconButton
+                    size="small"
+                    onClick={handleRemoveFile}
+                    className="text-blue-600"
+                  >
+                    <Close fontSize="small" />
+                  </IconButton>
+                </Box>
+              )}
+
               <Box className="flex items-center gap-2">
-                <IconButton size="small">
+                <IconButton
+                  size="small"
+                  onClick={handleAttachmentClick}
+                  color="primary"
+                >
                   <AttachFile />
                 </IconButton>
                 <TextField
@@ -1240,7 +1358,7 @@ function ChatsView() {
                   variant="contained"
                   color="primary"
                   onClick={handleSendMessage}
-                  disabled={!messageText.trim()}
+                  disabled={!messageText.trim() && !selectedFile}
                   startIcon={<Send />}
                 >
                   Send
