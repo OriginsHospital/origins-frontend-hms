@@ -4302,66 +4302,6 @@ export const getTreatmentCyclesReport = async (
   )
   return response.json()
 }
-export const getPatientReport = async (token, params = {}) => {
-  const {
-    fromDate,
-    toDate,
-    branchIds,
-    referralSource,
-    treatmentType,
-    packageName,
-    cycle,
-    status,
-    uptResult,
-    paidAmountMin,
-    paidAmountMax,
-    pendingAmountMin,
-    pendingAmountMax,
-    search,
-    page = 1,
-    limit = 50,
-  } = params
-
-  const queryParams = new URLSearchParams()
-  if (fromDate) queryParams.append('fromDate', fromDate)
-  if (toDate) queryParams.append('toDate', toDate)
-  if (branchIds) {
-    if (Array.isArray(branchIds)) {
-      branchIds.forEach((id) => queryParams.append('branchIds', id))
-    } else {
-      queryParams.append('branchIds', branchIds)
-    }
-  }
-  if (referralSource) queryParams.append('referralSource', referralSource)
-  if (treatmentType) queryParams.append('treatmentType', treatmentType)
-  if (packageName) queryParams.append('packageName', packageName)
-  if (cycle) queryParams.append('cycle', cycle)
-  if (status) queryParams.append('status', status)
-  if (uptResult) queryParams.append('uptResult', uptResult)
-  if (paidAmountMin) queryParams.append('paidAmountMin', paidAmountMin)
-  if (paidAmountMax) queryParams.append('paidAmountMax', paidAmountMax)
-  if (pendingAmountMin) queryParams.append('pendingAmountMin', pendingAmountMin)
-  if (pendingAmountMax) queryParams.append('pendingAmountMax', pendingAmountMax)
-  if (search) queryParams.append('search', search)
-  queryParams.append('page', page)
-  queryParams.append('limit', limit)
-
-  const myHeaders = new Headers()
-  myHeaders.append('Authorization', `Bearer ${token}`)
-  myHeaders.append('Content-Type', 'application/json')
-
-  const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_BASE_URL}/reports/patient-report?${queryParams.toString()}`,
-    {
-      method: 'GET',
-      headers: myHeaders,
-      credentials: 'include',
-    },
-  )
-
-  return response.json()
-}
-
 export const treatmentCyclesPaymentsReport = async (
   token,
   startDate,
@@ -5711,17 +5651,40 @@ export const createTicket = async (token, payload) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
-  const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.CREATE_TICKET}`,
-    {
-      method: 'POST',
-      headers: myHeaders,
-      body: JSON.stringify(payload),
-      redirect: 'follow',
-      credentials: 'include',
-    },
-  )
-  return response.json()
+
+  try {
+    const response = await fetch(
+      `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.CREATE_TICKET}`,
+      {
+        method: 'POST',
+        headers: myHeaders,
+        body: JSON.stringify(payload),
+        redirect: 'follow',
+        credentials: 'include',
+      },
+    )
+
+    const data = await response.json()
+
+    // If response is not ok, throw an error with the message from the API
+    if (!response.ok) {
+      const error = new Error(data.message || 'Failed to create ticket')
+      error.response = { data }
+      error.status = response.status
+      throw error
+    }
+
+    return data
+  } catch (error) {
+    // If it's already our custom error, re-throw it
+    if (error.response) {
+      throw error
+    }
+    // Otherwise, wrap it
+    const wrappedError = new Error(error.message || 'Failed to create ticket')
+    wrappedError.originalError = error
+    throw wrappedError
+  }
 }
 
 // Update ticket

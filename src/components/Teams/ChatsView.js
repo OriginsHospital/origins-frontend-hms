@@ -19,6 +19,8 @@ import {
   CircularProgress,
   Autocomplete,
   Chip,
+  Menu,
+  MenuItem,
 } from '@mui/material'
 import {
   Send,
@@ -47,6 +49,8 @@ import {
   initiateCall,
   updateCallStatus,
   deleteMessage,
+  removeChatMember,
+  addChatMembers,
 } from '@/constants/teamsApis'
 import { getValidUsersList } from '@/constants/apis'
 // Socket.io disabled - using REST API only
@@ -80,6 +84,19 @@ function ChatsView() {
   const [isSelectionMode, setIsSelectionMode] = useState(false)
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false)
   const longPressTimerRef = useRef(null)
+
+  // Menu state
+  const [anchorEl, setAnchorEl] = useState(null)
+  const [menuChat, setMenuChat] = useState(null)
+
+  // Dialog state
+  const [openChatInfoDialog, setOpenChatInfoDialog] = useState(false)
+  const [openGroupSettingsDialog, setOpenGroupSettingsDialog] = useState(false)
+  const [openClearChatDialog, setOpenClearChatDialog] = useState(false)
+  const [openAddMemberDialog, setOpenAddMemberDialog] = useState(false)
+  const [mutedChats, setMutedChats] = useState(new Set())
+  const [selectedMembersToAdd, setSelectedMembersToAdd] = useState([])
+  const [searchMemberQuery, setSearchMemberQuery] = useState('')
 
   // WebRTC refs
   const localAudioRef = useRef(null)
@@ -143,7 +160,28 @@ function ChatsView() {
       return []
     },
     enabled:
-      (openNewChatDialog || openNewGroupDialog) && !!userDetails?.accessToken,
+      (openNewChatDialog || openNewGroupDialog || openAddMemberDialog) &&
+      !!userDetails?.accessToken,
+  })
+
+  // Filter users for add member dialog (exclude existing members)
+  const availableUsersForGroup = allUsers?.filter((user) => {
+    if (!selectedChat || selectedChat.chatType !== 'group') return false
+    // Exclude users who are already members
+    const isMember = selectedChat.members?.some(
+      (member) => member.user?.id === user.id,
+    )
+    return !isMember
+  })
+
+  // Filter available users based on search query for add member
+  const filteredAvailableUsers = availableUsersForGroup?.filter((user) => {
+    if (!searchMemberQuery.trim()) return true
+    const query = searchMemberQuery.toLowerCase()
+    return (
+      user.fullName?.toLowerCase().includes(query) ||
+      user.email?.toLowerCase().includes(query)
+    )
   })
 
   // Filter users based on search query
@@ -901,6 +939,121 @@ function ChatsView() {
     // socket.emit('end_call', { ... })
   }
 
+  const handleMenuOpen = (event) => {
+    setAnchorEl(event.currentTarget)
+    setMenuChat(selectedChat)
+  }
+
+  const handleMenuClose = () => {
+    setAnchorEl(null)
+    setMenuChat(null)
+  }
+
+  const handleViewChatInfo = () => {
+    handleMenuClose()
+    setOpenChatInfoDialog(true)
+  }
+
+  const handleGroupSettings = () => {
+    handleMenuClose()
+    setOpenGroupSettingsDialog(true)
+  }
+
+  const handleClearChat = () => {
+    handleMenuClose()
+    setOpenClearChatDialog(true)
+  }
+
+  const handleMuteNotifications = () => {
+    if (!menuChat) return
+    const chatId = menuChat.id
+    const newMutedChats = new Set(mutedChats)
+    if (newMutedChats.has(chatId)) {
+      newMutedChats.delete(chatId)
+      toast.success('Notifications unmuted')
+    } else {
+      newMutedChats.add(chatId)
+      toast.success('Notifications muted')
+    }
+    setMutedChats(newMutedChats)
+    handleMenuClose()
+  }
+
+  // Clear all messages in chat
+  const clearChatMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedChat || !messagesData || messagesData.length === 0) {
+        throw new Error('No messages to clear')
+      }
+
+      const messageIds = messagesData.map((msg) => msg.id)
+      const deletePromises = messageIds.map(async (messageId) => {
+        const response = await deleteMessage(
+          userDetails?.accessToken,
+          selectedChat.id,
+          messageId,
+          false, // Delete for me only
+        )
+        if (!response.ok && response.status !== 200) {
+          throw new Error(response.message || 'Failed to delete message')
+        }
+        return response
+      })
+      await Promise.all(deletePromises)
+    },
+    onSuccess: async () => {
+      queryClient.invalidateQueries(['chatMessages', selectedChat?.id])
+      await refetchMessages()
+      queryClient.invalidateQueries(['userChats'])
+      await queryClient.refetchQueries(['userChats'])
+      setOpenClearChatDialog(false)
+      toast.success('Chat cleared successfully')
+    },
+    onError: (error) => {
+      toast.error(error?.message || 'Failed to clear chat')
+      console.error('Error clearing chat:', error)
+    },
+  })
+
+  // Add members to group mutation
+  const addMembersMutation = useMutation({
+    mutationFn: async (memberIds) => {
+      if (!selectedChat || !memberIds || memberIds.length === 0) {
+        throw new Error('No members selected')
+      }
+      const res = await addChatMembers(
+        userDetails?.accessToken,
+        selectedChat.id,
+        memberIds,
+      )
+      if (res.status !== 200 && res.status !== 201) {
+        throw new Error(res.message || 'Failed to add members')
+      }
+      return res
+    },
+    onSuccess: async () => {
+      queryClient.invalidateQueries(['userChats'])
+      await queryClient.refetchQueries(['userChats'])
+      setSelectedMembersToAdd([])
+      setSearchMemberQuery('')
+      setOpenAddMemberDialog(false)
+      toast.success('Members added successfully')
+    },
+    onError: (error) => {
+      toast.error(error?.message || 'Failed to add members')
+      console.error('Error adding members:', error)
+    },
+  })
+
+  const handleAddMembers = () => {
+    if (selectedMembersToAdd.length === 0) {
+      toast.error('Please select at least one member to add')
+      return
+    }
+    const memberIds = selectedMembersToAdd.map((user) => user.id)
+    addMembersMutation.mutate(memberIds)
+  }
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -1093,7 +1246,11 @@ function ChatsView() {
                     <IconButton size="small" color="primary" title="Video Call">
                       <Videocam />
                     </IconButton>
-                    <IconButton size="small">
+                    <IconButton
+                      size="small"
+                      onClick={handleMenuOpen}
+                      title="More options"
+                    >
                       <MoreVert />
                     </IconButton>
                   </Box>
@@ -1788,6 +1945,456 @@ function ChatsView() {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Three Dots Menu */}
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={handleMenuClose}
+      >
+        {menuChat && (
+          <>
+            <MenuItem onClick={handleViewChatInfo}>
+              <Typography variant="body2">View Chat Info</Typography>
+            </MenuItem>
+            {menuChat.chatType === 'group' && (
+              <MenuItem onClick={handleGroupSettings}>
+                <Typography variant="body2">Group Settings</Typography>
+              </MenuItem>
+            )}
+            <MenuItem onClick={handleClearChat}>
+              <Typography variant="body2">Clear Chat</Typography>
+            </MenuItem>
+            <MenuItem onClick={handleMuteNotifications}>
+              <Typography variant="body2">
+                {mutedChats.has(menuChat.id)
+                  ? 'Unmute Notifications'
+                  : 'Mute Notifications'}
+              </Typography>
+            </MenuItem>
+          </>
+        )}
+      </Menu>
+
+      {/* View Chat Info Dialog */}
+      <Dialog
+        open={openChatInfoDialog}
+        onClose={() => setOpenChatInfoDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Chat Information</DialogTitle>
+        <DialogContent>
+          {selectedChat && (
+            <Box className="space-y-4">
+              <Box className="flex items-center gap-4">
+                <Avatar className="w-16 h-16 bg-blue-500 text-2xl">
+                  {getChatAvatar(selectedChat)}
+                </Avatar>
+                <Box>
+                  <Typography variant="h6">
+                    {getChatDisplayName(selectedChat)}
+                  </Typography>
+                  <Typography variant="body2" className="text-gray-500">
+                    {selectedChat.chatType === 'direct'
+                      ? 'Direct chat'
+                      : selectedChat.chatType}
+                  </Typography>
+                </Box>
+              </Box>
+              <Divider />
+              <Box>
+                <Typography variant="body2" className="text-gray-500 mb-1">
+                  Chat ID
+                </Typography>
+                <Typography variant="body2">{selectedChat.id}</Typography>
+              </Box>
+              {selectedChat.chatType === 'group' && selectedChat.name && (
+                <Box>
+                  <Typography variant="body2" className="text-gray-500 mb-1">
+                    Group Name
+                  </Typography>
+                  <Typography variant="body2">{selectedChat.name}</Typography>
+                </Box>
+              )}
+              {selectedChat.chatType === 'group' &&
+                selectedChat.description && (
+                  <Box>
+                    <Typography variant="body2" className="text-gray-500 mb-1">
+                      Description
+                    </Typography>
+                    <Typography variant="body2">
+                      {selectedChat.description}
+                    </Typography>
+                  </Box>
+                )}
+              {selectedChat.chatType === 'direct' && selectedChat.otherUser && (
+                <>
+                  <Box>
+                    <Typography variant="body2" className="text-gray-500 mb-1">
+                      User Email
+                    </Typography>
+                    <Typography variant="body2">
+                      {selectedChat.otherUser.email || 'N/A'}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography variant="body2" className="text-gray-500 mb-1">
+                      User ID
+                    </Typography>
+                    <Typography variant="body2">
+                      {selectedChat.otherUser.id || 'N/A'}
+                    </Typography>
+                  </Box>
+                </>
+              )}
+              {selectedChat.chatType === 'group' && selectedChat.members && (
+                <Box>
+                  <Typography variant="body2" className="text-gray-500 mb-2">
+                    Members ({selectedChat.members.length})
+                  </Typography>
+                  <Box className="flex flex-wrap gap-2">
+                    {selectedChat.members.map((member, index) => (
+                      <Chip
+                        key={index}
+                        label={member.user?.fullName || 'Unknown'}
+                        size="small"
+                        avatar={
+                          <Avatar>
+                            {member.user?.fullName?.charAt(0) || '?'}
+                          </Avatar>
+                        }
+                      />
+                    ))}
+                  </Box>
+                </Box>
+              )}
+              <Box>
+                <Typography variant="body2" className="text-gray-500 mb-1">
+                  Total Messages
+                </Typography>
+                <Typography variant="body2">
+                  {messagesData?.length || 0}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="body2" className="text-gray-500 mb-1">
+                  Notifications
+                </Typography>
+                <Typography variant="body2">
+                  {mutedChats.has(selectedChat.id) ? 'Muted' : 'Enabled'}
+                </Typography>
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenChatInfoDialog(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Group Settings Dialog */}
+      <Dialog
+        open={openGroupSettingsDialog}
+        onClose={() => setOpenGroupSettingsDialog(false)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>Group Settings</DialogTitle>
+        <DialogContent>
+          {selectedChat && selectedChat.chatType === 'group' && (
+            <Box className="space-y-4 mt-2">
+              <Box>
+                <Typography variant="body2" className="text-gray-500 mb-2">
+                  Group Name
+                </Typography>
+                <TextField
+                  fullWidth
+                  size="small"
+                  value={selectedChat.name || ''}
+                  disabled
+                  variant="outlined"
+                />
+              </Box>
+              {selectedChat.description && (
+                <Box>
+                  <Typography variant="body2" className="text-gray-500 mb-2">
+                    Description
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    value={selectedChat.description || ''}
+                    disabled
+                    variant="outlined"
+                    multiline
+                    rows={3}
+                  />
+                </Box>
+              )}
+              <Box>
+                <Box className="flex justify-between items-center mb-2">
+                  <Typography variant="body2" className="text-gray-500">
+                    Members ({selectedChat.members?.length || 0})
+                  </Typography>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<PersonAdd />}
+                    onClick={() => {
+                      setSelectedMembersToAdd([])
+                      setSearchMemberQuery('')
+                      setOpenAddMemberDialog(true)
+                    }}
+                  >
+                    Add Member
+                  </Button>
+                </Box>
+                {selectedChat.members && selectedChat.members.length > 0 ? (
+                  <List>
+                    {selectedChat.members.map((member, index) => (
+                      <ListItem
+                        key={index}
+                        className="px-0"
+                        secondaryAction={
+                          member.user?.id !== userDetails?.id && (
+                            <IconButton
+                              edge="end"
+                              size="small"
+                              onClick={async () => {
+                                try {
+                                  const res = await removeChatMember(
+                                    userDetails?.accessToken,
+                                    selectedChat.id,
+                                    member.user?.id,
+                                  )
+                                  if (res.status === 200) {
+                                    toast.success('Member removed successfully')
+                                    queryClient.invalidateQueries(['userChats'])
+                                    setOpenGroupSettingsDialog(false)
+                                  } else {
+                                    toast.error('Failed to remove member')
+                                  }
+                                } catch (error) {
+                                  toast.error('Failed to remove member')
+                                  console.error(error)
+                                }
+                              }}
+                            >
+                              <Delete fontSize="small" />
+                            </IconButton>
+                          )
+                        }
+                      >
+                        <Avatar className="mr-2">
+                          {member.user?.fullName?.charAt(0) || '?'}
+                        </Avatar>
+                        <Typography variant="body2">
+                          {member.user?.fullName || 'Unknown'}
+                        </Typography>
+                        {member.user?.id === userDetails?.id && (
+                          <Chip
+                            label="You"
+                            size="small"
+                            className="ml-2"
+                            color="primary"
+                          />
+                        )}
+                      </ListItem>
+                    ))}
+                  </List>
+                ) : (
+                  <Typography variant="body2" className="text-gray-400">
+                    No members found
+                  </Typography>
+                )}
+              </Box>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenGroupSettingsDialog(false)}>
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Clear Chat Confirmation Dialog */}
+      <Dialog
+        open={openClearChatDialog}
+        onClose={() => setOpenClearChatDialog(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Clear Chat</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" className="mb-2">
+            Are you sure you want to clear all messages in this chat? This
+            action cannot be undone.
+          </Typography>
+          <Typography variant="body2" className="text-gray-500">
+            This will delete all messages for you only. Other participants will
+            still see the messages.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenClearChatDialog(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() => clearChatMutation.mutate()}
+            disabled={clearChatMutation.isLoading}
+          >
+            {clearChatMutation.isLoading ? 'Clearing...' : 'Clear Chat'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Add Member Dialog */}
+      <Dialog
+        open={openAddMemberDialog}
+        onClose={() => {
+          setOpenAddMemberDialog(false)
+          setSelectedMembersToAdd([])
+          setSearchMemberQuery('')
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Add Members to Group</DialogTitle>
+        <DialogContent>
+          <Box className="space-y-4 mt-2">
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Search users by name or email..."
+              value={searchMemberQuery}
+              onChange={(e) => setSearchMemberQuery(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search />
+                  </InputAdornment>
+                ),
+              }}
+            />
+            {isLoadingUsers ? (
+              <Box className="flex justify-center py-4">
+                <CircularProgress size={24} />
+              </Box>
+            ) : filteredAvailableUsers && filteredAvailableUsers.length > 0 ? (
+              <Box className="max-h-96 overflow-y-auto">
+                <List>
+                  {filteredAvailableUsers.map((user) => {
+                    const isSelected = selectedMembersToAdd.some(
+                      (u) => u.id === user.id,
+                    )
+                    return (
+                      <ListItem
+                        key={user.id}
+                        className="px-0 cursor-pointer hover:bg-gray-50"
+                        onClick={() => {
+                          if (isSelected) {
+                            setSelectedMembersToAdd(
+                              selectedMembersToAdd.filter(
+                                (u) => u.id !== user.id,
+                              ),
+                            )
+                          } else {
+                            setSelectedMembersToAdd([
+                              ...selectedMembersToAdd,
+                              user,
+                            ])
+                          }
+                        }}
+                      >
+                        <Avatar className="mr-2">
+                          {user.fullName?.charAt(0) || '?'}
+                        </Avatar>
+                        <Box className="flex-1">
+                          <Typography variant="body2">
+                            {user.fullName || 'Unknown'}
+                          </Typography>
+                          {user.email && (
+                            <Typography
+                              variant="caption"
+                              className="text-gray-500"
+                            >
+                              {user.email}
+                            </Typography>
+                          )}
+                        </Box>
+                        {isSelected ? (
+                          <CheckCircle color="primary" />
+                        ) : (
+                          <RadioButtonUnchecked />
+                        )}
+                      </ListItem>
+                    )
+                  })}
+                </List>
+              </Box>
+            ) : (
+              <Typography
+                variant="body2"
+                className="text-center text-gray-400 py-4"
+              >
+                {searchMemberQuery.trim()
+                  ? 'No users found matching your search'
+                  : 'No available users to add'}
+              </Typography>
+            )}
+            {selectedMembersToAdd.length > 0 && (
+              <Box>
+                <Typography variant="body2" className="text-gray-500 mb-2">
+                  Selected ({selectedMembersToAdd.length})
+                </Typography>
+                <Box className="flex flex-wrap gap-2">
+                  {selectedMembersToAdd.map((user) => (
+                    <Chip
+                      key={user.id}
+                      label={user.fullName || 'Unknown'}
+                      onDelete={() => {
+                        setSelectedMembersToAdd(
+                          selectedMembersToAdd.filter((u) => u.id !== user.id),
+                        )
+                      }}
+                      size="small"
+                      avatar={
+                        <Avatar>{user.fullName?.charAt(0) || '?'}</Avatar>
+                      }
+                    />
+                  ))}
+                </Box>
+              </Box>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setOpenAddMemberDialog(false)
+              setSelectedMembersToAdd([])
+              setSearchMemberQuery('')
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleAddMembers}
+            disabled={
+              selectedMembersToAdd.length === 0 || addMembersMutation.isLoading
+            }
+          >
+            {addMembersMutation.isLoading
+              ? 'Adding...'
+              : `Add ${selectedMembersToAdd.length} Member${
+                  selectedMembersToAdd.length !== 1 ? 's' : ''
+                }`}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }

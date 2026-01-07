@@ -174,8 +174,7 @@ function EmbryologyModalContentNew({
       id: editData?.id,
       type: selectedRow?.type,
       embryologyType: activeEmbryologyType,
-      updateTemplateForAll:
-        isSemenAnalysis && updateTemplateForAll ? true : false,
+      updateTemplateForAll: false, // Disabled: Always set to false
     }
     // console.log('handleSaveChanges payload', payload, selectedRow?.type, editData?.id)
 
@@ -630,52 +629,55 @@ function EmbryologyModalContentNew({
                         </Button>
                       </div>
                       {/* Show "Save for all formats" option only for Semen Analysis */}
-                      {(() => {
-                        // embryologyTypes contains objects with embryologyId and embryologyName
-                        const currentEmbryologyType = embryologyTypes?.find(
-                          (type) => type.embryologyId === activeEmbryologyType,
-                        )
-                        const isSemenAnalysis =
-                          currentEmbryologyType?.embryologyName
-                            ?.toLowerCase()
-                            .includes('semen') ||
-                          currentEmbryologyType?.embryologyName
-                            ?.toLowerCase()
-                            .includes('seman')
+                      {/* DISABLED: This option has been disabled as per requirement */}
+                      {false &&
+                        (() => {
+                          // embryologyTypes contains objects with embryologyId and embryologyName
+                          const currentEmbryologyType = embryologyTypes?.find(
+                            (type) =>
+                              type.embryologyId === activeEmbryologyType,
+                          )
+                          const isSemenAnalysis =
+                            currentEmbryologyType?.embryologyName
+                              ?.toLowerCase()
+                              .includes('semen') ||
+                            currentEmbryologyType?.embryologyName
+                              ?.toLowerCase()
+                              .includes('seman')
 
-                        return isSemenAnalysis ? (
-                          <Box className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                            <FormControlLabel
-                              control={
-                                <Checkbox
-                                  checked={updateTemplateForAll}
-                                  onChange={(e) =>
-                                    setUpdateTemplateForAll(e.target.checked)
-                                  }
-                                  color="primary"
-                                />
-                              }
-                              label={
-                                <Typography
-                                  variant="body2"
-                                  className="font-medium"
-                                >
-                                  Save for all formats - Update template for all
-                                  Semen Analysis reports
-                                </Typography>
-                              }
-                            />
-                            <Typography
-                              variant="caption"
-                              className="text-gray-600 ml-8 block mt-1"
-                            >
-                              When checked, this will update the base template
-                              and apply changes to all existing Semen Analysis
-                              reports
-                            </Typography>
-                          </Box>
-                        ) : null
-                      })()}
+                          return isSemenAnalysis ? (
+                            <Box className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                              <FormControlLabel
+                                control={
+                                  <Checkbox
+                                    checked={updateTemplateForAll}
+                                    onChange={(e) =>
+                                      setUpdateTemplateForAll(e.target.checked)
+                                    }
+                                    color="primary"
+                                  />
+                                }
+                                label={
+                                  <Typography
+                                    variant="body2"
+                                    className="font-medium"
+                                  >
+                                    Save for all formats - Update template for
+                                    all Semen Analysis reports
+                                  </Typography>
+                                }
+                              />
+                              <Typography
+                                variant="caption"
+                                className="text-gray-600 ml-8 block mt-1"
+                              >
+                                When checked, this will update the base template
+                                and apply changes to all existing Semen Analysis
+                                reports
+                              </Typography>
+                            </Box>
+                          ) : null
+                        })()}
                       {
                         // <TextJoedit
                         //   contents={editData.template}

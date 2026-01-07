@@ -132,13 +132,6 @@ const subNav = [
     icon: FiUser,
     requiresRevenueAccess: false,
   },
-  {
-    path: '/reports/patient-report',
-    title: 'Patient Report',
-    relatedModule: 'reportsModule',
-    icon: FiUser,
-    requiresRevenueAccess: false,
-  },
 ]
 
 function Reports() {

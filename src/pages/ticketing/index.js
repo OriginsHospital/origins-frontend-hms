@@ -122,10 +122,14 @@ function CreateTicketModal({ open, onClose, onSuccess }) {
 
   // Create ticket mutation
   const createMutation = useMutation({
-    mutationFn: (data) => createTicket(user?.accessToken, data),
+    mutationFn: (data) => {
+      console.log('Mutation called with data:', data)
+      return createTicket(user?.accessToken, data)
+    },
     onSuccess: (response) => {
-      if (response.status === 201) {
-        toast.success('Ticket created successfully!')
+      console.log('Ticket creation response:', response)
+      if (response.status === 201 || response.status === 200) {
+        toast.success(response.message || 'Ticket created successfully!')
         onSuccess()
         handleClose()
       } else {
@@ -133,7 +137,17 @@ function CreateTicketModal({ open, onClose, onSuccess }) {
       }
     },
     onError: (error) => {
-      toast.error(error.message || 'Failed to create ticket')
+      console.error('Error creating ticket:', error)
+      console.error('Error details:', {
+        message: error?.message,
+        response: error?.response,
+        status: error?.status,
+      })
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        'Failed to create ticket. Please try again.'
+      toast.error(errorMessage)
     },
   })
 
@@ -185,7 +199,11 @@ function CreateTicketModal({ open, onClose, onSuccess }) {
       newErrors.taskDescription =
         'Task description must be at least 10 characters'
     }
-    if (!formData.assignedTo) {
+    if (
+      !formData.assignedTo ||
+      formData.assignedTo === '' ||
+      isNaN(Number(formData.assignedTo))
+    ) {
       newErrors.assignedTo = 'Please assign the ticket to a staff member'
     }
     setErrors(newErrors)
@@ -195,7 +213,17 @@ function CreateTicketModal({ open, onClose, onSuccess }) {
   const handleSubmit = (e) => {
     e.preventDefault()
     if (validate()) {
-      createMutation.mutate(formData)
+      // Convert assignedTo to number and prepare payload
+      const payload = {
+        ...formData,
+        assignedTo: Number(formData.assignedTo),
+        // Ensure category is null if empty string
+        category: formData.category || null,
+        // Ensure tags is an array
+        tags: Array.isArray(formData.tags) ? formData.tags : [],
+      }
+      console.log('Submitting ticket with payload:', payload)
+      createMutation.mutate(payload)
     }
   }
 
