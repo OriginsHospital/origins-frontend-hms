@@ -190,6 +190,13 @@ const HoverDevCards = () => {
         subRoutes: [],
       },
       {
+        path: '/home/payments',
+        name: 'Payments',
+        relatedModule: 'dashboard',
+        Iconn: TbFileAnalytics,
+        subRoutes: [],
+      },
+      {
         path: '/tasktracker',
         name: 'Task Tracker',
         relatedModule: 'tasktracker',

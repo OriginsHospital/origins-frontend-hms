@@ -166,6 +166,30 @@ export const addChatMembers = async (token, chatId, memberIds) => {
   return response.json()
 }
 
+export const updateChat = async (token, chatId, payload) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.UPDATE_CHAT}/${chatId}`,
+    {
+      method: 'PUT',
+      headers: myHeaders,
+      body: JSON.stringify(payload),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  const data = await response.json()
+  return {
+    status: response.status,
+    statusText: response.statusText,
+    data: data.data || data,
+    message: data.message,
+    ok: response.ok,
+  }
+}
+
 export const removeChatMember = async (token, chatId, memberId) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)

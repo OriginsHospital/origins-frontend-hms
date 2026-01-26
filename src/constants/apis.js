@@ -318,6 +318,23 @@ export const getNewPatientTracker = async (token, branch) => {
   return response.json()
 }
 
+export const getAllPatientTracker = async (token) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_ALL_PATIENT_TRACKER}`,
+    {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+
+  return response.json()
+}
+
 export const getDonarInformation = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
@@ -3860,6 +3877,41 @@ export const createNewOrder = async (token, payload) => {
   return response.json()
 }
 
+export const getAllPayments = async (token) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_ALL_PAYMENTS}`,
+    {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+
+  return response.json()
+}
+
+export const createPayment = async (token, formData) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  // Don't set Content-Type for FormData, browser will set it with boundary
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.CREATE_PAYMENT}`,
+    {
+      method: 'POST',
+      body: formData,
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+
+  return response.json()
+}
+
 export const placeOrder = async (token, payload) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
@@ -4198,6 +4250,23 @@ export const getTaskDetailsByTaskId = async (taskId, token) => {
   return response.json()
 }
 
+// Get task details from taskTracker (includes comments)
+export const getTaskTrackerDetails = async (token, taskId) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}/taskTracker/getTaskDetails/${taskId}`,
+    {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
 export const createTaskComment = async (token, payload) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
@@ -4212,7 +4281,16 @@ export const createTaskComment = async (token, payload) => {
       credentials: 'include',
     },
   )
-  return response.json()
+
+  const data = await response.json()
+
+  if (!response.ok) {
+    const error = new Error(data?.message || 'Failed to create task comment')
+    error.response = { data }
+    throw error
+  }
+
+  return data
 }
 
 export const getPendingInformation = async (token, appointmentId, type) => {
@@ -5772,5 +5850,144 @@ export const getActiveStaff = async (token) => {
       credentials: 'include',
     },
   )
+  return response.json()
+}
+
+// ==================== TASKS API ====================
+
+// Get all tasks with filters and pagination
+export const getTasks = async (token, filters = {}) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+
+  const queryParams = new URLSearchParams()
+  if (filters.status) queryParams.append('status', filters.status)
+  if (filters.search) queryParams.append('search', filters.search)
+  if (filters.page) queryParams.append('page', filters.page)
+  if (filters.limit) queryParams.append('limit', filters.limit)
+
+  const queryString = queryParams.toString()
+  const url = `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_TASKS}${queryString ? `?${queryString}` : ''}`
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: myHeaders,
+    redirect: 'follow',
+    credentials: 'include',
+  })
+  return response.json()
+}
+
+// Get task details by ID
+export const getTaskDetails = async (token, taskId) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_TASK_DETAILS}/${taskId}`,
+    {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+// Create new task
+export const createTask = async (token, payload) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.CREATE_TASK}`,
+    {
+      method: 'POST',
+      headers: myHeaders,
+      body: JSON.stringify(payload),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+// Update task
+export const updateTask = async (token, payload) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.UPDATE_TASK}`,
+    {
+      method: 'PUT',
+      headers: myHeaders,
+      body: JSON.stringify(payload),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+// Update task status
+export const updateTaskStatus = async (token, taskId, status) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.UPDATE_TASK_STATUS}/${taskId}/status`,
+    {
+      method: 'PATCH',
+      headers: myHeaders,
+      body: JSON.stringify({ taskId, status }),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+// Delete task
+export const deleteTask = async (token, taskId) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.DELETE_TASK}/${taskId}`,
+    {
+      method: 'DELETE',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+// ==================== INBOX API ====================
+
+// Get inbox items (alerts + comments)
+export const getInboxItems = async (token, filters = {}) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+
+  const queryParams = new URLSearchParams()
+  if (filters.type) queryParams.append('type', filters.type)
+  if (filters.page) queryParams.append('page', filters.page)
+  if (filters.limit) queryParams.append('limit', filters.limit)
+
+  const queryString = queryParams.toString()
+  const url = `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_INBOX_ITEMS}${queryString ? `?${queryString}` : ''}`
+
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: myHeaders,
+    redirect: 'follow',
+    credentials: 'include',
+  })
   return response.json()
 }

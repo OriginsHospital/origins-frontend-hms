@@ -32,7 +32,7 @@ import { LuCalendarDays } from 'react-icons/lu'
 import { FiUser, FiUsers } from 'react-icons/fi'
 import { LuLayoutDashboard, LuBedDouble } from 'react-icons/lu'
 import { HiUsers } from 'react-icons/hi2'
-import { TbTicket } from 'react-icons/tb'
+import { TbTicket, TbInbox } from 'react-icons/tb'
 
 import Image from 'next/image'
 import originslogo from '../../public/origins-new-logo.png'
@@ -76,34 +76,64 @@ function NavItem({
     <>
       {subRoutes?.length > 0 ? (
         <>
-          <button
-            ref={buttonRef}
-            id={name}
-            className={`p-2 flex justify-center relative overflow-hidden ${
-              router.pathname.startsWith(path) ? 'shadow-md bg-primary/50' : ''
-            } before:absolute before:inset-0 before:bg-primary/50 before:translate-y-full hover:before:translate-y-0 before:transition-transform before:duration-300 before:ease-out`}
-            onClick={handleClick}
-          >
-            <div
-              // className={`${expanded ? 'w-full' : 'w-full'} transition-[width] duration-[0.5s]`}
-              className=" relative w-full flex items-center gap-2"
-            >
-              {/* <div className="w-6 h-6 flex justify-center items-center">
-                {icon}
-
-              </div> */}
-              <Iconn className="text-2xl text-secondary group-hover:text-white transition-colors relative z-10 duration-300 " />
-              {/* <iconn /> */}
-              <span
-                className={`duration-[0.5s] text-secondary font-semibold text-sm`}
+          <div className="relative flex items-center">
+            {path ? (
+              <Link
+                href={path}
+                className={`p-2 flex justify-center text-nowrap relative flex-1 before:absolute before:bottom-0 before:left-0 before:h-0 hover:before:h-full before:w-full before:transition-all before:duration-300 before:bg-primary/50 before:-z-10
+                ${router.pathname === path ? 'shadow bg-primary/50' : ''}`}
               >
-                {name}
-              </span>
-              {/* <ChevronRightIcon
-                className={`absolute -right-5 ${expanded ? 'opacity-100' : 'opacity-0'} transition-[opacity] duration-[0.5s]`}
-              /> */}
-            </div>
-          </button>
+                <div className="w-full flex justify-start items-center gap-2">
+                  <Iconn className="text-2xl text-secondary group-hover:text-white transition-colors relative z-10 duration-300" />
+                  <span
+                    className={`font-sans text-sm font-semibold text-secondary`}
+                  >
+                    {name}
+                  </span>
+                </div>
+              </Link>
+            ) : (
+              <div
+                className={`p-2 flex justify-center text-nowrap relative flex-1 before:absolute before:bottom-0 before:left-0 before:h-0 hover:before:h-full before:w-full before:transition-all before:duration-300 before:bg-primary/50 before:-z-10
+                ${router.pathname === path ? 'shadow bg-primary/50' : ''}`}
+              >
+                <div className="w-full flex justify-start items-center gap-2">
+                  <Iconn className="text-2xl text-secondary group-hover:text-white transition-colors relative z-10 duration-300" />
+                  <span
+                    className={`font-sans text-sm font-semibold text-secondary`}
+                  >
+                    {name}
+                  </span>
+                </div>
+              </div>
+            )}
+            <button
+              ref={buttonRef}
+              id={name}
+              className="p-1 flex items-center justify-center hover:bg-primary/30 rounded transition-colors"
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                handleClick()
+              }}
+            >
+              <svg
+                className={`w-4 h-4 text-secondary transition-transform ${
+                  Boolean(anchorEl) && name == clickedNavItem ? 'rotate-90' : ''
+                }`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
+            </button>
+          </div>
           <Popover
             open={Boolean(anchorEl) && name == clickedNavItem}
             onClose={handleClose}
@@ -294,12 +324,25 @@ function SideNav(props) {
         relatedModule: 'dashboard',
         // icon: <HomeOutlined className="text-secondary" />,
         Iconn: LuLayoutDashboard,
+        subRoutes: [
+          {
+            path: '/home/payments',
+            name: 'Payments',
+            relatedModule: 'dashboard',
+          },
+        ],
       },
       {
         path: '/teams',
         name: 'Teams',
         relatedModule: 'teams',
         Iconn: HiUsers,
+      },
+      {
+        path: '/inbox',
+        name: 'Inbox',
+        relatedModule: 'inbox',
+        Iconn: TbInbox,
       },
       {
         path: '/appointments',
@@ -377,7 +420,7 @@ function SideNav(props) {
         ],
       },
       {
-        // path: '/pharmacy/medicinestages',
+        path: '/pharmacy/medicinestages',
         name: 'Pharmacy',
         relatedModule: 'pharmacy',
         Iconn: GiMedicines,

@@ -23,6 +23,7 @@ export const API_ROUTES = {
   GET_PATIENTS: '/patients/getPatients',
   GET_PATIENT_TREATMENTCYCLES: '/patients/getPatientTreatmentCycles',
   GET_NEW_PATIENT_TRACKER: '/patients/new-tracker',
+  GET_ALL_PATIENT_TRACKER: '/patient-tracker/all',
   GET_DONAR_INFORMATION: '/visits/getDonarInformation',
   GET_DONAR_DATA_BY_VISIT: '/visits/getDonarDataByVisitId',
   SAVE_DONAR_RECORD: '/visits/saveDonar',
@@ -338,6 +339,10 @@ export const API_ROUTES = {
   RECEIVE_ORDER: '/orders/receiveOrder',
   PAY_ORDER: '/orders/paidOrder',
 
+  //payments
+  GET_ALL_PAYMENTS: '/payments/getAll',
+  CREATE_PAYMENT: '/payments/create',
+
   GET_ALL_REFERRALS: '/masterData/referrals/getAllReferrals',
   ADD_NEW_REFERRAL: '/masterData/referrals/addReferral',
   EDIT_REFERRAL: '/masterData/referrals/editReferral',
@@ -365,6 +370,13 @@ export const API_ROUTES = {
   UPDATE_TICKET_STATUS: '/tickets',
   DELETE_TICKET: '/tickets',
   CREATE_TICKET_COMMENT: '/tickets',
+  GET_TASKS: '/tasks',
+  GET_TASK_DETAILS: '/tasks',
+  CREATE_TASK: '/tasks',
+  UPDATE_TASK: '/tasks',
+  UPDATE_TASK_STATUS: '/tasks',
+  DELETE_TASK: '/tasks',
+  GET_INBOX_ITEMS: '/inbox',
   GET_ACTIVE_STAFF: '/tickets/staff/active',
   APPLY_OPT_OUT: '/appointments/applyOptOut',
 
@@ -381,6 +393,7 @@ export const API_ROUTES = {
   // Teams Module Routes
   GET_USER_CHATS: '/teams/chats',
   CREATE_CHAT: '/teams/chats',
+  UPDATE_CHAT: '/teams/chats',
   GET_CHAT_MESSAGES: '/teams/chats',
   SEND_MESSAGE: '/teams/chats',
   EDIT_MESSAGE: '/teams/chats',

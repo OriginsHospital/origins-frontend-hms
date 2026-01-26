@@ -38,6 +38,9 @@ import {
   Forward,
   CheckCircle,
   RadioButtonUnchecked,
+  Edit,
+  Save,
+  Cancel,
 } from '@mui/icons-material'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSelector } from 'react-redux'
@@ -51,6 +54,7 @@ import {
   deleteMessage,
   removeChatMember,
   addChatMembers,
+  updateChat,
 } from '@/constants/teamsApis'
 import { getValidUsersList } from '@/constants/apis'
 // Socket.io disabled - using REST API only
@@ -97,6 +101,8 @@ function ChatsView() {
   const [mutedChats, setMutedChats] = useState(new Set())
   const [selectedMembersToAdd, setSelectedMembersToAdd] = useState([])
   const [searchMemberQuery, setSearchMemberQuery] = useState('')
+  const [isEditingGroupName, setIsEditingGroupName] = useState(false)
+  const [editingGroupName, setEditingGroupName] = useState('')
 
   // WebRTC refs
   const localAudioRef = useRef(null)
@@ -2105,14 +2111,47 @@ function ChatsView() {
           {selectedChat && selectedChat.chatType === 'group' && (
             <Box className="space-y-4 mt-2">
               <Box>
-                <Typography variant="body2" className="text-gray-500 mb-2">
-                  Group Name
-                </Typography>
+                <Box className="flex justify-between items-center mb-2">
+                  <Typography variant="body2" className="text-gray-500">
+                    Group Name
+                  </Typography>
+                  {selectedChat.members?.find(
+                    (member) =>
+                      member.user?.id === userDetails?.id &&
+                      member.role === 'admin',
+                  ) && (
+                    <IconButton
+                      size="small"
+                      onClick={() => {
+                        if (isEditingGroupName) {
+                          // Cancel editing
+                          setIsEditingGroupName(false)
+                          setEditingGroupName('')
+                        } else {
+                          // Start editing
+                          setIsEditingGroupName(true)
+                          setEditingGroupName(selectedChat.name || '')
+                        }
+                      }}
+                    >
+                      {isEditingGroupName ? (
+                        <Cancel fontSize="small" />
+                      ) : (
+                        <Edit fontSize="small" />
+                      )}
+                    </IconButton>
+                  )}
+                </Box>
                 <TextField
                   fullWidth
                   size="small"
-                  value={selectedChat.name || ''}
-                  disabled
+                  value={
+                    isEditingGroupName
+                      ? editingGroupName
+                      : selectedChat.name || ''
+                  }
+                  onChange={(e) => setEditingGroupName(e.target.value)}
+                  disabled={!isEditingGroupName}
                   variant="outlined"
                 />
               </Box>
@@ -2213,7 +2252,45 @@ function ChatsView() {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenGroupSettingsDialog(false)}>
+          {isEditingGroupName && (
+            <Button
+              onClick={async () => {
+                try {
+                  const res = await updateChat(
+                    userDetails?.accessToken,
+                    selectedChat.id,
+                    { name: editingGroupName.trim() },
+                  )
+                  if (res.status === 200 || res.ok) {
+                    toast.success('Group name updated successfully')
+                    queryClient.invalidateQueries(['userChats'])
+                    setIsEditingGroupName(false)
+                    setEditingGroupName('')
+                  } else {
+                    toast.error(res.message || 'Failed to update group name')
+                  }
+                } catch (error) {
+                  toast.error('Failed to update group name')
+                  console.error(error)
+                }
+              }}
+              variant="contained"
+              color="primary"
+              disabled={
+                !editingGroupName.trim() ||
+                editingGroupName.trim() === selectedChat.name
+              }
+            >
+              Save
+            </Button>
+          )}
+          <Button
+            onClick={() => {
+              setIsEditingGroupName(false)
+              setEditingGroupName('')
+              setOpenGroupSettingsDialog(false)
+            }}
+          >
             Close
           </Button>
         </DialogActions>
