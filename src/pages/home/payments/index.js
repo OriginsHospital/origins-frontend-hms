@@ -7,10 +7,10 @@ import {
   createNewOrder,
   getAllPayments,
   createPayment,
+  updatePaymentFiles,
 } from '@/constants/apis'
 import { useSelector, useDispatch } from 'react-redux'
 import { DataGrid } from '@mui/x-data-grid'
-import ReportExportToolbar from '@/components/ReportExportToolbar'
 import FilteredDataGrid from '@/components/FilteredDataGrid'
 import {
   Button,
@@ -32,6 +32,10 @@ import {
   Divider,
   Paper,
   Tooltip,
+  FormControl,
+  InputLabel,
+  Select,
+  Menu,
 } from '@mui/material'
 import dayjs from 'dayjs'
 import { openModal, closeModal } from '@/redux/modalSlice'
@@ -58,6 +62,8 @@ import {
   ArrowUpward,
   ArrowDownward,
   Remove,
+  CloudUpload,
+  FilterList,
 } from '@mui/icons-material'
 import { Pie, Bar, Line } from 'react-chartjs-2'
 import {
@@ -74,6 +80,7 @@ import {
   Filler,
 } from 'chart.js'
 import JSZip from 'jszip'
+import { exportReport } from '@/utils/reportExport'
 
 // Register Chart.js components
 ChartJS.register(
@@ -108,6 +115,12 @@ function PaymentsPage() {
   const [filteredPayments, setFilteredPayments] = useState([])
   const [isDownloadingInvoices, setIsDownloadingInvoices] = useState(false)
   const [isDownloadingReceipts, setIsDownloadingReceipts] = useState(false)
+  const [exportAnchorEl, setExportAnchorEl] = useState(null)
+  const [filterAnchorEl, setFilterAnchorEl] = useState(null)
+  const [filterValues, setFilterValues] = useState({})
+  const [uploadingPaymentId, setUploadingPaymentId] = useState(null)
+  const [uploadingFileType, setUploadingFileType] = useState(null)
+  const fileInputRefs = useRef({})
   const modalOpeningRef = useRef(false)
   const modalJustOpenedRef = useRef(false)
   const modalStateRef = useRef(modal?.key)
@@ -133,27 +146,40 @@ function PaymentsPage() {
       // Get current modal state
       const currentModal = modal?.key
 
-      // Don't cleanup if invoice or receipt modals are open, or if a modal is currently opening
+      // Check if a Select menu is open - don't cleanup if it is
+      const hasOpenMenu =
+        document.querySelector(
+          '[class*="MuiMenu-root"][aria-hidden="false"], [class*="MuiPopover-root"][aria-hidden="false"]',
+        ) ||
+        document.querySelector('[role="listbox"][aria-expanded="true"]') ||
+        document.querySelector(
+          '[class*="MuiMenu-paper"]:not([style*="display: none"])',
+        )
+
+      // Don't cleanup if invoice or receipt modals are open, or if a modal is currently opening, or if a menu is open
       if (
         modalOpeningRef.current ||
         currentModal === 'viewInvoiceModal' ||
-        currentModal === 'viewReceiptModal'
+        currentModal === 'viewReceiptModal' ||
+        hasOpenMenu
       ) {
-        return // Don't interfere with invoice/receipt modals
+        return // Don't interfere with invoice/receipt modals or open menus
       }
 
-      // Remove ALL backdrops if no modal is open
+      // Hide ALL backdrops if no modal is open (don't remove, let React handle it)
       if (!currentModal) {
         const backdrops = document.querySelectorAll(
           '[class*="MuiBackdrop-root"], [class*="MuiModal-backdrop"], [class*="backdrop"], [class*="MuiBackdrop"]',
         )
         backdrops.forEach((el) => {
-          el.style.display = 'none'
-          el.style.pointerEvents = 'none'
-          el.remove()
+          if (el && el.isConnected) {
+            el.style.display = 'none'
+            el.style.pointerEvents = 'none'
+            el.style.visibility = 'hidden'
+          }
         })
       } else {
-        // If modal is open, only remove backdrops without dialogs
+        // If modal is open, only hide backdrops without dialogs
         const backdrops = document.querySelectorAll(
           '[class*="MuiBackdrop-root"]',
         )
@@ -161,13 +187,15 @@ function PaymentsPage() {
           const dialog = el.parentElement?.querySelector('[role="dialog"]')
           const isOpen =
             dialog && window.getComputedStyle(dialog).display !== 'none'
-          if (!isOpen) {
-            el.remove()
+          if (!isOpen && el && el.isConnected) {
+            el.style.display = 'none'
+            el.style.pointerEvents = 'none'
+            el.style.visibility = 'hidden'
           }
         })
       }
 
-      // Remove modal root containers without open dialogs
+      // Hide modal root containers without open dialogs (don't remove, let React handle it)
       const modalRoots = document.querySelectorAll('[class*="MuiModal-root"]')
       modalRoots.forEach((el) => {
         const dialog = el.querySelector('[role="dialog"]')
@@ -175,8 +203,9 @@ function PaymentsPage() {
           dialog &&
           window.getComputedStyle(dialog).display !== 'none' &&
           window.getComputedStyle(dialog).visibility !== 'hidden'
-        if (!isOpen || !currentModal) {
-          el.remove()
+        if ((!isOpen || !currentModal) && el && el.isConnected) {
+          el.style.display = 'none'
+          el.style.visibility = 'hidden'
         }
       })
 
@@ -191,6 +220,11 @@ function PaymentsPage() {
           document.body.style.paddingRight = ''
           document.body.classList.remove('MuiModal-open')
           document.body.removeAttribute('aria-hidden')
+          // Remove aria-hidden from #__next to fix dropdown issues
+          const nextDiv = document.getElementById('__next')
+          if (nextDiv) {
+            nextDiv.removeAttribute('aria-hidden')
+          }
           // Remove inline styles if they're only for modal
           const bodyStyle = document.body.getAttribute('style')
           if (
@@ -219,6 +253,61 @@ function PaymentsPage() {
     setTimeout(() => removeAllBackdrops(), 100)
     setTimeout(() => removeAllBackdrops(), 200)
 
+    // AGGRESSIVE FIX: Remove aria-hidden from #__next that blocks dropdowns
+    const fixAriaHidden = () => {
+      const nextDiv = document.getElementById('__next')
+      if (nextDiv) {
+        // Always remove aria-hidden to allow dropdowns to work
+        // Only keep it if there's actually a modal open with a dialog
+        const hasOpenModal = document.querySelector(
+          '[role="dialog"][aria-modal="true"]:not([style*="display: none"])',
+        )
+        if (!hasOpenModal) {
+          nextDiv.removeAttribute('aria-hidden')
+        }
+      }
+    }
+
+    // Run immediately and very frequently
+    fixAriaHidden()
+    const ariaHiddenInterval = setInterval(fixAriaHidden, 100)
+
+    // Also use MutationObserver to catch when aria-hidden is set
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (
+          mutation.type === 'attributes' &&
+          mutation.attributeName === 'aria-hidden'
+        ) {
+          const target = mutation.target
+          if (
+            target.id === '__next' &&
+            target.getAttribute('aria-hidden') === 'true'
+          ) {
+            const hasOpenModal = document.querySelector(
+              '[role="dialog"][aria-modal="true"]:not([style*="display: none"])',
+            )
+            if (!hasOpenModal) {
+              target.removeAttribute('aria-hidden')
+            }
+          }
+        }
+      })
+    })
+
+    const nextDiv = document.getElementById('__next')
+    if (nextDiv) {
+      observer.observe(nextDiv, {
+        attributes: true,
+        attributeFilter: ['aria-hidden'],
+      })
+    }
+
+    return () => {
+      clearInterval(ariaHiddenInterval)
+      observer.disconnect()
+    }
+
     // Also inject global style to ensure sidebar is always clickable
     const styleId = 'payments-page-fix'
     if (!document.getElementById(styleId)) {
@@ -239,6 +328,11 @@ function PaymentsPage() {
           display: none !important;
           visibility: hidden !important;
         }
+        /* CRITICAL: Ensure backdrops don't cover Select menus */
+        [class*="MuiBackdrop-root"]:has(~ [class*="MuiMenu-root"]) {
+          display: none !important;
+          z-index: -1 !important;
+        }
         /* Unlock body when no real modals */
         body.MuiModal-open:not(:has([role="dialog"][aria-modal="true"]:not([style*="display: none"]))) {
           overflow: auto !important;
@@ -256,6 +350,43 @@ function PaymentsPage() {
         [class*="MuiBackdrop-root"][style*="position: fixed"] {
           display: none !important;
         }
+        /* Ensure Select dropdowns are always clickable */
+        [class*="MuiSelect-root"],
+        [class*="MuiFormControl-root"],
+        [class*="MuiInputBase-root"],
+        [class*="MuiSelect-select"],
+        [class*="MuiOutlinedInput-root"] {
+          pointer-events: auto !important;
+          z-index: 1 !important;
+        }
+        /* Ensure Select menu appears above everything */
+        [class*="MuiMenu-paper"],
+        [class*="MuiPopover-paper"],
+        [class*="MuiMenu-root"],
+        [class*="MuiPopover-root"],
+        [class*="MuiModal-root"]:has([class*="MuiMenu-paper"]) {
+          z-index: 99999 !important;
+          position: fixed !important;
+        }
+        /* Hide any backdrops that might cover menus */
+        [class*="MuiBackdrop-root"]:not(:has(+ [role="dialog"][aria-modal="true"]:not([style*="display: none"]))) {
+          z-index: -1 !important;
+        }
+        /* Ensure menus are visible */
+        [class*="MuiMenu-paper"] {
+          visibility: visible !important;
+          opacity: 1 !important;
+          display: block !important;
+        }
+        /* Force remove aria-hidden from #__next when Select is focused */
+        #__next:has([class*="MuiSelect-select"]:focus) {
+          aria-hidden: false !important;
+        }
+        /* Ensure Select can receive focus even if parent has aria-hidden */
+        [class*="MuiSelect-select"] {
+          pointer-events: auto !important;
+          cursor: pointer !important;
+        }
       `
       document.head.appendChild(style)
     }
@@ -263,6 +394,44 @@ function PaymentsPage() {
     // Also add a global click handler to force navigation - AGGRESSIVE
     const handleGlobalClick = (e) => {
       const target = e.target
+
+      // Don't interfere if clicking on Select dropdowns, menus, or form elements
+      const isSelectClick =
+        target.closest('[role="button"][aria-haspopup="listbox"]') ||
+        target.closest('[class*="MuiSelect"]') ||
+        target.closest('[class*="MuiSelect-root"]') ||
+        target.closest('[class*="MuiSelect-select"]') ||
+        target.closest('[class*="MuiMenu"]') ||
+        target.closest('[class*="MuiPopover"]') ||
+        target.closest('[class*="MuiMenu-paper"]') ||
+        target.closest('[class*="MuiPopover-paper"]') ||
+        target.closest('[class*="MuiMenu-list"]') ||
+        target.closest('[role="listbox"]') ||
+        target.closest('[role="option"]') ||
+        target.closest('[role="presentation"]') ||
+        target.closest('[role="menu"]') ||
+        target.closest('input') ||
+        target.closest('select') ||
+        target.closest('textarea') ||
+        target.closest('[class*="MuiAutocomplete"]') ||
+        target.closest('[class*="MuiFormControl"]') ||
+        target.closest('[class*="MuiTextField"]') ||
+        target.closest('[class*="MuiInputBase"]') ||
+        target.closest('[class*="MuiOutlinedInput"]') ||
+        target.closest('[data-testid*="menu"]') ||
+        (target.getAttribute &&
+          target.getAttribute('aria-haspopup') === 'listbox') ||
+        // Check if any parent has MuiMenu classes
+        (target.closest('[class*="MuiPaper-root"]') &&
+          target
+            .closest('[class*="MuiPaper-root"]')
+            .querySelector('[class*="MuiMenu-list"]'))
+
+      if (isSelectClick) {
+        e.stopPropagation() // Stop propagation to prevent interference
+        e.preventDefault() // Prevent default to keep menu open
+        return // Don't interfere with form controls and dropdowns
+      }
 
       // Don't interfere if clicking on modal or modal-related elements
       const isModalClick =
@@ -292,14 +461,17 @@ function PaymentsPage() {
         setReceiptUrl(null)
         removeAllBackdrops()
 
-        // Force remove any remaining backdrops immediately
+        // Force hide any remaining backdrops immediately (don't remove, let React handle it)
         requestAnimationFrame(() => {
           const allBackdrops = document.querySelectorAll(
             '[class*="MuiBackdrop-root"]',
           )
           allBackdrops.forEach((b) => {
-            b.style.display = 'none'
-            b.remove()
+            if (b && b.isConnected) {
+              b.style.display = 'none'
+              b.style.pointerEvents = 'none'
+              b.style.visibility = 'hidden'
+            }
           })
           document.body.style.overflow = ''
           document.body.style.paddingRight = ''
@@ -321,9 +493,25 @@ function PaymentsPage() {
     // Periodic cleanup to catch any stuck backdrops
     const cleanupInterval = setInterval(() => {
       const currentModal = modal?.key
-      // Don't cleanup if invoice or receipt modals are open, or if a modal is opening
+
+      // Check if a Select menu is open - don't cleanup if it is
+      const hasOpenMenu =
+        document.querySelector(
+          '[class*="MuiMenu-root"]:not([aria-hidden="true"])',
+        ) ||
+        document.querySelector(
+          '[class*="MuiPopover-root"]:not([aria-hidden="true"])',
+        ) ||
+        document.querySelector('[role="listbox"][aria-expanded="true"]') ||
+        (document.querySelector('[class*="MuiMenu-paper"]') &&
+          window.getComputedStyle(
+            document.querySelector('[class*="MuiMenu-paper"]'),
+          ).display !== 'none')
+
+      // Don't cleanup if invoice or receipt modals are open, or if a modal is opening, or if a menu is open
       if (
         !modalOpeningRef.current &&
+        !hasOpenMenu &&
         (!currentModal ||
           (currentModal !== 'viewInvoiceModal' &&
             currentModal !== 'viewReceiptModal'))
@@ -343,8 +531,14 @@ function PaymentsPage() {
         capture: true,
       })
       const styleEl = document.getElementById(styleId)
-      if (styleEl) {
-        styleEl.remove()
+      if (styleEl && styleEl.isConnected && styleEl.parentNode) {
+        try {
+          if (styleEl.parentNode.contains(styleEl)) {
+            styleEl.remove()
+          }
+        } catch (error) {
+          // Element might already be removed
+        }
       }
     }
   }, [dispatch, modal?.key])
@@ -369,15 +563,24 @@ function PaymentsPage() {
       const isOpen =
         dialog && window.getComputedStyle(dialog).display !== 'none'
 
-      // If no open dialog, remove the backdrop
+      // If no open dialog, hide the backdrop (don't remove, let React handle it)
       if (!isOpen) {
-        backdrop.remove()
-        // Also remove any related overlay elements
+        if (backdrop && backdrop.isConnected) {
+          backdrop.style.display = 'none'
+          backdrop.style.pointerEvents = 'none'
+          backdrop.style.visibility = 'hidden'
+        }
+        // Also hide any related overlay elements
         const overlay = backdrop.parentElement?.querySelector(
           '[class*="MuiModal-root"]',
         )
-        if (overlay && !overlay.querySelector('[role="dialog"]')) {
-          overlay.remove()
+        if (
+          overlay &&
+          overlay.isConnected &&
+          !overlay.querySelector('[role="dialog"]')
+        ) {
+          overlay.style.display = 'none'
+          overlay.style.visibility = 'hidden'
         }
       }
     })
@@ -408,8 +611,14 @@ function PaymentsPage() {
         el.classList.contains('MuiBackdrop-root')
       ) {
         const dialog = el.parentElement?.querySelector('[role="dialog"]')
-        if (!dialog || window.getComputedStyle(dialog).display === 'none') {
-          el.remove()
+        if (
+          (!dialog || window.getComputedStyle(dialog).display === 'none') &&
+          el &&
+          el.isConnected
+        ) {
+          el.style.display = 'none'
+          el.style.pointerEvents = 'none'
+          el.style.visibility = 'hidden'
         }
       }
     })
@@ -475,7 +684,13 @@ function PaymentsPage() {
         const allBackdrops = document.querySelectorAll(
           '[class*="MuiBackdrop-root"], [class*="MuiModal-backdrop"]',
         )
-        allBackdrops.forEach((backdrop) => backdrop.remove())
+        allBackdrops.forEach((backdrop) => {
+          if (backdrop && backdrop.isConnected) {
+            backdrop.style.display = 'none'
+            backdrop.style.pointerEvents = 'none'
+            backdrop.style.visibility = 'hidden'
+          }
+        })
 
         // Ensure body is not locked
         document.body.style.overflow = ''
@@ -530,11 +745,12 @@ function PaymentsPage() {
 
   // Payment form state
   const [paymentForm, setPaymentForm] = useState({
-    branchId: 1,
+    branchId: '',
     departmentId: '',
     vendorId: '',
     amount: '',
     paymentDate: dayjs().format('YYYY-MM-DD'),
+    invoiceDate: dayjs().format('YYYY-MM-DD'),
     invoiceFile: null,
     receiptFile: null,
   })
@@ -639,7 +855,13 @@ function PaymentsPage() {
       link.target = '_blank'
       document.body.appendChild(link)
       link.click()
-      document.body.removeChild(link)
+      if (document.body.contains(link)) {
+        try {
+          document.body.removeChild(link)
+        } catch (error) {
+          // Link might already be removed
+        }
+      }
     }
   }
 
@@ -651,7 +873,13 @@ function PaymentsPage() {
       link.target = '_blank'
       document.body.appendChild(link)
       link.click()
-      document.body.removeChild(link)
+      if (document.body.contains(link)) {
+        try {
+          document.body.removeChild(link)
+        } catch (error) {
+          // Link might already be removed
+        }
+      }
     }
   }
 
@@ -673,7 +901,15 @@ function PaymentsPage() {
   // Handle filter changes from FilteredDataGrid
   const handleFilterChange = (filters) => {
     setCurrentFilters(filters)
+    setFilterValues(filters)
   }
+
+  // Sync filterValues with currentFilters on mount
+  useEffect(() => {
+    if (currentFilters && Object.keys(currentFilters).length > 0) {
+      setFilterValues(currentFilters)
+    }
+  }, [])
 
   // Handle rows change from FilteredDataGrid (gets filtered rows)
   const handleRowsChange = (rows) => {
@@ -719,7 +955,13 @@ function PaymentsPage() {
       link.download = `all_invoices_${dayjs().format('DD-MM-YYYY')}.zip`
       document.body.appendChild(link)
       link.click()
-      document.body.removeChild(link)
+      if (document.body.contains(link)) {
+        try {
+          document.body.removeChild(link)
+        } catch (error) {
+          // Link might already be removed
+        }
+      }
       window.URL.revokeObjectURL(url)
 
       toast.success(
@@ -773,7 +1015,13 @@ function PaymentsPage() {
       link.download = `all_receipts_${dayjs().format('DD-MM-YYYY')}.zip`
       document.body.appendChild(link)
       link.click()
-      document.body.removeChild(link)
+      if (document.body.contains(link)) {
+        try {
+          document.body.removeChild(link)
+        } catch (error) {
+          // Link might already be removed
+        }
+      }
       window.URL.revokeObjectURL(url)
 
       toast.success(
@@ -790,17 +1038,23 @@ function PaymentsPage() {
 
   // Transform payments data for display
   const paymentsData =
-    data?.data?.map((payment) => ({
-      id: payment.id,
-      paymentId: payment.id,
-      branch: payment.branch || '',
-      department: payment.department || '',
-      vendor: payment.vendor || '',
-      amount: payment.amount || 0,
-      paymentDate: payment.paymentDate,
-      invoiceUrl: payment.invoiceUrl,
-      receiptUrl: payment.receiptUrl,
-    })) || []
+    data?.data?.map((payment) => {
+      // Get invoiceDate from payment
+      const invoiceDate = payment.invoiceDate || null
+
+      return {
+        id: payment.id,
+        paymentId: payment.id,
+        branch: payment.branch || '',
+        department: payment.department || '',
+        vendor: payment.vendor || '',
+        amount: payment.amount || 0,
+        paymentDate: payment.paymentDate,
+        invoiceDate: invoiceDate,
+        invoiceUrl: payment.invoiceUrl,
+        receiptUrl: payment.receiptUrl,
+      }
+    }) || []
 
   // Initialize filteredPayments when paymentsData is available
   useEffect(() => {
@@ -810,103 +1064,595 @@ function PaymentsPage() {
     }
   }, [paymentsData])
 
-  const columns = [
-    { field: 'branch', headerName: 'Branch', width: 100 },
-    {
-      field: 'paymentDate',
-      headerName: 'Payment Date',
-      width: 130,
-      renderCell: ({ row }) =>
-        row.paymentDate ? dayjs(row.paymentDate).format('DD-MM-YYYY') : '',
+  // Filter payments based on invoice and receipt upload status
+  // Summary tab: payments with both invoice and receipt uploaded
+  const summaryTabPayments = useMemo(() => {
+    return paymentsData.filter(
+      (payment) => payment.invoiceUrl && payment.receiptUrl,
+    )
+  }, [paymentsData])
+
+  // Create tab: payments without both invoice and receipt uploaded
+  const dataTabPayments = useMemo(() => {
+    return paymentsData.filter(
+      (payment) => !payment.invoiceUrl || !payment.receiptUrl,
+    )
+  }, [paymentsData])
+
+  // Mutation for updating payment files
+  const updatePaymentFilesMutation = useMutation({
+    mutationFn: async ({ paymentId, invoiceFile, receiptFile }) => {
+      const formData = new FormData()
+      if (invoiceFile) {
+        formData.append('invoiceFile', invoiceFile)
+      }
+      if (receiptFile) {
+        formData.append('receiptFile', receiptFile)
+      }
+      return await updatePaymentFiles(
+        userDetails?.accessToken,
+        paymentId,
+        formData,
+      )
     },
-    {
-      field: 'department',
-      headerName: 'Department',
-      width: 150,
+    onSuccess: (res) => {
+      if (res?.status === 200) {
+        toast.success(
+          res?.message || 'Files uploaded successfully',
+          toastconfig,
+        )
+        queryClient.invalidateQueries(['allPayments'])
+        setUploadingPaymentId(null)
+        setUploadingFileType(null)
+      } else {
+        toast.error(res?.message || 'Failed to upload files', toastconfig)
+        setUploadingPaymentId(null)
+        setUploadingFileType(null)
+      }
     },
-    {
-      field: 'vendor',
-      headerName: 'Vendor',
-      width: 200,
+    onError: (error) => {
+      toast.error(error.message || 'Failed to upload files', toastconfig)
+      setUploadingPaymentId(null)
+      setUploadingFileType(null)
     },
-    {
-      field: 'amount',
-      headerName: 'Amount',
-      width: 120,
-      renderCell: ({ row }) =>
-        `₹${parseFloat(row.amount || 0).toLocaleString('en-IN')}`,
+  })
+
+  // Handle file upload from table
+  const handleTableFileUpload = useCallback(
+    (paymentId, fileType, file) => {
+      if (!file) return
+
+      setUploadingPaymentId(paymentId)
+      setUploadingFileType(fileType)
+
+      const payload = {
+        paymentId,
+        [fileType === 'invoice' ? 'invoiceFile' : 'receiptFile']: file,
+      }
+
+      updatePaymentFilesMutation.mutate(payload)
     },
-    {
-      field: 'invoiceReceipt',
-      headerName: 'Upload',
-      width: 200,
-      renderCell: ({ row }) => (
-        <Stack direction="row" spacing={1}>
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<Visibility />}
-            onClick={(e) => {
-              e.stopPropagation()
-              console.log('Invoice button clicked, URL:', row.invoiceUrl)
-              viewInvoice(row.invoiceUrl)
+    [updatePaymentFilesMutation],
+  )
+
+  const columns = useMemo(
+    () => [
+      {
+        field: 'branch',
+        headerName: 'Branch',
+        flex: 0.8,
+        minWidth: 70,
+        cellClassName: 'cell-text',
+        renderCell: ({ row }) => (
+          <Box
+            sx={{
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              width: '100%',
             }}
-            disabled={!row.invoiceUrl}
-            sx={{ textTransform: 'none' }}
           >
-            INVOICE
-          </Button>
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<Visibility />}
-            onClick={(e) => {
-              e.stopPropagation()
-              console.log('Receipt button clicked, URL:', row.receiptUrl)
-              viewReceipt(row.receiptUrl)
+            {row.branch || '-'}
+          </Box>
+        ),
+      },
+      {
+        field: 'paymentDate',
+        headerName: 'Payment Date',
+        flex: 1,
+        minWidth: 110,
+        cellClassName: 'cell-text',
+        renderCell: ({ row }) => (
+          <Box
+            sx={{
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              width: '100%',
             }}
-            disabled={!row.receiptUrl}
-            sx={{ textTransform: 'none' }}
           >
-            RECEIPT
-          </Button>
-        </Stack>
-      ),
-    },
-    {
-      field: 'actions',
-      headerName: 'Download',
-      width: 200,
-      renderCell: ({ row }) => (
-        <Stack direction="row" spacing={1}>
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<FileDownload />}
-            onClick={() =>
-              downloadInvoice(row.invoiceUrl, `invoice_${row.paymentId}.pdf`)
-            }
-            disabled={!row.invoiceUrl}
-            sx={{ textTransform: 'none' }}
+            {row.paymentDate
+              ? dayjs(row.paymentDate).format('DD-MM-YYYY')
+              : '-'}
+          </Box>
+        ),
+      },
+      {
+        field: 'invoiceDate',
+        headerName: 'Invoice Date',
+        flex: 1,
+        minWidth: 110,
+        cellClassName: 'cell-text',
+        renderCell: ({ row }) => {
+          if (!row) return '-'
+
+          // Try multiple field name variations
+          const invoiceDate =
+            row.invoiceDate || row.invoice_date || row.InvoiceDate || null
+
+          if (!invoiceDate) return '-'
+
+          try {
+            const date = dayjs(invoiceDate)
+            if (!date.isValid()) return '-'
+            return date.format('DD-MM-YYYY')
+          } catch (error) {
+            return '-'
+          }
+        },
+      },
+      {
+        field: 'department',
+        headerName: 'Department',
+        flex: 1.2,
+        minWidth: 100,
+        cellClassName: 'cell-text',
+        renderCell: ({ row }) => (
+          <Box
+            sx={{
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              width: '100%',
+            }}
           >
-            INVOICE
-          </Button>
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<FileDownload />}
-            onClick={() =>
-              downloadReceipt(row.receiptUrl, `receipt_${row.paymentId}.pdf`)
-            }
-            disabled={!row.receiptUrl}
-            sx={{ textTransform: 'none' }}
+            {row.department || '-'}
+          </Box>
+        ),
+      },
+      {
+        field: 'vendor',
+        headerName: 'Vendor',
+        flex: 1.5,
+        minWidth: 120,
+        cellClassName: 'cell-text',
+        renderCell: ({ row }) => (
+          <Box
+            sx={{
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              width: '100%',
+            }}
           >
-            RECEIPT
-          </Button>
-        </Stack>
-      ),
-    },
-  ]
+            {row.vendor || '-'}
+          </Box>
+        ),
+      },
+      {
+        field: 'amount',
+        headerName: 'Amount',
+        flex: 1,
+        minWidth: 100,
+        align: 'right',
+        headerAlign: 'right',
+        cellClassName: 'cell-text',
+        renderCell: ({ row }) => (
+          <Box
+            sx={{
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              width: '100%',
+              textAlign: 'right',
+            }}
+          >
+            ₹{parseFloat(row.amount || 0).toLocaleString('en-IN')}
+          </Box>
+        ),
+      },
+      {
+        field: 'invoiceReceipt',
+        headerName: 'Upload',
+        flex: 1.8,
+        minWidth: 180,
+        align: 'center',
+        headerAlign: 'center',
+        renderCell: ({ row }) => {
+          const isUploading = uploadingPaymentId === row.paymentId
+          const isUploadingInvoice =
+            isUploading && uploadingFileType === 'invoice'
+          const isUploadingReceipt =
+            isUploading && uploadingFileType === 'receipt'
+
+          // In Create tab (activeTab === 0), show upload buttons if files are missing
+          // In Summary tab (activeTab === 1), show view buttons if files exist
+          const showUploadButtons =
+            activeTab === 0 && (!row.invoiceUrl || !row.receiptUrl)
+
+          return (
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{
+                justifyContent: 'center',
+                alignItems: 'center',
+                width: '100%',
+              }}
+            >
+              {showUploadButtons ? (
+                <>
+                  {/* Invoice Upload/View Button */}
+                  {!row.invoiceUrl ? (
+                    <label htmlFor={`invoice-upload-${row.paymentId}`}>
+                      <input
+                        id={`invoice-upload-${row.paymentId}`}
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        style={{ display: 'none' }}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) {
+                            handleTableFileUpload(
+                              row.paymentId,
+                              'invoice',
+                              file,
+                            )
+                          }
+                          e.target.value = '' // Reset input
+                        }}
+                        disabled={isUploading}
+                      />
+                      <Stack
+                        direction="column"
+                        alignItems="center"
+                        spacing={0.25}
+                        sx={{ cursor: isUploading ? 'not-allowed' : 'pointer' }}
+                      >
+                        <IconButton
+                          component="span"
+                          size="small"
+                          color="primary"
+                          disabled={isUploading}
+                          sx={{
+                            p: 0.75,
+                            '&:hover': { bgcolor: 'action.hover' },
+                          }}
+                          title={
+                            isUploadingInvoice
+                              ? 'Uploading Invoice...'
+                              : 'Upload Invoice'
+                          }
+                        >
+                          {isUploadingInvoice ? (
+                            <CircularProgress size={18} />
+                          ) : (
+                            <CloudUpload fontSize="small" />
+                          )}
+                        </IconButton>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            fontSize: '0.65rem',
+                            color: isUploading
+                              ? 'text.disabled'
+                              : 'text.secondary',
+                            fontWeight: 500,
+                            lineHeight: 1,
+                          }}
+                        >
+                          Invoice
+                        </Typography>
+                      </Stack>
+                    </label>
+                  ) : (
+                    <Stack
+                      direction="column"
+                      alignItems="center"
+                      spacing={0.25}
+                    >
+                      <IconButton
+                        size="small"
+                        color="primary"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          viewInvoice(row.invoiceUrl)
+                        }}
+                        sx={{
+                          p: 0.75,
+                          '&:hover': { bgcolor: 'action.hover' },
+                        }}
+                        title="View Invoice"
+                      >
+                        <Visibility fontSize="small" />
+                      </IconButton>
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          fontSize: '0.65rem',
+                          color: 'text.secondary',
+                          fontWeight: 500,
+                          lineHeight: 1,
+                        }}
+                      >
+                        Invoice
+                      </Typography>
+                    </Stack>
+                  )}
+
+                  {/* Receipt Upload/View Button */}
+                  {!row.receiptUrl ? (
+                    <label htmlFor={`receipt-upload-${row.paymentId}`}>
+                      <input
+                        id={`receipt-upload-${row.paymentId}`}
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        style={{ display: 'none' }}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) {
+                            handleTableFileUpload(
+                              row.paymentId,
+                              'receipt',
+                              file,
+                            )
+                          }
+                          e.target.value = '' // Reset input
+                        }}
+                        disabled={isUploading}
+                      />
+                      <Stack
+                        direction="column"
+                        alignItems="center"
+                        spacing={0.25}
+                        sx={{ cursor: isUploading ? 'not-allowed' : 'pointer' }}
+                      >
+                        <IconButton
+                          component="span"
+                          size="small"
+                          color="primary"
+                          disabled={isUploading}
+                          sx={{
+                            p: 0.75,
+                            '&:hover': { bgcolor: 'action.hover' },
+                          }}
+                          title={
+                            isUploadingReceipt
+                              ? 'Uploading Receipt...'
+                              : 'Upload Receipt'
+                          }
+                        >
+                          {isUploadingReceipt ? (
+                            <CircularProgress size={18} />
+                          ) : (
+                            <CloudUpload fontSize="small" />
+                          )}
+                        </IconButton>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            fontSize: '0.65rem',
+                            color: isUploading
+                              ? 'text.disabled'
+                              : 'text.secondary',
+                            fontWeight: 500,
+                            lineHeight: 1,
+                          }}
+                        >
+                          Receipt
+                        </Typography>
+                      </Stack>
+                    </label>
+                  ) : (
+                    <Stack
+                      direction="column"
+                      alignItems="center"
+                      spacing={0.25}
+                    >
+                      <IconButton
+                        size="small"
+                        color="primary"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          viewReceipt(row.receiptUrl)
+                        }}
+                        sx={{
+                          p: 0.75,
+                          '&:hover': { bgcolor: 'action.hover' },
+                        }}
+                        title="View Receipt"
+                      >
+                        <Visibility fontSize="small" />
+                      </IconButton>
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          fontSize: '0.65rem',
+                          color: 'text.secondary',
+                          fontWeight: 500,
+                          lineHeight: 1,
+                        }}
+                      >
+                        Receipt
+                      </Typography>
+                    </Stack>
+                  )}
+                </>
+              ) : (
+                <>
+                  {/* Summary tab: Show view buttons if files exist */}
+                  <Stack direction="column" alignItems="center" spacing={0.25}>
+                    <IconButton
+                      size="small"
+                      color="primary"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        viewInvoice(row.invoiceUrl)
+                      }}
+                      disabled={!row.invoiceUrl}
+                      sx={{
+                        p: 0.75,
+                        '&:hover': { bgcolor: 'action.hover' },
+                      }}
+                      title="View Invoice"
+                    >
+                      <Visibility fontSize="small" />
+                    </IconButton>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        fontSize: '0.65rem',
+                        color: !row.invoiceUrl
+                          ? 'text.disabled'
+                          : 'text.secondary',
+                        fontWeight: 500,
+                        lineHeight: 1,
+                      }}
+                    >
+                      Invoice
+                    </Typography>
+                  </Stack>
+                  <Stack direction="column" alignItems="center" spacing={0.25}>
+                    <IconButton
+                      size="small"
+                      color="primary"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        viewReceipt(row.receiptUrl)
+                      }}
+                      disabled={!row.receiptUrl}
+                      sx={{
+                        p: 0.75,
+                        '&:hover': { bgcolor: 'action.hover' },
+                      }}
+                      title="View Receipt"
+                    >
+                      <Visibility fontSize="small" />
+                    </IconButton>
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        fontSize: '0.65rem',
+                        color: !row.receiptUrl
+                          ? 'text.disabled'
+                          : 'text.secondary',
+                        fontWeight: 500,
+                        lineHeight: 1,
+                      }}
+                    >
+                      Receipt
+                    </Typography>
+                  </Stack>
+                </>
+              )}
+            </Stack>
+          )
+        },
+      },
+      {
+        field: 'actions',
+        headerName: 'Download',
+        flex: 1.5,
+        minWidth: 140,
+        align: 'center',
+        headerAlign: 'center',
+        renderCell: ({ row }) => (
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{
+              justifyContent: 'center',
+              alignItems: 'center',
+              width: '100%',
+            }}
+          >
+            <Stack direction="column" alignItems="center" spacing={0.25}>
+              <IconButton
+                size="small"
+                color="primary"
+                onClick={() =>
+                  downloadInvoice(
+                    row.invoiceUrl,
+                    `invoice_${row.paymentId}.pdf`,
+                  )
+                }
+                disabled={!row.invoiceUrl}
+                sx={{
+                  p: 0.75,
+                  '&:hover': { bgcolor: 'action.hover' },
+                }}
+                title="Download Invoice"
+              >
+                <FileDownload fontSize="small" />
+              </IconButton>
+              <Typography
+                variant="caption"
+                sx={{
+                  fontSize: '0.65rem',
+                  color: !row.invoiceUrl ? 'text.disabled' : 'text.secondary',
+                  fontWeight: 500,
+                  lineHeight: 1,
+                }}
+              >
+                Invoice
+              </Typography>
+            </Stack>
+            <Stack direction="column" alignItems="center" spacing={0.25}>
+              <IconButton
+                size="small"
+                color="primary"
+                onClick={() =>
+                  downloadReceipt(
+                    row.receiptUrl,
+                    `receipt_${row.paymentId}.pdf`,
+                  )
+                }
+                disabled={!row.receiptUrl}
+                sx={{
+                  p: 0.75,
+                  '&:hover': { bgcolor: 'action.hover' },
+                }}
+                title="Download Receipt"
+              >
+                <FileDownload fontSize="small" />
+              </IconButton>
+              <Typography
+                variant="caption"
+                sx={{
+                  fontSize: '0.65rem',
+                  color: !row.receiptUrl ? 'text.disabled' : 'text.secondary',
+                  fontWeight: 500,
+                  lineHeight: 1,
+                }}
+              >
+                Receipt
+              </Typography>
+            </Stack>
+          </Stack>
+        ),
+      },
+    ],
+    [
+      activeTab,
+      uploadingPaymentId,
+      uploadingFileType,
+      handleTableFileUpload,
+      viewInvoice,
+      viewReceipt,
+      downloadInvoice,
+      downloadReceipt,
+    ],
+  )
 
   const customFilters = [
     {
@@ -1184,8 +1930,14 @@ function PaymentsPage() {
 
       const backdrops = document.querySelectorAll('[class*="MuiBackdrop-root"]')
       backdrops.forEach((backdrop) => {
-        if (!backdrop.closest('[role="dialog"]')) {
-          backdrop.remove()
+        if (
+          !backdrop.closest('[role="dialog"]') &&
+          backdrop &&
+          backdrop.isConnected
+        ) {
+          backdrop.style.display = 'none'
+          backdrop.style.pointerEvents = 'none'
+          backdrop.style.visibility = 'hidden'
         }
       })
       // Also remove body overflow lock only if no modals are open
@@ -1256,7 +2008,13 @@ function PaymentsPage() {
         const backdrops = document.querySelectorAll(
           '[class*="MuiBackdrop-root"]',
         )
-        backdrops.forEach((backdrop) => backdrop.remove())
+        backdrops.forEach((backdrop) => {
+          if (backdrop && backdrop.isConnected) {
+            backdrop.style.display = 'none'
+            backdrop.style.pointerEvents = 'none'
+            backdrop.style.visibility = 'hidden'
+          }
+        })
         document.body.style.overflow = ''
         document.body.style.paddingRight = ''
       }
@@ -1306,9 +2064,14 @@ function PaymentsPage() {
           dialog.getAttribute('aria-modal') === 'true'
 
         // If no open dialog or modal key is null, remove backdrop
-        if (!isDialogOpen || !currentModalKey) {
+        if (
+          (!isDialogOpen || !currentModalKey) &&
+          backdrop &&
+          backdrop.isConnected
+        ) {
           backdrop.style.display = 'none'
-          backdrop.remove()
+          backdrop.style.pointerEvents = 'none'
+          backdrop.style.visibility = 'hidden'
         }
       })
 
@@ -1318,8 +2081,9 @@ function PaymentsPage() {
         const dialog = modalRoot.querySelector('[role="dialog"]')
         const isOpen =
           dialog && window.getComputedStyle(dialog).display !== 'none'
-        if (!isOpen && !currentModalKey) {
-          modalRoot.remove()
+        if (!isOpen && !currentModalKey && modalRoot && modalRoot.isConnected) {
+          modalRoot.style.display = 'none'
+          modalRoot.style.visibility = 'hidden'
         }
       })
 
@@ -1404,12 +2168,12 @@ function PaymentsPage() {
               },
             }}
           >
-            <Tab label="Data" />
+            <Tab label="Create" />
             <Tab label="Summary" />
           </Tabs>
         </Box>
 
-        {/* DATA TAB */}
+        {/* CREATE TAB */}
         <TabPanel value={activeTab} index={0}>
           <CardContent sx={{ p: 3 }}>
             {/* Payment Entry Form */}
@@ -1421,9 +2185,6 @@ function PaymentsPage() {
                 border: '1px solid #e0e0e0',
               }}
             >
-              <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>
-                Create Payment
-              </Typography>
               <CreatePaymentForm
                 paymentForm={paymentForm}
                 setPaymentForm={setPaymentForm}
@@ -1438,52 +2199,284 @@ function PaymentsPage() {
               <div className="text-red-500 mb-4">{error.message}</div>
             )}
 
-            {/* Download All Buttons */}
+            {/* Filters and Action Buttons Row */}
             <Box
               sx={{
                 display: 'flex',
                 gap: 2,
                 mb: 2,
-                justifyContent: 'flex-end',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                mt: 3,
+                flexWrap: 'wrap',
               }}
             >
-              <Button
-                variant="outlined"
-                startIcon={<FileDownload />}
-                onClick={downloadAllInvoices}
-                disabled={isDownloadingInvoices || isDownloadingReceipts}
-                sx={{ textTransform: 'none' }}
-              >
-                {isDownloadingInvoices ? (
-                  <>
-                    <CircularProgress size={16} sx={{ mr: 1 }} />
-                    Downloading...
-                  </>
-                ) : (
-                  'Download All Invoices'
-                )}
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<FileDownload />}
-                onClick={downloadAllReceipts}
-                disabled={isDownloadingInvoices || isDownloadingReceipts}
-                sx={{ textTransform: 'none' }}
-              >
-                {isDownloadingReceipts ? (
-                  <>
-                    <CircularProgress size={16} sx={{ mr: 1 }} />
-                    Downloading...
-                  </>
-                ) : (
-                  'Download All Receipts'
-                )}
-              </Button>
+              {/* Filter Button */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Button
+                  variant="outlined"
+                  startIcon={<FilterList />}
+                  onClick={(e) => setFilterAnchorEl(e.currentTarget)}
+                  size="small"
+                  color={
+                    Object.keys(currentFilters).filter(
+                      (key) => currentFilters[key],
+                    ).length > 0
+                      ? 'primary'
+                      : 'inherit'
+                  }
+                  sx={{ textTransform: 'none' }}
+                >
+                  Filters
+                  {Object.keys(currentFilters).filter(
+                    (key) => currentFilters[key],
+                  ).length > 0 && (
+                    <Chip
+                      label={
+                        Object.keys(currentFilters).filter(
+                          (key) => currentFilters[key],
+                        ).length
+                      }
+                      size="small"
+                      color="primary"
+                      sx={{ ml: 1, height: 20, fontSize: '0.7rem' }}
+                    />
+                  )}
+                </Button>
+                <Menu
+                  anchorEl={filterAnchorEl}
+                  open={Boolean(filterAnchorEl)}
+                  onClose={() => setFilterAnchorEl(null)}
+                  anchorOrigin={{
+                    vertical: 'bottom',
+                    horizontal: 'left',
+                  }}
+                  transformOrigin={{
+                    vertical: 'top',
+                    horizontal: 'left',
+                  }}
+                >
+                  <Box sx={{ p: 2, maxWidth: 500, minWidth: 300 }}>
+                    <Box
+                      sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
+                    >
+                      {customFilters.map((filter) => (
+                        <Box key={filter.field}>
+                          <FormControl fullWidth size="small">
+                            <InputLabel>{filter.label}</InputLabel>
+                            <Select
+                              multiple
+                              value={filterValues[filter.field]?.value || []}
+                              label={filter.label}
+                              onChange={(e) => {
+                                const newValue = e.target.value
+                                setFilterValues((prev) => ({
+                                  ...prev,
+                                  [filter.field]: {
+                                    prefix: 'IN',
+                                    value: newValue,
+                                  },
+                                }))
+                              }}
+                              renderValue={(selected) => (
+                                <Box
+                                  sx={{
+                                    display: 'flex',
+                                    flexWrap: 'wrap',
+                                    gap: 0.5,
+                                  }}
+                                >
+                                  {selected.map((value) => (
+                                    <Chip
+                                      key={value}
+                                      label={value}
+                                      size="small"
+                                    />
+                                  ))}
+                                </Box>
+                              )}
+                            >
+                              {filter.options.map((option) => (
+                                <MenuItem key={option} value={option}>
+                                  {option}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        </Box>
+                      ))}
+                    </Box>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'flex-end',
+                        gap: 1,
+                        mt: 2,
+                      }}
+                    >
+                      <Button
+                        onClick={() => {
+                          const clearedFilters = {}
+                          customFilters.forEach((filter) => {
+                            clearedFilters[filter.field] = null
+                          })
+                          setFilterValues({})
+                          setCurrentFilters({})
+                          handleFilterChange({})
+                          setFilterAnchorEl(null)
+                        }}
+                        size="small"
+                      >
+                        Clear
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          setCurrentFilters(filterValues)
+                          handleFilterChange(filterValues)
+                          setFilterAnchorEl(null)
+                        }}
+                        variant="contained"
+                        size="small"
+                      >
+                        Apply
+                      </Button>
+                    </Box>
+                  </Box>
+                </Menu>
+              </Box>
+
+              {/* Action Buttons */}
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                <Button
+                  variant="outlined"
+                  startIcon={<Download />}
+                  onClick={(e) => setExportAnchorEl(e.currentTarget)}
+                  disabled={!dataTabPayments || dataTabPayments.length === 0}
+                  sx={{ textTransform: 'none' }}
+                >
+                  Export
+                </Button>
+                <Menu
+                  anchorEl={exportAnchorEl}
+                  open={Boolean(exportAnchorEl)}
+                  onClose={() => setExportAnchorEl(null)}
+                  anchorOrigin={{
+                    vertical: 'bottom',
+                    horizontal: 'left',
+                  }}
+                  transformOrigin={{
+                    vertical: 'top',
+                    horizontal: 'left',
+                  }}
+                >
+                  <MenuItem
+                    onClick={() => {
+                      exportReport(dataTabPayments, columns, 'csv', {
+                        reportName: 'Payments_Report',
+                        reportType: 'payments',
+                        branchName: 'All_Branches',
+                        filters: currentFilters,
+                      })
+                      setExportAnchorEl(null)
+                    }}
+                  >
+                    Download as CSV
+                  </MenuItem>
+                  <MenuItem
+                    onClick={() => {
+                      exportReport(dataTabPayments, columns, 'xlsx', {
+                        reportName: 'Payments_Report',
+                        reportType: 'payments',
+                        branchName: 'All_Branches',
+                        filters: currentFilters,
+                      })
+                      setExportAnchorEl(null)
+                    }}
+                  >
+                    Download as Excel
+                  </MenuItem>
+                  <MenuItem
+                    onClick={() => {
+                      exportReport(dataTabPayments, columns, 'pdf', {
+                        reportName: 'Payments_Report',
+                        reportType: 'payments',
+                        branchName: 'All_Branches',
+                        filters: currentFilters,
+                      })
+                      setExportAnchorEl(null)
+                    }}
+                  >
+                    Download as PDF
+                  </MenuItem>
+                </Menu>
+                <Button
+                  variant="outlined"
+                  startIcon={<FileDownload />}
+                  onClick={downloadAllInvoices}
+                  disabled={isDownloadingInvoices || isDownloadingReceipts}
+                  sx={{ textTransform: 'none' }}
+                >
+                  {isDownloadingInvoices ? (
+                    <>
+                      <CircularProgress size={16} sx={{ mr: 1 }} />
+                      Downloading...
+                    </>
+                  ) : (
+                    'Invoice'
+                  )}
+                </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<FileDownload />}
+                  onClick={downloadAllReceipts}
+                  disabled={isDownloadingInvoices || isDownloadingReceipts}
+                  sx={{ textTransform: 'none' }}
+                >
+                  {isDownloadingReceipts ? (
+                    <>
+                      <CircularProgress size={16} sx={{ mr: 1 }} />
+                      Downloading...
+                    </>
+                  ) : (
+                    'Receipt'
+                  )}
+                </Button>
+              </Box>
             </Box>
 
-            <div style={{ height: '70vh', width: '100%' }}>
+            <Box
+              sx={{
+                height: '70vh',
+                width: '100%',
+                overflow: 'hidden',
+                '& .MuiDataGrid-root': {
+                  border: 'none',
+                },
+                '& .MuiDataGrid-cell': {
+                  padding: '8px 12px',
+                  fontSize: '0.875rem',
+                },
+                '& .MuiDataGrid-columnHeaders': {
+                  padding: '0 12px',
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                  backgroundColor: '#f5f5f5',
+                },
+                '& .MuiDataGrid-columnHeader': {
+                  padding: '8px 12px',
+                },
+                '& .MuiDataGrid-row': {
+                  '&:hover': {
+                    backgroundColor: '#fafafa',
+                  },
+                },
+                '& .cell-text': {
+                  fontSize: '0.875rem',
+                },
+              }}
+            >
               <FilteredDataGrid
-                rows={paymentsData}
+                rows={dataTabPayments}
                 getRowId={(row) => row.id}
                 columns={columns}
                 className="my-5 mx-2 py-3 bg-white"
@@ -1491,33 +2484,356 @@ function PaymentsPage() {
                 customFilters={customFilters}
                 filterData={filterData}
                 getUniqueValues={getUniqueValues}
-                reportName="Payments_Report"
-                reportType="payments"
-                branchName="All_Branches"
                 filters={currentFilters}
                 onRowsChange={handleRowsChange}
                 disableRowSelectionOnClick
+                hideExport={true}
+                autoHeight={false}
+                disableColumnMenu
+                disableDensitySelector
+                disableColumnResize
+                scrollbarSize={8}
                 slots={{
-                  toolbar: ReportExportToolbar,
+                  toolbar: () => null,
                 }}
-                slotProps={{
-                  toolbar: {
-                    data: paymentsData,
-                    columns,
-                    reportName: 'Payments_Report',
-                    reportType: 'payments',
-                    branchName: 'All_Branches',
-                    filters: currentFilters,
+                sx={{
+                  '& .MuiDataGrid-main': {
+                    overflowX: 'hidden',
+                  },
+                  '& .MuiDataGrid-virtualScroller': {
+                    overflowX: 'hidden !important',
+                  },
+                  '& .MuiDataGrid-virtualScrollerContent': {
+                    width: '100% !important',
+                  },
+                  '& .MuiDataGrid-toolbarContainer': {
+                    display: 'none',
                   },
                 }}
               />
-            </div>
+            </Box>
           </CardContent>
         </TabPanel>
 
         {/* SUMMARY TAB - Enhanced */}
         <TabPanel value={activeTab} index={1}>
           <CardContent sx={{ p: 2.5 }}>
+            {/* Filters and Action Buttons Row */}
+            <Box
+              sx={{
+                display: 'flex',
+                gap: 2,
+                mb: 2,
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+              }}
+            >
+              {/* Filter Button */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Button
+                  variant="outlined"
+                  startIcon={<FilterList />}
+                  onClick={(e) => setFilterAnchorEl(e.currentTarget)}
+                  size="small"
+                  color={
+                    Object.keys(currentFilters).filter(
+                      (key) => currentFilters[key],
+                    ).length > 0
+                      ? 'primary'
+                      : 'inherit'
+                  }
+                  sx={{ textTransform: 'none' }}
+                >
+                  Filters
+                  {Object.keys(currentFilters).filter(
+                    (key) => currentFilters[key],
+                  ).length > 0 && (
+                    <Chip
+                      label={
+                        Object.keys(currentFilters).filter(
+                          (key) => currentFilters[key],
+                        ).length
+                      }
+                      size="small"
+                      color="primary"
+                      sx={{ ml: 1, height: 20, fontSize: '0.7rem' }}
+                    />
+                  )}
+                </Button>
+                <Menu
+                  anchorEl={filterAnchorEl}
+                  open={Boolean(filterAnchorEl)}
+                  onClose={() => setFilterAnchorEl(null)}
+                  anchorOrigin={{
+                    vertical: 'bottom',
+                    horizontal: 'left',
+                  }}
+                  transformOrigin={{
+                    vertical: 'top',
+                    horizontal: 'left',
+                  }}
+                >
+                  <Box sx={{ p: 2, maxWidth: 500, minWidth: 300 }}>
+                    <Box
+                      sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}
+                    >
+                      {customFilters.map((filter) => (
+                        <Box key={filter.field}>
+                          <FormControl fullWidth size="small">
+                            <InputLabel>{filter.label}</InputLabel>
+                            <Select
+                              multiple
+                              value={filterValues[filter.field]?.value || []}
+                              label={filter.label}
+                              onChange={(e) => {
+                                const newValue = e.target.value
+                                setFilterValues((prev) => ({
+                                  ...prev,
+                                  [filter.field]: {
+                                    prefix: 'IN',
+                                    value: newValue,
+                                  },
+                                }))
+                              }}
+                              renderValue={(selected) => (
+                                <Box
+                                  sx={{
+                                    display: 'flex',
+                                    flexWrap: 'wrap',
+                                    gap: 0.5,
+                                  }}
+                                >
+                                  {selected.map((value) => (
+                                    <Chip
+                                      key={value}
+                                      label={value}
+                                      size="small"
+                                    />
+                                  ))}
+                                </Box>
+                              )}
+                            >
+                              {filter.options.map((option) => (
+                                <MenuItem key={option} value={option}>
+                                  {option}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </FormControl>
+                        </Box>
+                      ))}
+                    </Box>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'flex-end',
+                        gap: 1,
+                        mt: 2,
+                      }}
+                    >
+                      <Button
+                        onClick={() => {
+                          const clearedFilters = {}
+                          customFilters.forEach((filter) => {
+                            clearedFilters[filter.field] = null
+                          })
+                          setFilterValues({})
+                          setCurrentFilters({})
+                          handleFilterChange({})
+                          setFilterAnchorEl(null)
+                        }}
+                        size="small"
+                      >
+                        Clear
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          setCurrentFilters(filterValues)
+                          handleFilterChange(filterValues)
+                          setFilterAnchorEl(null)
+                        }}
+                        variant="contained"
+                        size="small"
+                      >
+                        Apply
+                      </Button>
+                    </Box>
+                  </Box>
+                </Menu>
+              </Box>
+
+              {/* Action Buttons */}
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                <Button
+                  variant="outlined"
+                  startIcon={<Download />}
+                  onClick={(e) => setExportAnchorEl(e.currentTarget)}
+                  disabled={
+                    !summaryTabPayments || summaryTabPayments.length === 0
+                  }
+                  sx={{ textTransform: 'none' }}
+                >
+                  Export
+                </Button>
+                <Menu
+                  anchorEl={exportAnchorEl}
+                  open={Boolean(exportAnchorEl)}
+                  onClose={() => setExportAnchorEl(null)}
+                  anchorOrigin={{
+                    vertical: 'bottom',
+                    horizontal: 'left',
+                  }}
+                  transformOrigin={{
+                    vertical: 'top',
+                    horizontal: 'left',
+                  }}
+                >
+                  <MenuItem
+                    onClick={() => {
+                      exportReport(summaryTabPayments, columns, 'csv', {
+                        reportName: 'Payments_Report',
+                        reportType: 'payments',
+                        branchName: 'All_Branches',
+                        filters: currentFilters,
+                      })
+                      setExportAnchorEl(null)
+                    }}
+                  >
+                    Download as CSV
+                  </MenuItem>
+                  <MenuItem
+                    onClick={() => {
+                      exportReport(summaryTabPayments, columns, 'xlsx', {
+                        reportName: 'Payments_Report',
+                        reportType: 'payments',
+                        branchName: 'All_Branches',
+                        filters: currentFilters,
+                      })
+                      setExportAnchorEl(null)
+                    }}
+                  >
+                    Download as Excel
+                  </MenuItem>
+                  <MenuItem
+                    onClick={() => {
+                      exportReport(summaryTabPayments, columns, 'pdf', {
+                        reportName: 'Payments_Report',
+                        reportType: 'payments',
+                        branchName: 'All_Branches',
+                        filters: currentFilters,
+                      })
+                      setExportAnchorEl(null)
+                    }}
+                  >
+                    Download as PDF
+                  </MenuItem>
+                </Menu>
+                <Button
+                  variant="outlined"
+                  startIcon={<FileDownload />}
+                  onClick={downloadAllInvoices}
+                  disabled={isDownloadingInvoices || isDownloadingReceipts}
+                  sx={{ textTransform: 'none' }}
+                >
+                  {isDownloadingInvoices ? (
+                    <>
+                      <CircularProgress size={16} sx={{ mr: 1 }} />
+                      Downloading...
+                    </>
+                  ) : (
+                    'Invoice'
+                  )}
+                </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<FileDownload />}
+                  onClick={downloadAllReceipts}
+                  disabled={isDownloadingInvoices || isDownloadingReceipts}
+                  sx={{ textTransform: 'none' }}
+                >
+                  {isDownloadingReceipts ? (
+                    <>
+                      <CircularProgress size={16} sx={{ mr: 1 }} />
+                      Downloading...
+                    </>
+                  ) : (
+                    'Receipt'
+                  )}
+                </Button>
+              </Box>
+            </Box>
+
+            <Box
+              sx={{
+                height: '70vh',
+                width: '100%',
+                mb: 3,
+                overflow: 'hidden',
+                '& .MuiDataGrid-root': {
+                  border: 'none',
+                },
+                '& .MuiDataGrid-cell': {
+                  padding: '8px 12px',
+                  fontSize: '0.875rem',
+                },
+                '& .MuiDataGrid-columnHeaders': {
+                  padding: '0 12px',
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                  backgroundColor: '#f5f5f5',
+                },
+                '& .MuiDataGrid-columnHeader': {
+                  padding: '8px 12px',
+                },
+                '& .MuiDataGrid-row': {
+                  '&:hover': {
+                    backgroundColor: '#fafafa',
+                  },
+                },
+                '& .cell-text': {
+                  fontSize: '0.875rem',
+                },
+              }}
+            >
+              <FilteredDataGrid
+                rows={summaryTabPayments}
+                getRowId={(row) => row.id}
+                columns={columns}
+                className="my-5 mx-2 py-3 bg-white"
+                loading={isLoading}
+                customFilters={customFilters}
+                filterData={filterData}
+                getUniqueValues={getUniqueValues}
+                filters={currentFilters}
+                onRowsChange={handleRowsChange}
+                disableRowSelectionOnClick
+                hideExport={true}
+                autoHeight={false}
+                disableColumnMenu
+                disableDensitySelector
+                disableColumnResize
+                scrollbarSize={8}
+                slots={{
+                  toolbar: () => null,
+                }}
+                sx={{
+                  '& .MuiDataGrid-main': {
+                    overflowX: 'hidden',
+                  },
+                  '& .MuiDataGrid-virtualScroller': {
+                    overflowX: 'hidden !important',
+                  },
+                  '& .MuiDataGrid-virtualScrollerContent': {
+                    width: '100% !important',
+                  },
+                  '& .MuiDataGrid-toolbarContainer': {
+                    display: 'none',
+                  },
+                }}
+              />
+            </Box>
+
             <Typography
               variant="h5"
               fontWeight={700}
@@ -2515,7 +3831,7 @@ const CreateOrderModalWrapper = () => {
   const queryClient = useQueryClient()
 
   const [orderForm, setOrderForm] = useState({
-    branchId: 1,
+    branchId: '',
     orderDate: dayjs().format('YYYY-MM-DD'),
     departmentId: '',
     vendorId: '',
@@ -2540,7 +3856,7 @@ const CreateOrderModalWrapper = () => {
       if (res?.status === 200) {
         toast.success(res?.message || 'Order created successfully', toastconfig)
         setOrderForm({
-          branchId: 1,
+          branchId: '',
           orderDate: dayjs().format('YYYY-MM-DD'),
           departmentId: '',
           vendorId: '',
@@ -2584,20 +3900,48 @@ const CreateOrderModalWrapper = () => {
           </IconButton>
         </div>
 
-        <TextField
-          select
+        <Autocomplete
           fullWidth
-          label="Branch"
-          name="branchId"
-          value={orderForm.branchId}
-          onChange={handleInputChange}
-        >
-          {dropdowns?.branches?.map((branch) => (
-            <MenuItem key={branch.id} value={branch.id}>
-              {branch.name}
-            </MenuItem>
-          ))}
-        </TextField>
+          options={(dropdowns?.branches || [])
+            .filter((branch) => {
+              const branchCode = (
+                branch.branchCode ||
+                branch.name ||
+                ''
+              ).toUpperCase()
+              return ['HYD', 'HNK', 'KMM', 'SPL'].includes(branchCode)
+            })
+            .slice()
+            .sort((a, b) =>
+              (a.name || a.branchCode || '').localeCompare(
+                b.name || b.branchCode || '',
+              ),
+            )}
+          getOptionLabel={(option) =>
+            option.name || option.branchCode || `Branch ${option.id}` || ''
+          }
+          value={
+            (dropdowns?.branches || [])
+              .filter((branch) => {
+                const branchCode = (
+                  branch.branchCode ||
+                  branch.name ||
+                  ''
+                ).toUpperCase()
+                return ['HYD', 'HNK', 'KMM', 'SPL'].includes(branchCode)
+              })
+              .find((branch) => branch.id === orderForm.branchId) || null
+          }
+          onChange={(event, newValue) => {
+            setOrderForm((prev) => ({
+              ...prev,
+              branchId: newValue?.id || '',
+            }))
+          }}
+          renderInput={(params) => (
+            <TextField {...params} label="Branch" variant="outlined" />
+          )}
+        />
 
         <DatePicker
           className="w-full"
@@ -2698,6 +4042,78 @@ const CreatePaymentForm = ({
   dropdowns,
 }) => {
   const userDetails = useSelector((store) => store.user)
+  const invoiceFileInputRef = useRef(null)
+  const receiptFileInputRef = useRef(null)
+
+  // Remove any backdrops that might cover the Select menu
+  useEffect(() => {
+    const removeBackdropsForSelect = () => {
+      try {
+        // Find all Select menus
+        const menus = document.querySelectorAll(
+          '[class*="MuiMenu-root"], [class*="MuiPopover-root"]',
+        )
+        if (menus.length > 0) {
+          // Find and hide any backdrops that might be covering this menu
+          const backdrops = document.querySelectorAll(
+            '[class*="MuiBackdrop-root"]',
+          )
+          backdrops.forEach((backdrop) => {
+            // Check if backdrop still exists and is in the DOM
+            if (!backdrop.parentNode) return
+
+            // Check if this backdrop is not part of an open modal dialog
+            const dialog = backdrop.parentElement?.querySelector(
+              '[role="dialog"][aria-modal="true"]',
+            )
+            const isOpenDialog =
+              dialog && window.getComputedStyle(dialog).display !== 'none'
+            if (!isOpenDialog) {
+              // Only modify style, don't remove the element
+              backdrop.style.display = 'none'
+              backdrop.style.zIndex = '-1'
+              backdrop.style.visibility = 'hidden'
+            }
+          })
+        }
+      } catch (error) {
+        // Silently handle any errors to prevent crashes
+        console.warn('Error in removeBackdropsForSelect:', error)
+      }
+    }
+
+    // Run immediately and on interval (less frequently)
+    removeBackdropsForSelect()
+    const interval = setInterval(removeBackdropsForSelect, 500)
+
+    // Also listen for menu opens (but be careful)
+    const observer = new MutationObserver((mutations) => {
+      // Only process if menus are actually added
+      const hasMenuAdded = mutations.some((mutation) =>
+        Array.from(mutation.addedNodes).some(
+          (node) =>
+            node.nodeType === 1 &&
+            (node.classList?.contains('MuiMenu-root') ||
+              node.querySelector?.('[class*="MuiMenu-root"]')),
+        ),
+      )
+      if (hasMenuAdded) {
+        setTimeout(removeBackdropsForSelect, 50)
+      }
+    })
+
+    if (document.body) {
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+      })
+    }
+
+    return () => {
+      clearInterval(interval)
+      observer.disconnect()
+    }
+  }, [])
   const queryClient = useQueryClient()
 
   const createPaymentMutation = useMutation({
@@ -2705,6 +4121,7 @@ const CreatePaymentForm = ({
       const formData = new FormData()
       formData.append('branchId', newPayment.branchId)
       formData.append('paymentDate', newPayment.paymentDate)
+      formData.append('invoiceDate', newPayment.invoiceDate)
       formData.append('departmentId', newPayment.departmentId)
       formData.append('vendorId', newPayment.vendorId)
       formData.append('amount', newPayment.amount)
@@ -2725,11 +4142,12 @@ const CreatePaymentForm = ({
           toastconfig,
         )
         setPaymentForm({
-          branchId: 1,
+          branchId: '',
           departmentId: '',
           vendorId: '',
           amount: '',
           paymentDate: dayjs().format('YYYY-MM-DD'),
+          invoiceDate: dayjs().format('YYYY-MM-DD'),
           invoiceFile: null,
           receiptFile: null,
         })
@@ -2757,225 +4175,343 @@ const CreatePaymentForm = ({
   }
 
   return (
-    <Box>
-      {/* Row 1 - All fields in single line */}
-      <Box
-        sx={{
-          display: 'flex',
-          gap: 2,
-          mb: 2,
-          alignItems: 'flex-start',
-          flexWrap: { xs: 'wrap', md: 'nowrap' },
-        }}
-      >
-        <TextField
-          select
-          label="Branch"
-          name="branchId"
-          value={paymentForm.branchId}
-          onChange={handleInputChange}
-          size="small"
-          sx={{ flex: '0 0 7.5%', minWidth: '100px' }}
-        >
-          {dropdowns?.branches?.map((branch) => (
-            <MenuItem key={branch.id} value={branch.id}>
-              {branch.name}
-            </MenuItem>
-          ))}
-        </TextField>
+    <Box sx={{ width: '100%' }}>
+      {/* Form Container with Grid Layout */}
+      <Grid container spacing={2} sx={{ mb: 2 }}>
+        {/* Branch Field */}
+        <Grid item xs={12} sm={6} md={2}>
+          <Autocomplete
+            size="small"
+            fullWidth
+            options={(dropdowns?.branches || [])
+              .filter((branch) => {
+                const branchCode = (
+                  branch.branchCode ||
+                  branch.name ||
+                  ''
+                ).toUpperCase()
+                return ['HYD', 'HNK', 'KMM', 'SPL'].includes(branchCode)
+              })
+              .slice()
+              .sort((a, b) =>
+                (a.name || a.branchCode || '').localeCompare(
+                  b.name || b.branchCode || '',
+                ),
+              )}
+            getOptionLabel={(option) =>
+              option.name || option.branchCode || `Branch ${option.id}` || ''
+            }
+            value={
+              (dropdowns?.branches || [])
+                .filter((branch) => {
+                  const branchCode = (
+                    branch.branchCode ||
+                    branch.name ||
+                    ''
+                  ).toUpperCase()
+                  return ['HYD', 'HNK', 'KMM', 'SPL'].includes(branchCode)
+                })
+                .find((branch) => branch.id === paymentForm.branchId) || null
+            }
+            onChange={(event, newValue) => {
+              setPaymentForm((prev) => ({
+                ...prev,
+                branchId: newValue?.id || '',
+              }))
+            }}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Branch"
+                variant="outlined"
+                size="small"
+                fullWidth
+              />
+            )}
+            sx={{
+              '& .MuiInputBase-root': {
+                height: '40px',
+              },
+            }}
+          />
+        </Grid>
 
-        <DatePicker
-          label="Payment Date"
-          value={dayjs(paymentForm.paymentDate)}
-          onChange={(newDate) =>
-            setPaymentForm((prev) => ({
-              ...prev,
-              paymentDate: dayjs(newDate).format('YYYY-MM-DD'),
-            }))
-          }
-          format="DD-MM-YYYY"
-          slotProps={{
-            textField: {
-              size: 'small',
-            },
-          }}
-          sx={{ flex: '0 0 15%', minWidth: '150px' }}
-        />
+        {/* Payment Date Field */}
+        <Grid item xs={12} sm={6} md={2}>
+          <DatePicker
+            label="Payment Date"
+            value={dayjs(paymentForm.paymentDate)}
+            onChange={(newDate) =>
+              setPaymentForm((prev) => ({
+                ...prev,
+                paymentDate: dayjs(newDate).format('YYYY-MM-DD'),
+              }))
+            }
+            format="DD-MM-YYYY"
+            slotProps={{
+              textField: {
+                size: 'small',
+                fullWidth: true,
+              },
+            }}
+            sx={{
+              width: '100%',
+              '& .MuiInputBase-root': {
+                height: '40px',
+              },
+            }}
+          />
+        </Grid>
 
-        <Autocomplete
-          size="small"
-          options={(dropdowns?.departmentList || [])
-            .slice()
-            .sort((a, b) => a.name?.localeCompare(b.name))}
-          getOptionLabel={(option) => option.name || ''}
-          value={
-            (dropdowns?.departmentList || []).find(
-              (dept) => dept.id === paymentForm.departmentId,
-            ) || null
-          }
-          onChange={(event, newValue) => {
-            setPaymentForm((prev) => ({
-              ...prev,
-              departmentId: newValue?.id || '',
-              vendorId: '',
-            }))
-          }}
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              label="Department"
-              variant="outlined"
-              size="small"
-            />
-          )}
-          sx={{ flex: '0 0 20%', minWidth: '120px' }}
-        />
+        {/* Invoice Date Field */}
+        <Grid item xs={12} sm={6} md={2}>
+          <DatePicker
+            label="Invoice Date"
+            value={dayjs(paymentForm.invoiceDate)}
+            onChange={(newDate) =>
+              setPaymentForm((prev) => ({
+                ...prev,
+                invoiceDate: dayjs(newDate).format('YYYY-MM-DD'),
+              }))
+            }
+            format="DD-MM-YYYY"
+            slotProps={{
+              textField: {
+                size: 'small',
+                fullWidth: true,
+              },
+            }}
+            sx={{
+              width: '100%',
+              '& .MuiInputBase-root': {
+                height: '40px',
+              },
+            }}
+          />
+        </Grid>
 
-        <Autocomplete
-          size="small"
-          options={(
-            (getVendorsByDepartment ? getVendorsByDepartment?.data : []) || []
-          )
-            .slice()
-            .sort((a, b) => a.name?.localeCompare(b.name))}
-          getOptionLabel={(option) => option.name || ''}
-          value={
-            (
+        {/* Department Field */}
+        <Grid item xs={12} sm={6} md={2}>
+          <Autocomplete
+            size="small"
+            fullWidth
+            options={(dropdowns?.departmentList || [])
+              .slice()
+              .sort((a, b) => a.name?.localeCompare(b.name))}
+            getOptionLabel={(option) => option.name || ''}
+            value={
+              (dropdowns?.departmentList || []).find(
+                (dept) => dept.id === paymentForm.departmentId,
+              ) || null
+            }
+            onChange={(event, newValue) => {
+              setPaymentForm((prev) => ({
+                ...prev,
+                departmentId: newValue?.id || '',
+                vendorId: '',
+              }))
+            }}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Department"
+                variant="outlined"
+                size="small"
+                fullWidth
+              />
+            )}
+            sx={{
+              '& .MuiInputBase-root': {
+                height: '40px',
+              },
+            }}
+          />
+        </Grid>
+
+        {/* Vendor Field */}
+        <Grid item xs={12} sm={6} md={2}>
+          <Autocomplete
+            size="small"
+            fullWidth
+            options={(
               (getVendorsByDepartment ? getVendorsByDepartment?.data : []) || []
-            ).find((vendor) => vendor.id === paymentForm.vendorId) || null
-          }
-          onChange={(event, newValue) => {
-            setPaymentForm((prev) => ({
-              ...prev,
-              vendorId: newValue?.id || '',
-            }))
-          }}
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              label="Vendor"
-              variant="outlined"
+            )
+              .slice()
+              .sort((a, b) => a.name?.localeCompare(b.name))}
+            getOptionLabel={(option) => option.name || ''}
+            value={
+              (
+                (getVendorsByDepartment ? getVendorsByDepartment?.data : []) ||
+                []
+              ).find((vendor) => vendor.id === paymentForm.vendorId) || null
+            }
+            onChange={(event, newValue) => {
+              setPaymentForm((prev) => ({
+                ...prev,
+                vendorId: newValue?.id || '',
+              }))
+            }}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                label="Vendor"
+                variant="outlined"
+                size="small"
+                fullWidth
+              />
+            )}
+            disabled={!paymentForm.departmentId}
+            sx={{
+              '& .MuiInputBase-root': {
+                height: '40px',
+              },
+            }}
+          />
+        </Grid>
+
+        {/* Amount Field */}
+        <Grid item xs={12} sm={6} md={2}>
+          <TextField
+            type="number"
+            label="Amount"
+            name="amount"
+            value={paymentForm.amount}
+            onChange={handleInputChange}
+            required
+            size="small"
+            fullWidth
+            sx={{
+              '& .MuiInputBase-root': {
+                height: '40px',
+              },
+            }}
+          />
+        </Grid>
+
+        {/* Action Buttons - Inline with form fields on desktop, separate row on mobile */}
+        <Grid item xs={12} sm={12} md={12}>
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: 1.5,
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              mt: { xs: 1, sm: 0 },
+            }}
+          >
+            <Box
+              sx={{
+                position: 'relative',
+                display: 'flex',
+                alignItems: 'center',
+                height: '40px',
+              }}
+            >
+              <input
+                type="file"
+                id="invoiceFile"
+                ref={invoiceFileInputRef}
+                onChange={(e) => handleFileChange('invoiceFile', e)}
+                accept="application/pdf,image/*"
+                style={{
+                  position: 'absolute',
+                  width: 0,
+                  height: 0,
+                  opacity: 0,
+                  overflow: 'hidden',
+                  zIndex: -1,
+                  pointerEvents: 'none',
+                }}
+              />
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={() => invoiceFileInputRef.current?.click()}
+                size="small"
+                sx={{
+                  textTransform: 'none',
+                  minWidth: '120px',
+                  height: '40px',
+                  boxShadow: 1,
+                  '&:hover': {
+                    boxShadow: 2,
+                  },
+                }}
+              >
+                Invoice
+              </Button>
+            </Box>
+
+            <Box
+              sx={{
+                position: 'relative',
+                display: 'flex',
+                alignItems: 'center',
+                height: '40px',
+              }}
+            >
+              <input
+                type="file"
+                id="receiptFile"
+                ref={receiptFileInputRef}
+                onChange={(e) => handleFileChange('receiptFile', e)}
+                accept="application/pdf,image/*"
+                style={{
+                  position: 'absolute',
+                  width: 0,
+                  height: 0,
+                  opacity: 0,
+                  overflow: 'hidden',
+                  zIndex: -1,
+                  pointerEvents: 'none',
+                }}
+              />
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={() => receiptFileInputRef.current?.click()}
+                size="small"
+                sx={{
+                  textTransform: 'none',
+                  minWidth: '120px',
+                  height: '40px',
+                  boxShadow: 1,
+                  '&:hover': {
+                    boxShadow: 2,
+                  },
+                }}
+              >
+                Receipt
+              </Button>
+            </Box>
+
+            <Button
+              variant="contained"
+              className="capitalize text-white"
+              color="primary"
+              onClick={handleSubmit}
+              disabled={createPaymentMutation.isLoading}
               size="small"
-            />
-          )}
-          disabled={!paymentForm.departmentId}
-          sx={{ flex: '0 0 25%', minWidth: '120px' }}
-        />
-
-        <TextField
-          type="number"
-          label="Amount"
-          name="amount"
-          value={paymentForm.amount}
-          onChange={handleInputChange}
-          required
-          size="small"
-          sx={{ flex: '0 0 15%', minWidth: '120px' }}
-        />
-      </Box>
-
-      {/* Row 2 */}
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' },
-          gap: 2,
-          mb: 2,
-        }}
-      >
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 0.5,
-            justifyContent: 'flex-start',
-          }}
-        >
-          <Typography variant="body2" sx={{ fontWeight: 500, mb: 0.5 }}>
-            Upload Invoice
-          </Typography>
-          <input
-            type="file"
-            id="invoiceFile"
-            onChange={(e) => handleFileChange('invoiceFile', e)}
-            accept="application/pdf,image/*"
-            style={{
-              padding: '6px 8px',
-              border: '1px solid #ccc',
-              borderRadius: '4px',
-              fontSize: '14px',
-              width: '100%',
-              boxSizing: 'border-box',
-            }}
-          />
-          {paymentForm.invoiceFile && (
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ mt: 0.5 }}
+              sx={{
+                minWidth: '120px',
+                textTransform: 'none',
+                height: '40px',
+                boxShadow: 1,
+                '&:hover': {
+                  boxShadow: 2,
+                },
+              }}
             >
-              Selected: {paymentForm.invoiceFile.name}
-            </Typography>
-          )}
-        </Box>
-
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 0.5,
-            justifyContent: 'flex-start',
-          }}
-        >
-          <Typography variant="body2" sx={{ fontWeight: 500, mb: 0.5 }}>
-            Upload Payment Receipt
-          </Typography>
-          <input
-            type="file"
-            id="receiptFile"
-            onChange={(e) => handleFileChange('receiptFile', e)}
-            accept="application/pdf,image/*"
-            style={{
-              padding: '6px 8px',
-              border: '1px solid #ccc',
-              borderRadius: '4px',
-              fontSize: '14px',
-              width: '100%',
-              boxSizing: 'border-box',
-            }}
-          />
-          {paymentForm.receiptFile && (
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ mt: 0.5 }}
-            >
-              Selected: {paymentForm.receiptFile.name}
-            </Typography>
-          )}
-        </Box>
-
-        {/* Empty space to maintain grid alignment */}
-        <Box />
-      </Box>
-
-      {/* Create Button Row */}
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-        <Button
-          variant="contained"
-          className="capitalize text-white"
-          color="primary"
-          onClick={handleSubmit}
-          disabled={createPaymentMutation.isLoading}
-          sx={{ minWidth: '150px' }}
-        >
-          {createPaymentMutation.isLoading ? (
-            <CircularProgress size={24} />
-          ) : (
-            'Submit'
-          )}
-        </Button>
-      </Box>
+              {createPaymentMutation.isLoading ? (
+                <CircularProgress size={24} />
+              ) : (
+                'Submit'
+              )}
+            </Button>
+          </Box>
+        </Grid>
+      </Grid>
     </Box>
   )
 }

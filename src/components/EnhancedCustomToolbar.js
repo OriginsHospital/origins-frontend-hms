@@ -108,6 +108,7 @@ const EnhancedCustomToolbar = ({
   filters = {},
   data = [],
   columns = [],
+  hideExport = false,
 }) => {
   const [anchorEl, setAnchorEl] = useState(null)
   const [filterValues, setFilterValues] = useState({})
@@ -478,7 +479,7 @@ const EnhancedCustomToolbar = ({
       >
         Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
       </Button>
-      <CustomExportButton />
+      {!hideExport && <CustomExportButton />}
 
       <Menu
         anchorEl={anchorEl}

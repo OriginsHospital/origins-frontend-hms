@@ -342,6 +342,7 @@ export const API_ROUTES = {
   //payments
   GET_ALL_PAYMENTS: '/payments/getAll',
   CREATE_PAYMENT: '/payments/create',
+  UPDATE_PAYMENT_FILES: '/payments/updateFiles',
 
   GET_ALL_REFERRALS: '/masterData/referrals/getAllReferrals',
   ADD_NEW_REFERRAL: '/masterData/referrals/addReferral',

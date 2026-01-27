@@ -3,7 +3,6 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions,
   Button,
   Typography,
   Box,
@@ -22,11 +21,7 @@ import {
   TextField,
   CircularProgress,
 } from '@mui/material'
-import {
-  Close as CloseIcon,
-  Edit as EditIcon,
-  Comment as CommentIcon,
-} from '@mui/icons-material'
+import { Close as CloseIcon, Comment as CommentIcon } from '@mui/icons-material'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSelector } from 'react-redux'
 import { toast } from 'react-toastify'
@@ -974,35 +969,6 @@ function TaskDetailsModal({ open, onClose, taskId, onEdit, onStatusChange }) {
           </Box>
         )}
       </DialogContent>
-      <DialogActions sx={{ p: 1.5, pt: 1 }}>
-        <Button
-          onClick={onClose}
-          variant="outlined"
-          size="small"
-          sx={{ fontSize: '0.875rem', px: 2 }}
-        >
-          Cancel
-        </Button>
-        {normalizedTask && onEdit && (
-          <Button
-            onClick={() => {
-              onEdit(normalizedTask)
-              onClose()
-            }}
-            variant="contained"
-            size="small"
-            startIcon={<EditIcon sx={{ fontSize: '1rem' }} />}
-            sx={{
-              bgcolor: '#06aee9',
-              '&:hover': { bgcolor: '#0599d1' },
-              fontSize: '0.875rem',
-              px: 2,
-            }}
-          >
-            Edit Task
-          </Button>
-        )}
-      </DialogActions>
     </Dialog>
   )
 }

@@ -3912,6 +3912,24 @@ export const createPayment = async (token, formData) => {
   return response.json()
 }
 
+export const updatePaymentFiles = async (token, paymentId, formData) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  // Don't set Content-Type for FormData, browser will set it with boundary
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.UPDATE_PAYMENT_FILES}/${paymentId}`,
+    {
+      method: 'PUT',
+      body: formData,
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+
+  return response.json()
+}
+
 export const placeOrder = async (token, payload) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
