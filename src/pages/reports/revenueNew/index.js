@@ -444,7 +444,7 @@ function SalesNew() {
             const matches = itemService === filterValue
             return matches
           })
-        } else if (service === 'Fronth Desk') {
+        } else if (service === 'Front Desk') {
           // Filter to show all items EXCEPT Pharmacy
           filteredSalesData = filteredSalesData.filter((item) => {
             if (!item) return false
@@ -647,7 +647,7 @@ function SalesNew() {
             >
               <MenuItem value="ALL">All</MenuItem>
               <MenuItem value="Pharmacy">Pharmacy</MenuItem>
-              <MenuItem value="Fronth Desk">Fronth Desk</MenuItem>
+              <MenuItem value="Front Desk">Front Desk</MenuItem>
             </Select>
           </FormControl>
         </Grid>
