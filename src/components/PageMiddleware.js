@@ -14,6 +14,8 @@ import Link from 'next/link'
 import { SideNav } from './SideNav'
 import { requestInterceptor } from '@/utils/requestInterceptor'
 import { setCoupon } from '@/redux/couponSlice'
+import TabBar from './TabBar'
+import TabManager from './TabManager'
 
 export default function PageMiddleware(props) {
   const user = useSelector((store) => store.user)
@@ -173,11 +175,16 @@ export default function PageMiddleware(props) {
   }
 
   return (
-    <div className="flex flex-row ">
-      <SideNav />
-      <div className="pt-[60px] self-stretch h-screen overflow-scroll grow relative">
-        <div className="">{props.children}</div>
+    <TabManager>
+      <div className="flex flex-row ">
+        <SideNav />
+        <div className="pt-[60px] self-stretch h-screen overflow-hidden grow relative flex flex-col">
+          <TabBar />
+          <div className="flex-1 overflow-auto">
+            <div className="">{props.children}</div>
+          </div>
+        </div>
       </div>
-    </div>
+    </TabManager>
   )
 }
