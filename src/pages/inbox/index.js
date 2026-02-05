@@ -24,6 +24,7 @@ import {
 import {
   Notifications as NotificationsIcon,
   Comment as CommentIcon,
+  Assignment as AssignmentIcon,
   ArrowForward as ArrowForwardIcon,
   Search as SearchIcon,
   CheckCircle as CheckCircleIcon,
@@ -47,7 +48,7 @@ function Inbox() {
   const user = useSelector((store) => store.user)
   const router = useRouter()
   const [activeTab, setActiveTab] = useState(0) // 0: Take Action, 1: Notifications, 2: Archive
-  const [selectedCategory, setSelectedCategory] = useState('alerts') // 'alerts', 'ticketComments'
+  const [selectedCategory, setSelectedCategory] = useState('alerts') // 'alerts', 'ticketComments', 'ticketAssignments'
   const [selectedItem, setSelectedItem] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [sortOrder, setSortOrder] = useState('newest')
@@ -70,6 +71,7 @@ function Inbox() {
   const inboxData = data?.data || {}
   const alerts = inboxData.alerts || []
   const ticketComments = inboxData.ticketComments || []
+  const ticketAssignments = inboxData.ticketAssignments || []
 
   // Filter items based on selected category
   const getItemsForCategory = () => {
@@ -77,6 +79,8 @@ function Inbox() {
       return alerts
     } else if (selectedCategory === 'ticketComments') {
       return ticketComments
+    } else if (selectedCategory === 'ticketAssignments') {
+      return ticketAssignments
     }
     return []
   }
@@ -107,6 +111,19 @@ function Inbox() {
               .includes(searchTerm.toLowerCase()) ||
             item.ticket_code?.toLowerCase().includes(searchTerm.toLowerCase())
           )
+        } else if (selectedCategory === 'ticketAssignments') {
+          const creator = item.creatorDetails
+            ? typeof item.creatorDetails === 'string'
+              ? JSON.parse(item.creatorDetails)
+              : item.creatorDetails
+            : {}
+          return (
+            creator.fullName
+              ?.toLowerCase()
+              .includes(searchTerm.toLowerCase()) ||
+            item.message?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            item.ticket_code?.toLowerCase().includes(searchTerm.toLowerCase())
+          )
         }
         return true
       })
@@ -120,7 +137,14 @@ function Inbox() {
     })
 
     return items
-  }, [selectedCategory, searchTerm, sortOrder, alerts, ticketComments])
+  }, [
+    selectedCategory,
+    searchTerm,
+    sortOrder,
+    alerts,
+    ticketComments,
+    ticketAssignments,
+  ])
 
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue)
@@ -204,7 +228,7 @@ function Inbox() {
           }}
         >
           <Tab
-            label={`TAKE ACTION (${alerts.length + ticketComments.length})`}
+            label={`TAKE ACTION (${alerts.length + ticketComments.length + ticketAssignments.length})`}
           />
           <Tab label="NOTIFICATIONS" />
           <Tab label="ARCHIVE" />
@@ -294,6 +318,41 @@ function Inbox() {
                 Ticket Comments ({ticketComments.length})
               </Typography>
             </Box>
+            <Box
+              onClick={() => handleCategoryChange('ticketAssignments')}
+              sx={{
+                p: 1.5,
+                borderRadius: 1,
+                cursor: 'pointer',
+                bgcolor:
+                  selectedCategory === 'ticketAssignments'
+                    ? '#f3e5f5'
+                    : 'transparent',
+                color:
+                  selectedCategory === 'ticketAssignments'
+                    ? '#7b1fa2'
+                    : 'inherit',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 2,
+                '&:hover': {
+                  bgcolor:
+                    selectedCategory === 'ticketAssignments'
+                      ? '#f3e5f5'
+                      : '#f5f5f5',
+                },
+              }}
+            >
+              <AssignmentIcon sx={{ fontSize: 20 }} />
+              <Typography
+                variant="body2"
+                fontWeight={
+                  selectedCategory === 'ticketAssignments' ? 600 : 400
+                }
+              >
+                Ticket Assignments ({ticketAssignments.length})
+              </Typography>
+            </Box>
           </Stack>
         </Box>
 
@@ -317,7 +376,11 @@ function Inbox() {
                 fontWeight={600}
                 sx={{ flex: 1, textTransform: 'uppercase' }}
               >
-                {selectedCategory === 'alerts' ? 'ALERTS' : 'TICKET COMMENTS'}
+                {selectedCategory === 'alerts'
+                  ? 'ALERTS'
+                  : selectedCategory === 'ticketComments'
+                    ? 'TICKET COMMENTS'
+                    : 'TICKET ASSIGNMENTS'}
               </Typography>
             </Box>
             <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
@@ -491,6 +554,83 @@ function Inbox() {
                             {getTimeAgo(item.created_at || item.createdAt)}
                           </Typography>
                         </Box>
+                      </Box>
+                    </Box>
+                  )
+                } else if (selectedCategory === 'ticketAssignments') {
+                  const creator = item.creatorDetails
+                    ? typeof item.creatorDetails === 'string'
+                      ? JSON.parse(item.creatorDetails)
+                      : item.creatorDetails
+                    : {}
+                  const initials =
+                    creator.fullName
+                      ?.split(' ')
+                      .map((n) => n[0])
+                      .join('')
+                      .toUpperCase()
+                      .slice(0, 2) || 'U'
+
+                  return (
+                    <Box
+                      key={item.id || index}
+                      onClick={() => setSelectedItem(item)}
+                      sx={{
+                        p: 2,
+                        borderBottom: '1px solid #f0f0f0',
+                        cursor: 'pointer',
+                        bgcolor:
+                          selectedItem?.id === item.id
+                            ? '#f3e5f5'
+                            : 'transparent',
+                        '&:hover': {
+                          bgcolor:
+                            selectedItem?.id === item.id
+                              ? '#f3e5f5'
+                              : '#fafafa',
+                        },
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: 2,
+                        }}
+                      >
+                        <Checkbox size="small" sx={{ mt: 0.5 }} />
+                        <Avatar
+                          sx={{
+                            bgcolor: '#9c27b0',
+                            width: 40,
+                            height: 40,
+                          }}
+                        >
+                          {initials}
+                        </Avatar>
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Typography variant="body2" fontWeight={500} noWrap>
+                            {item.message || 'New ticket assigned'}
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ mt: 0.5, display: 'block' }}
+                          >
+                            {item.ticket_code} • {getTimeAgo(item.created_at)}
+                          </Typography>
+                        </Box>
+                        {!item.is_read && (
+                          <Box
+                            sx={{
+                              width: 8,
+                              height: 8,
+                              borderRadius: '50%',
+                              bgcolor: '#7b1fa2',
+                              mt: 1,
+                            }}
+                          />
+                        )}
                       </Box>
                     </Box>
                   )
@@ -721,6 +861,131 @@ function Inbox() {
                             View Ticket
                           </Button>
                         </Box>
+                      </>
+                    )
+                  })()}
+                </Box>
+              ) : selectedCategory === 'ticketAssignments' ? (
+                <Box sx={{ p: 3, overflowY: 'auto' }}>
+                  {(() => {
+                    const creator = selectedItem.creatorDetails
+                      ? typeof selectedItem.creatorDetails === 'string'
+                        ? JSON.parse(selectedItem.creatorDetails)
+                        : selectedItem.creatorDetails
+                      : {}
+                    const initials =
+                      creator.fullName
+                        ?.split(' ')
+                        .map((n) => n[0])
+                        .join('')
+                        .toUpperCase()
+                        .slice(0, 2) || 'U'
+                    const statusColor = getStatusColor(
+                      selectedItem.ticket_status,
+                    )
+
+                    return (
+                      <>
+                        {/* Header */}
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 2,
+                            mb: 3,
+                          }}
+                        >
+                          <Avatar
+                            sx={{ bgcolor: '#9c27b0', width: 48, height: 48 }}
+                          >
+                            {initials}
+                          </Avatar>
+                          <Box>
+                            <Typography variant="h6" fontWeight={600}>
+                              Ticket Assignment
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              {dayjs(selectedItem.created_at).format(
+                                'DD MMM YYYY hh:mm A',
+                              )}
+                            </Typography>
+                          </Box>
+                        </Box>
+                        <Divider sx={{ mb: 3 }} />
+
+                        {/* Message */}
+                        <Typography variant="body1" sx={{ mb: 3 }}>
+                          {selectedItem.message ||
+                            'You have been assigned a new ticket'}
+                        </Typography>
+
+                        {/* Ticket Details */}
+                        <Paper
+                          sx={{
+                            p: 2,
+                            bgcolor: '#f9fafb',
+                            borderRadius: 1,
+                            mb: 3,
+                          }}
+                        >
+                          <Box sx={{ display: 'flex', gap: 2 }}>
+                            <Box>
+                              <Typography
+                                variant="body2"
+                                fontWeight={600}
+                                sx={{ mb: 0.5 }}
+                              >
+                                {selectedItem.ticket_code ||
+                                  `#${selectedItem.ticket_id}`}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                Ticket Code
+                              </Typography>
+                            </Box>
+                            <Box sx={{ flex: 1 }}>
+                              <Typography
+                                variant="body2"
+                                fontWeight={500}
+                                sx={{ mb: 0.5 }}
+                              >
+                                {selectedItem.task_description ||
+                                  'No description'}
+                              </Typography>
+                              {selectedItem.ticket_status && (
+                                <Chip
+                                  label={selectedItem.ticket_status}
+                                  size="small"
+                                  sx={{
+                                    bgcolor: statusColor.bg,
+                                    color: statusColor.text,
+                                    height: 24,
+                                    fontSize: '0.75rem',
+                                  }}
+                                />
+                              )}
+                            </Box>
+                          </Box>
+                        </Paper>
+
+                        {/* Action Button */}
+                        <Button
+                          variant="contained"
+                          onClick={() =>
+                            handleViewTicket(selectedItem.ticket_id)
+                          }
+                          sx={{
+                            bgcolor: '#06aee9',
+                            '&:hover': { bgcolor: '#0599d1' },
+                          }}
+                        >
+                          View Ticket
+                        </Button>
                       </>
                     )
                   })()}

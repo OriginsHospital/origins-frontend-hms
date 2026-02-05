@@ -95,15 +95,90 @@ function Prescription({
     packageAmount: '',
   })
 
-  const { mutate: updateTreatmentStatusMutation } = useMutation({
+  const {
+    mutate: updateTreatmentStatusMutation,
+    isPending: isUpdatingTrigger,
+  } = useMutation({
     mutationFn: async (payload) => {
       const res = await updateTreatmentStatus(user.accessToken, payload)
-      if (res.status === 200) {
-        queryClient.invalidateQueries('treatmentStatus')
-        toast.success(res?.data, toastconfig)
-      } else {
-        toast.error(res.message, toastconfig)
+      // Don't show success toast here - wait for refetch to confirm
+      if (res.status !== 200) {
+        throw new Error(res.message || 'Failed to start trigger')
       }
+      return res
+    },
+    onSuccess: async (data, variables) => {
+      // After successful mutation, invalidate and refetch treatmentStatus queries
+      const visitId = variables.visitId
+      const treatmentType = variables.treatmentType
+
+      console.log(
+        'Trigger start mutation successful, invalidating queries for:',
+        {
+          visitId,
+          treatmentType,
+        },
+      )
+
+      // Invalidate all treatmentStatus queries
+      queryClient.invalidateQueries({
+        queryKey: ['treatmentStatus'],
+        exact: false,
+      })
+
+      // Wait for backend transaction to commit, then refetch and verify
+      setTimeout(async () => {
+        console.log('Refetching treatmentStatus query:', {
+          visitId,
+          treatmentType,
+        })
+        try {
+          const queryResult = await queryClient.refetchQueries({
+            queryKey: ['treatmentStatus', visitId, treatmentType],
+          })
+
+          // Get the updated treatmentStatus from cache
+          const updatedStatus = queryClient.getQueryData([
+            'treatmentStatus',
+            visitId,
+            treatmentType,
+          ])
+
+          console.log('TreatmentStatus query refetched successfully:', {
+            TRIGGER_START: updatedStatus?.TRIGGER_START,
+          })
+
+          // Only show success if TRIGGER_START is actually 1
+          if (updatedStatus?.TRIGGER_START === 1) {
+            toast.success(
+              data?.data || 'Trigger Started Successfully',
+              toastconfig,
+            )
+          } else {
+            console.warn(
+              'Trigger start may not have completed. TRIGGER_START value:',
+              updatedStatus?.TRIGGER_START,
+            )
+            toast.warning(
+              'Trigger start initiated. Please refresh if status does not update.',
+              toastconfig,
+            )
+          }
+        } catch (err) {
+          console.error('Error refetching treatmentStatus:', err)
+          toast.error(
+            'Failed to verify trigger status. Please refresh the page.',
+            toastconfig,
+          )
+        }
+      }, 1200) // Wait 1.2 seconds for backend transaction to complete
+    },
+    onError: (error) => {
+      console.error('Error starting trigger:', error)
+      toast.error(
+        error.message || 'Failed to start trigger. Please try again.',
+        toastconfig,
+      )
     },
   })
   const {
@@ -147,6 +222,7 @@ function Prescription({
   const [follicularTemplate, setFolicularTemplate] = useState(null)
   const [medicationFormData, setMedicationFormData] = useState({})
   const [scanFormData, setScanFormData] = useState({})
+  const migrationDoneRef = useRef(false) // Track if migration has been done for this template
   const [scanFetFormData, setScanFetFormData] = useState({})
   const [scanEraFormData, setScanEraFormData] = useState({})
   const [fetFormData, setFETFormData] = useState({})
@@ -167,19 +243,25 @@ function Prescription({
         patientInfo?.treatmentDetails?.treatmentTypeId,
       ],
       queryFn: async () => {
-        // console.log(patientInfo)
         const responsejson = await getTreatmentStatus(
           user.accessToken,
           patientInfo?.activeVisitId,
           patientInfo?.treatmentDetails?.treatmentTypeId,
         )
         if (responsejson.status == 200) {
+          console.log('TreatmentStatus fetched:', {
+            visitId: patientInfo?.activeVisitId,
+            treatmentType: patientInfo?.treatmentDetails?.treatmentTypeId,
+            TRIGGER_START: responsejson.data?.TRIGGER_START,
+          })
           return responsejson.data
         } else {
           throw new Error('Error occurred while fetching treatment status')
         }
       },
       enabled: !!patientInfo?.treatmentDetails,
+      refetchOnWindowFocus: false,
+      refetchOnMount: true,
     })
   // const [folicularSheet, setFolicularSheet] = useState('')
   // const { data: defaultTreatmentTemplate } = useQuery({
@@ -285,21 +367,151 @@ function Prescription({
           const hasValidColumns =
             Array.isArray(res?.columns) && res?.columns.length > 0
           const hasValidRows = Array.isArray(res?.rows) && res?.rows.length > 0
+
+          // Correct follicular scan row values - ALWAYS use these regardless of what's in DB
+          const correctRows = [
+            { value: '<=10' },
+            { value: '10.5' },
+            { value: '11' },
+            { value: '11.5' },
+            { value: '12' },
+            { value: '12.5' },
+            { value: '13' },
+            { value: '13.5' },
+            { value: '14' },
+            { value: '14.5' },
+            { value: '15' },
+            { value: '15.5' },
+            { value: '16' },
+            { value: '16.5' },
+            { value: '17' },
+            { value: '17.5' },
+            { value: '18' },
+            { value: '18.5' },
+            { value: '19' },
+            { value: '19.5' },
+            { value: '>=20' },
+            { value: 'ET' }, // ET is the last row (index 21)
+          ]
+
           let columns = res?.columns
-          let rows = res?.rows
-          if (!hasValidColumns || !hasValidRows) {
-            // Build a minimal default template with one day and standard sizes
+          // ALWAYS use correct rows format to fix existing templates with wrong values
+          let rows = correctRows
+
+          // Check if rows in DB need migration (old format: numeric values like 2, 4, 6, etc.)
+          const needsMigration =
+            hasValidRows &&
+            res?.rows?.some((row, index) => {
+              const rowValue = row?.value || row
+              // Check if it's a numeric value (old format) or if it doesn't match correct format
+              if (typeof rowValue === 'number') return true
+              if (typeof rowValue === 'string') {
+                // Check if it matches old numeric format or doesn't match correct format
+                const numValue = parseInt(rowValue)
+                if (!isNaN(numValue) && numValue !== correctRows[index]?.value)
+                  return true
+                if (index < 21 && rowValue !== correctRows[index]?.value)
+                  return true
+              }
+              return false
+            })
+
+          if (!hasValidColumns) {
+            // Build a minimal default template with one day
             const defaultColumns = [dayjs().format('DD/MM')]
-            const standardSizes = [
-              2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34,
-              36, 38, 40,
-            ]
-            const defaultRows = [
-              ...standardSizes.map((size) => ({ value: size })),
-              { value: 'Notes' }, // index 20 (size === 21 row in UI logic)
-            ]
-            columns = hasValidColumns ? res?.columns : defaultColumns
-            rows = hasValidRows ? res?.rows : defaultRows
+            columns = defaultColumns
+          }
+
+          if (needsMigration && !migrationDoneRef.current) {
+            // Migrate old format to new format - preserve data by mapping old indices to new
+            console.log(
+              'Migrating follicular scan rows from old format to new format',
+            )
+            migrationDoneRef.current = true // Mark migration as done
+
+            // Map old row indices (based on old values) to new row indices
+            // Old format: [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22] (11 rows)
+            // New format: ['<=10', '10.5', '11', '11.5', '12', '12.5', '13', '13.5', '14', '14.5', '15', '15.5', '16', '16.5', '17', '17.5', '18', '18.5', '19', '19.5', '>=20', 'ET'] (21 rows, ET is last)
+            const oldRowValues = res?.rows?.map((r) => r?.value || r) || []
+            const oldToNewIndexMap = {}
+
+            // Create mapping: old index -> new index based on closest value match
+            oldRowValues.forEach((oldValue, oldIndex) => {
+              const numValue =
+                typeof oldValue === 'number' ? oldValue : parseInt(oldValue)
+              if (!isNaN(numValue)) {
+                // Find closest matching new row
+                let closestIndex = -1
+                let minDiff = Infinity
+                correctRows.forEach((newRow, newIndex) => {
+                  if (newIndex < 21) {
+                    // Exclude ET row (last row)
+                    const newValue = newRow.value
+                    if (newValue === '<=10' && numValue <= 10) {
+                      const diff = Math.abs(10 - numValue)
+                      if (diff < minDiff) {
+                        minDiff = diff
+                        closestIndex = newIndex
+                      }
+                    } else if (newValue === '>=20' && numValue >= 20) {
+                      const diff = Math.abs(20 - numValue)
+                      if (diff < minDiff) {
+                        minDiff = diff
+                        closestIndex = newIndex
+                      }
+                    } else {
+                      const newNumValue = parseFloat(newValue)
+                      if (!isNaN(newNumValue)) {
+                        const diff = Math.abs(newNumValue - numValue)
+                        if (diff < minDiff) {
+                          minDiff = diff
+                          closestIndex = newIndex
+                        }
+                      }
+                    }
+                  }
+                })
+                if (closestIndex >= 0) {
+                  oldToNewIndexMap[oldIndex] = closestIndex
+                }
+              }
+            })
+
+            // Migrate existing follicular form data from old indices to new indices
+            if (res?.follicularSheet) {
+              const migratedFormData = {}
+              Object.keys(res.follicularSheet).forEach((key) => {
+                // Key format: `${day}-${side}-${oldIndex}`
+                const parts = key.split('-')
+                if (parts.length >= 3) {
+                  const day = parts[0]
+                  const side = parts[1]
+                  const oldIndex = parseInt(parts[2])
+
+                  if (
+                    !isNaN(oldIndex) &&
+                    oldToNewIndexMap.hasOwnProperty(oldIndex)
+                  ) {
+                    // Map to new index
+                    const newIndex = oldToNewIndexMap[oldIndex]
+                    migratedFormData[`${day}-${side}-${newIndex}`] =
+                      res.follicularSheet[key]
+                  } else if (parts[2] === 'note' || key.includes('note')) {
+                    // Keep notes as-is
+                    migratedFormData[key] = res.follicularSheet[key]
+                  } else {
+                    // Keep original if can't map
+                    migratedFormData[key] = res.follicularSheet[key]
+                  }
+                } else {
+                  // Keep non-standard keys
+                  migratedFormData[key] = res.follicularSheet[key]
+                }
+              })
+              setFolicularFormData(migratedFormData)
+              // Note: Migration fixes the display. User can manually click "UPDATE SHEET" to save.
+              // This prevents continuous popup windows.
+            }
           }
           setFolicularTemplate({
             columns,
@@ -309,13 +521,31 @@ function Prescription({
           // No template returned from API. If ICSI is started, create a safe default
           if (treatmentStatus?.START_ICSI == 1) {
             const defaultColumns = [dayjs().format('DD/MM')]
-            const standardSizes = [
-              2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34,
-              36, 38, 40,
-            ]
+            // Use the correct follicular scan row values matching backend
             const defaultRows = [
-              ...standardSizes.map((size) => ({ value: size })),
-              { value: 'Notes' },
+              { value: '<=10' },
+              { value: '10.5' },
+              { value: '11' },
+              { value: '11.5' },
+              { value: '12' },
+              { value: '12.5' },
+              { value: '13' },
+              { value: '13.5' },
+              { value: '14' },
+              { value: '14.5' },
+              { value: '15' },
+              { value: '15.5' },
+              { value: '16' },
+              { value: '16.5' },
+              { value: '17' },
+              { value: '17.5' },
+              { value: '18' },
+              { value: '18.5' },
+              { value: '19' },
+              { value: '19.5' },
+              { value: '>=20' },
+              { value: 'ET' },
+              { value: 'Notes' }, // Notes row at the end
             ]
             setFolicularFormData({})
             setMedicationFormData({})
@@ -463,7 +693,7 @@ function Prescription({
       } else if (res.status === 200) {
         toast.success(res.message)
         dispatch(closeModal())
-        queryClient.invalidateQueries('patientInfoForDoctor')
+        // Removed patientInfoForDoctor invalidation - it's managed in appointments page
         queryClient.invalidateQueries('treatmentStatus')
       }
       // setViewForm(false)
@@ -1195,15 +1425,55 @@ function Prescription({
   }
 
   const handleActionOnStartTrigger = () => {
-    if (confirm('Are you sure you want to start trigger?') && triggerTime) {
-      updateTreatmentStatusMutation({
-        visitId: patientInfo?.activeVisitId,
+    // Prevent multiple clicks
+    if (isUpdatingTrigger) {
+      return
+    }
+
+    // Validate trigger time
+    if (!triggerTime) {
+      toast.error('Please select a trigger time', toastconfig)
+      return
+    }
+
+    // Validate patient info
+    if (
+      !patientInfo?.activeVisitId ||
+      !patientInfo?.treatmentDetails?.treatmentTypeId
+    ) {
+      toast.error(
+        'Patient information is missing. Please refresh the page.',
+        toastconfig,
+      )
+      return
+    }
+
+    // Confirm action
+    if (!confirm('Are you sure you want to start trigger?')) {
+      return
+    }
+
+    // Call mutation
+    updateTreatmentStatusMutation(
+      {
+        visitId: patientInfo.activeVisitId,
         stage: 'TRIGGER_START',
         triggerTime: triggerTime,
-        treatmentType: patientInfo?.treatmentDetails?.treatmentTypeId,
-      })
-      dispatch(closeModal('triggerDate'))
-    }
+        treatmentType: patientInfo.treatmentDetails.treatmentTypeId,
+      },
+      {
+        onSuccess: () => {
+          // Close modal after successful mutation
+          dispatch(closeModal('triggerDate'))
+          // Reset trigger time
+          setTriggerTime(null)
+          // The mutation's onSuccess handler will handle the refetch and success message
+        },
+        onError: () => {
+          // Keep modal open on error so user can retry
+        },
+      },
+    )
   }
   const { data: activeVisitAppointments } = useQuery({
     queryKey: ['activeVisitAppointments', patientInfo?.activeVisitId],
@@ -1417,11 +1687,15 @@ function Prescription({
               variant="contained"
               className=" capitalize text-white"
               onClick={startDispatchTriggerModal}
-              disabled={treatmentStatus?.TRIGGER_START == 1}
+              disabled={
+                treatmentStatus?.TRIGGER_START == 1 || isUpdatingTrigger
+              }
             >
-              {treatmentStatus?.TRIGGER_START == 1
-                ? 'Trigger Started'
-                : 'Start Trigger'}
+              {isUpdatingTrigger
+                ? 'Starting Trigger...'
+                : treatmentStatus?.TRIGGER_START == 1
+                  ? 'Trigger Started'
+                  : 'Start Trigger'}
             </Button>
           )}
           <Modal
@@ -1460,10 +1734,10 @@ function Prescription({
               <Button
                 variant="contained"
                 className="text-white capitalize mt-5"
-                disabled={!triggerTime}
+                disabled={!triggerTime || isUpdatingTrigger}
                 onClick={handleActionOnStartTrigger}
               >
-                Start Trigger
+                {isUpdatingTrigger ? 'Starting...' : 'Start Trigger'}
               </Button>
             </div>
           </Modal>

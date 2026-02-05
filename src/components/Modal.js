@@ -16,6 +16,7 @@ export default function Modal({
   title,
   closeOnOutsideClick,
   onOutsideClick,
+  paperSx, // Additional sx props for Paper component
 }) {
   const modal = useSelector((store) => store.modal)
   const dispatch = useDispatch()
@@ -73,6 +74,7 @@ export default function Modal({
       PaperProps={{
         sx: {
           zIndex: 1300,
+          ...paperSx,
         },
       }}
       BackdropProps={{
@@ -85,22 +87,24 @@ export default function Modal({
       disableEscapeKeyDown={!closeOnOutsideClick}
       disableScrollLock={true} // Don't lock scroll to prevent body issues
       hideBackdrop={false}
-      onExited={() => {
-        // Cleanup on exit - remove body lock
-        document.body.style.overflow = ''
-        document.body.style.paddingRight = ''
-        document.body.classList.remove('MuiModal-open')
-        // Force remove any remaining backdrops
-        setTimeout(() => {
-          const backdrops = document.querySelectorAll(
-            '[class*="MuiBackdrop-root"]',
-          )
-          backdrops.forEach((backdrop) => {
-            if (!backdrop.closest('[role="dialog"]')) {
-              backdrop.remove()
-            }
-          })
-        }, 50)
+      TransitionProps={{
+        onExited: () => {
+          // Cleanup on exit - remove body lock
+          document.body.style.overflow = ''
+          document.body.style.paddingRight = ''
+          document.body.classList.remove('MuiModal-open')
+          // Force remove any remaining backdrops
+          setTimeout(() => {
+            const backdrops = document.querySelectorAll(
+              '[class*="MuiBackdrop-root"]',
+            )
+            backdrops.forEach((backdrop) => {
+              if (!backdrop.closest('[role="dialog"]')) {
+                backdrop.remove()
+              }
+            })
+          }, 50)
+        },
       }}
     >
       {title && <DialogTitle>{title}</DialogTitle>}

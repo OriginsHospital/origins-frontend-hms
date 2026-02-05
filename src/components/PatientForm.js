@@ -915,7 +915,11 @@ const PatientForm = forwardRef(
                 <Close />
               </IconButton>
             </div>
-            <iframe src={formData?.aadhaarCard} className="w-full h-[70vh]" />
+            <iframe
+              src={formData?.aadhaarCard || ''}
+              className="w-full h-[70vh]"
+              key={formData?.aadhaarCard} // Force re-render when URL changes
+            />
           </Modal>
           <Modal
             uniqueKey={'previewAffidavit'}

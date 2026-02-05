@@ -484,10 +484,22 @@ export default function Register() {
       referralName: formData.referralName || null,
       pincode: formData.pincode || null,
       photoPath: formData.photoPath || null,
+      // Include document files - these will be extracted and sent as FormData files
+      aadhaarCard: formData.aadhaarCard || null,
+      marriageCertificate: formData.marriageCertificate || null,
+      affidavit: formData.affidavit || null,
     }
 
     // Log the payload being sent
     console.log('Sending edit patient payload:', editPatientPayload)
+    console.log(
+      'Aadhaar Card file:',
+      formData.aadhaarCard,
+      'Type:',
+      typeof formData.aadhaarCard,
+      'Is File:',
+      formData.aadhaarCard instanceof File,
+    )
 
     try {
       const editPatient = await editPatientRecord(
@@ -497,6 +509,7 @@ export default function Register() {
       )
 
       console.log('Edit patient response:', editPatient)
+      console.log('Response aadhaarCard URL:', editPatient.data?.aadhaarCard)
 
       if (editPatient.status == 200) {
         toast.success(
@@ -513,7 +526,61 @@ export default function Register() {
         ) {
           console.log('Updating formData with response data:', editPatient.data)
           let { uploadedDocuments, ...nonUpload } = editPatient.data
-          setFormData(nonUpload)
+
+          // Update formData with all fields including document URLs
+          // Priority: Use new URLs from backend response, fallback to existing string URLs, then null
+          const updatedFormData = {
+            ...nonUpload,
+            // Ensure document fields are updated with new URLs from backend
+            // Backend always returns the current URL (either updated or existing)
+            // Add cache-busting parameter to ensure fresh file is loaded
+            aadhaarCard: editPatient.data.aadhaarCard
+              ? `${editPatient.data.aadhaarCard}${editPatient.data.aadhaarCard.includes('?') ? '&' : '?'}t=${Date.now()}`
+              : null,
+            marriageCertificate: editPatient.data.marriageCertificate
+              ? `${editPatient.data.marriageCertificate}${editPatient.data.marriageCertificate.includes('?') ? '&' : '?'}t=${Date.now()}`
+              : null,
+            affidavit: editPatient.data.affidavit
+              ? `${editPatient.data.affidavit}${editPatient.data.affidavit.includes('?') ? '&' : '?'}t=${Date.now()}`
+              : null,
+          }
+
+          console.log(
+            'Updated formData.aadhaarCard:',
+            editPatient.data.aadhaarCard,
+          )
+          console.log(
+            'Setting formData with aadhaarCard URL (with cache-bust):',
+            updatedFormData.aadhaarCard,
+          )
+
+          // Force a state update by creating a new object reference
+          setFormData((prevData) => ({
+            ...prevData,
+            ...updatedFormData,
+          }))
+
+          // Only refetch if the response doesn't include the updated document URL
+          // Since the backend returns the updated patient data, we should have the new URL already
+          const hadNewAadhaarFile =
+            formData.aadhaarCard &&
+            typeof formData.aadhaarCard === 'object' &&
+            (formData.aadhaarCard instanceof File ||
+              formData.aadhaarCard.constructor?.name === 'File')
+          if (hadNewAadhaarFile && !editPatient.data.aadhaarCard) {
+            // Only refetch if we uploaded a file but the response doesn't have the URL
+            console.log(
+              'New Aadhaar card file was uploaded but response missing URL, refetching patient data',
+            )
+            setTimeout(() => {
+              fetchPatientMutate(formData?.aadhaarNo)
+            }, 2000)
+          } else if (hadNewAadhaarFile && editPatient.data.aadhaarCard) {
+            console.log(
+              'New Aadhaar card file uploaded and URL received in response, no refetch needed',
+            )
+          }
+
           // Also update photo if photoPath changed
           if (editPatient.data?.photoPath) {
             setImagePreview(editPatient.data.photoPath)
@@ -523,15 +590,21 @@ export default function Register() {
             setUploadedDocuments(uploadedDocuments || [])
           }
         } else {
-          // Fallback: refetch patient data
+          // Fallback: refetch patient data to get updated document URLs
           console.log(
             'Refreshing patient data with aadhaar:',
             formData?.aadhaarNo,
           )
           setTimeout(() => {
             fetchPatientMutate(formData?.aadhaarNo)
-          }, 500)
+          }, 1000) // Increased delay to ensure backend processing is complete
         }
+
+        // Note: Removed automatic refetch here because:
+        // 1. The backend response already includes the updated document URLs
+        // 2. We update formData immediately with the response data above
+        // 3. Automatic refetch was overwriting the correct data with potentially stale data from the API
+        // The conditional refetch above (inside the if block) handles cases where the URL is missing
       } else {
         const errorMessage =
           editPatient.message || editPatient.error || 'Failed to update patient'

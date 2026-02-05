@@ -957,6 +957,7 @@ export default function Appointments() {
   const dispatch = useDispatch()
   const router = useRouter()
   const user = useSelector((store) => store.user)
+  const queryClient = useQueryClient()
   const [date, setDate] = useState(dayjs())
   const [selectedPatient, setSelectedPatient] = useState({
     patientId: '',
@@ -1164,14 +1165,68 @@ export default function Appointments() {
       if (appointment && appointment.type === 'Consultation') {
         // confirmation popup
         if (!confirm('Are you sure you want to close this visit?')) {
+          dispatch(hideLoader())
+          return
+        }
+
+        // Check if patientDetails is loaded (required for getting the numeric patient ID)
+        if (!patientDetails || !patientDetails.patientInfo) {
+          toast.error(
+            'Patient information is still loading. Please wait a moment and try again.',
+          )
+          dispatch(hideLoader())
+          return
+        }
+
+        // Get the visitId from patientDetails (activeVisitId) or from appointment data
+        const visitId =
+          patientDetails?.patientInfo?.activeVisitId ||
+          appointment?.visitId ||
+          appointment?.visit_id
+
+        if (!visitId) {
+          toast.error(
+            'Visit ID not found. Please refresh the page and try again.',
+          )
+          dispatch(hideLoader())
+          return
+        }
+
+        // Get patientId - backend expects the auto-increment ID (pm.id), not the patientId string
+        // patientDetails.patientInfo.id is the auto-increment ID from patient_master
+        const patientIdNum = Number(patientDetails.patientInfo.id)
+
+        if (!patientIdNum || isNaN(patientIdNum) || patientIdNum === 0) {
+          console.error('Patient ID validation failed:', {
+            patientDetails: patientDetails?.patientInfo,
+            selectedPatient,
+            appointment,
+            calculatedId: patientIdNum,
+          })
+          toast.error(
+            'Invalid patient ID. Please refresh the page and try again.',
+          )
+          dispatch(hideLoader())
+          return
+        }
+
+        // Ensure consultationId and appointmentId are numbers
+        const consultationIdNum = Number(appointment.consultationId)
+        const appointmentIdNum = Number(appointment.appointmentId)
+
+        if (isNaN(consultationIdNum) || isNaN(appointmentIdNum)) {
+          toast.error(
+            'Invalid consultation or appointment ID. Please refresh the page and try again.',
+          )
+          dispatch(hideLoader())
           return
         }
 
         const payload = {
-          patientId: appointment.patientId,
+          patientId: patientIdNum,
           type: 'Consultation',
-          appointmentId: appointment.appointmentId,
-          consultationId: appointment.consultationId,
+          appointmentId: appointmentIdNum,
+          consultationId: consultationIdNum,
           visitClosedStatus: 'Completed',
           visitClosedReason: 'Closed from Appointments',
         }
@@ -1179,12 +1234,16 @@ export default function Appointments() {
         const res = await closeVisitInConsultation(
           user.accessToken,
           payload,
-          appointment.consultationId || appointment.appointmentId,
+          visitId,
         )
 
         if (res && (res.status === 200 || res.status === 'success')) {
           toast.success(res.message || 'Visit closed successfully')
           queryClient.invalidateQueries(['appointmentsForDoctor', date])
+          queryClient.invalidateQueries([
+            'patientInfoForDoctor',
+            selectedPatient,
+          ])
         } else {
           toast.error(res.message || 'Failed to close visit')
         }
@@ -1194,12 +1253,17 @@ export default function Appointments() {
         if (result && (result.status === 'success' || result.status === 200)) {
           toast.success(result.message || 'Visit closed successfully')
           queryClient.invalidateQueries(['appointmentsForDoctor', date])
+          queryClient.invalidateQueries([
+            'patientInfoForDoctor',
+            selectedPatient,
+          ])
         } else {
           toast.error(result.message || 'Failed to close visit')
         }
       }
     } catch (error) {
-      toast.error('Error closing visit: ' + error.message)
+      console.error('Error closing visit:', error)
+      toast.error('Error closing visit: ' + (error.message || 'Unknown error'))
     } finally {
       dispatch(hideLoader())
     }

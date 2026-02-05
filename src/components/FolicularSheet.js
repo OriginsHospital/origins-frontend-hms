@@ -25,7 +25,7 @@ const FollicularScanForm = ({
       const newValue = value === '' ? '' : parseFloat(value)
       if (isNaN(newValue) || newValue < 0 || newValue > 99) return
 
-      setFolicularFormData(prevData => ({
+      setFolicularFormData((prevData) => ({
         ...prevData,
         [`${day}-${side}-${size}`]: newValue,
       }))
@@ -42,11 +42,9 @@ const FollicularScanForm = ({
 
     const lastDate =
       follicularTemplate.columns[follicularTemplate.columns.length - 1]
-    const nextDate = dayjs(lastDate, 'DD/MM')
-      .add(1, 'day')
-      .format('DD/MM')
+    const nextDate = dayjs(lastDate, 'DD/MM').add(1, 'day').format('DD/MM')
 
-    setFolicularTemplate(prev => ({
+    setFolicularTemplate((prev) => ({
       ...prev,
       columns: [...prev.columns, nextDate],
     }))
@@ -58,13 +56,13 @@ const FollicularScanForm = ({
   })
 
   const handleNoteChange = (day, note) => {
-    setFolicularFormData(prevData => ({
+    setFolicularFormData((prevData) => ({
       ...prevData,
       [`${day}-note`]: note,
     }))
   }
 
-  const handleNoteClick = day => {
+  const handleNoteClick = (day) => {
     setNoteModal({
       open: true,
       day,
@@ -72,7 +70,7 @@ const FollicularScanForm = ({
   }
 
   // Add function to check if a column date matches today
-  const isCurrentDate = useCallback(columnDate => {
+  const isCurrentDate = useCallback((columnDate) => {
     const today = dayjs().format('DD/MM')
     return columnDate === today
   }, [])
@@ -136,7 +134,7 @@ const FollicularScanForm = ({
           </tr>
           <tr>
             <th></th>
-            {follicularTemplate?.columns?.flatMap(day => [
+            {follicularTemplate?.columns?.flatMap((day) => [
               <th
                 key={`'folicular'${day}-R`}
                 className={`p-2 border text-center ${
@@ -167,15 +165,15 @@ const FollicularScanForm = ({
                   size < 5
                     ? 'bg-green-200 text-green-900'
                     : size <= 10
-                    ? 'bg-green-300 text-green-800'
-                    : size === 21
-                    ? 'bg-violet-300 text-white'
-                    : 'bg-green-400 text-white'
+                      ? 'bg-green-300 text-green-800'
+                      : size === 21
+                        ? 'bg-violet-300 text-white'
+                        : 'bg-green-400 text-white'
                 }`}
               >
                 {value}
               </td>
-              {follicularTemplate?.columns?.flatMap(day => [
+              {follicularTemplate?.columns?.flatMap((day) => [
                 <td
                   key={`'folicular'${day}-R-${size}`}
                   className={`border ${
@@ -204,18 +202,18 @@ const FollicularScanForm = ({
                       step="0.1"
                       value={folicularFormData[`${day}-R-${size}`] || ''}
                       disabled={false}
-                      onChange={e =>
+                      onChange={(e) =>
                         handleInputChange(day, 'R', size, e.target.value)
                       }
                       className="w-10 h-8 text-center border m-1"
                     />
                   )}
                 </td>,
-                // Only render L column if not the last row
+                // Only render L column if not the last row (ET row is at index 21)
                 ...(size !== 21
                   ? [
                       <td
-                        key={`'folicular'${day}-L-${value}`}
+                        key={`'folicular'${day}-L-${size}`}
                         className={`border ${
                           isCurrentDate(day) ? 'bg-green-100' : ''
                         }`}
@@ -226,9 +224,9 @@ const FollicularScanForm = ({
                           max="99"
                           step="0.1"
                           disabled={false}
-                          value={folicularFormData[`${day}-L-${value}`] || ''}
-                          onChange={e =>
-                            handleInputChange(day, 'L', value, e.target.value)
+                          value={folicularFormData[`${day}-L-${size}`] || ''}
+                          onChange={(e) =>
+                            handleInputChange(day, 'L', size, e.target.value)
                           }
                           className="w-10 h-8 text-center border m-1"
                         />
@@ -257,7 +255,7 @@ const FollicularScanForm = ({
             rows={4}
             fullWidth
             value={folicularFormData[`${noteModal.day}-note`] || ''}
-            onChange={e => handleNoteChange(noteModal.day, e.target.value)}
+            onChange={(e) => handleNoteChange(noteModal.day, e.target.value)}
             placeholder="Enter your notes here..."
           />
         </DialogContent>

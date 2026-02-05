@@ -270,6 +270,8 @@ export const API_ROUTES = {
   GET_PRESCRIPTION_DETAILS_BY_TREATMENT_CYCLE_ID:
     '/patientHistory/getPrescriptionDetailsByTreatmentCycleIdFollicular',
   GET_PAYMENT_HISTORY_BY_VISIT_ID: '/patientHistory/getPaymentHistoryByVisitId',
+  UPDATE_PAYMENT_HISTORY: '/patientHistory/updatePayment',
+  DELETE_PAYMENT_HISTORY: '/patientHistory/deletePayment',
   GET_ALL_APPOINTMENT_REASONS:
     '/masterData/appointments/getAllAppointmentReasons',
   ADD_NEW_APPOINTMENT_REASON:
@@ -446,6 +448,8 @@ export const API_ROUTES = {
   ADD_OTHER_PAYMENT: '/otherPayments/addNewPayment',
   GET_OTHER_PAYMENTS_ORDER_ID: '/otherPayments/getOrderId',
   SEND_OTHER_PAYMENTS_TRANSACTION: '/otherPayments/sendTransactionId',
+  UPDATE_ADVANCE_PAYMENT_HISTORY: '/otherPayments/updatePaymentHistory',
+  DELETE_ADVANCE_PAYMENT_HISTORY: '/otherPayments/deletePaymentHistory',
   UPLOAD_EMBRYOLOGY_IMAGE: '/embryology/uploadEmbryologyImage',
   DELETE_EMBRYOLOGY_IMAGE: '/embryology/deleteEmbryologyImage',
 

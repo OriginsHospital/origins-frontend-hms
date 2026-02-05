@@ -548,14 +548,51 @@ export const editPatientRecord = async (
   })
 
   // Handle file uploads
-  if (file && typeof file == 'object') formData.append('file', file)
-  if (aadhaarCard && typeof aadhaarCard === 'object') {
+  // Check for File instances (File extends Blob, so instanceof File is the correct check)
+  if (
+    file &&
+    (file instanceof File ||
+      (typeof file === 'object' && file !== null && !Array.isArray(file)))
+  ) {
+    formData.append('file', file)
+  }
+  if (
+    aadhaarCard &&
+    (aadhaarCard instanceof File ||
+      (typeof aadhaarCard === 'object' &&
+        aadhaarCard !== null &&
+        !Array.isArray(aadhaarCard)))
+  ) {
+    console.log(
+      'Appending aadhaarCard file to FormData:',
+      aadhaarCard.name || aadhaarCard,
+    )
     formData.append('aadhaarCard', aadhaarCard)
   }
-  if (marriageCertificate && typeof marriageCertificate === 'object') {
+  if (
+    marriageCertificate &&
+    (marriageCertificate instanceof File ||
+      (typeof marriageCertificate === 'object' &&
+        marriageCertificate !== null &&
+        !Array.isArray(marriageCertificate)))
+  ) {
+    console.log(
+      'Appending marriageCertificate file to FormData:',
+      marriageCertificate.name || marriageCertificate,
+    )
     formData.append('marriageCertificate', marriageCertificate)
   }
-  if (affidavit && typeof affidavit === 'object') {
+  if (
+    affidavit &&
+    (affidavit instanceof File ||
+      (typeof affidavit === 'object' &&
+        affidavit !== null &&
+        !Array.isArray(affidavit)))
+  ) {
+    console.log(
+      'Appending affidavit file to FormData:',
+      affidavit.name || affidavit,
+    )
     formData.append('affidavit', affidavit)
   }
 
@@ -3648,6 +3685,39 @@ export const getPaymentHistoryByVisitId = async (token, visitId) => {
   return response.json()
 }
 
+export const updatePaymentHistory = async (token, paymentId, paymentData) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.UPDATE_PAYMENT_HISTORY}/${paymentId}`,
+    {
+      method: 'PUT',
+      headers: myHeaders,
+      body: JSON.stringify(paymentData),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const deletePaymentHistory = async (token, paymentId) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.DELETE_PAYMENT_HISTORY}/${paymentId}`,
+    {
+      method: 'DELETE',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
 export const getAllAppointmentReasons = async (token) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
@@ -4938,6 +5008,43 @@ export const downloadOtherPaymentsInvoice = async (token, payload) => {
     `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.DOWNLOAD_OTHER_PAYMENTS_INVOICE}?refId=${payload.refId}&patientId=${payload.patientId}`,
     {
       method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const updateAdvancePaymentHistory = async (
+  token,
+  paymentHistoryId,
+  paymentData,
+) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.UPDATE_ADVANCE_PAYMENT_HISTORY}/${paymentHistoryId}`,
+    {
+      method: 'PUT',
+      headers: myHeaders,
+      body: JSON.stringify(paymentData),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const deleteAdvancePaymentHistory = async (token, paymentHistoryId) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.DELETE_ADVANCE_PAYMENT_HISTORY}/${paymentHistoryId}`,
+    {
+      method: 'DELETE',
       headers: myHeaders,
       redirect: 'follow',
       credentials: 'include',

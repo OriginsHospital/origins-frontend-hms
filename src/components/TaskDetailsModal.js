@@ -3,6 +3,7 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  DialogActions,
   Button,
   Typography,
   Box,
@@ -11,7 +12,6 @@ import {
   Divider,
   Grid,
   Avatar,
-  Stack,
   FormControl,
   FormControlLabel,
   InputLabel,
@@ -29,11 +29,43 @@ import {
   getTaskDetails,
   updateTask,
   updateTaskStatus,
-  getActiveStaff,
   createTaskComment,
 } from '@/constants/apis'
 import dayjs from 'dayjs'
 import { DatePicker } from '@mui/x-date-pickers'
+
+// Priority badge colors
+const getPriorityColor = (priority) => {
+  switch (priority) {
+    case 'HIGH':
+      return { bg: '#fee2e2', text: '#dc2626', border: '#fecaca' }
+    case 'MEDIUM':
+      return { bg: '#dbeafe', text: '#2563eb', border: '#bfdbfe' }
+    case 'LOW':
+      return { bg: '#f3f4f6', text: '#6b7280', border: '#e5e7eb' }
+    default:
+      return { bg: '#f3f4f6', text: '#6b7280', border: '#e5e7eb' }
+  }
+}
+
+// Status badge colors
+const getStatusColor = (status) => {
+  switch (status) {
+    case 'OPEN':
+    case 'Pending':
+      return { bg: '#ffffff', text: '#374151', border: '#d1d5db' }
+    case 'IN_PROGRESS':
+    case 'In Progress':
+      return { bg: '#dbeafe', text: '#2563eb', border: '#bfdbfe' }
+    case 'COMPLETED':
+    case 'Completed':
+      return { bg: '#d1fae5', text: '#059669', border: '#a7f3d0' }
+    case 'Cancelled':
+      return { bg: '#ffebee', text: '#c62828', border: '#f44336' }
+    default:
+      return { bg: '#f3f4f6', text: '#6b7280', border: '#e5e7eb' }
+  }
+}
 
 function TaskDetailsModal({ open, onClose, taskId, onEdit, onStatusChange }) {
   const user = useSelector((store) => store.user)
@@ -63,25 +95,26 @@ function TaskDetailsModal({ open, onClose, taskId, onEdit, onStatusChange }) {
       return response
     },
     enabled: !!taskId && !!user?.accessToken && open,
-    refetchOnMount: true,
-    refetchOnWindowFocus: false,
   })
 
   const task = taskData?.data || taskData
 
-  // Normalize field names
+  // Normalize field names (handle both snake_case and camelCase)
   const normalizedTask = task
     ? {
         ...task,
+        taskCode: task.taskCode || task.task_code,
         taskName: task.taskName || task.task_name,
         description: task.description || task.description,
-        pendingOn: task.pendingOn || task.pending_on,
         remarks: task.remarks || task.remarks,
         status: task.status || task.status,
+        priority: task.priority || task.priority || 'MEDIUM',
+        department: task.department || task.department,
+        category: task.category || task.category,
         startDate: task.startDate || task.start_date,
         endDate: task.endDate || task.end_date,
-        alertEnabled: task.alertEnabled || task.alert_enabled,
-        alertDate: task.alertDate || task.alert_date,
+        alertEnabled: task.alertEnabled || task.alert_enabled || false,
+        alertDate: task.alertDate || task.alert_date || null,
         createdAt: task.createdAt || task.created_at,
         updatedAt: task.updatedAt || task.updated_at,
         createdBy: task.createdBy || task.created_by,
@@ -89,12 +122,22 @@ function TaskDetailsModal({ open, onClose, taskId, onEdit, onStatusChange }) {
       }
     : null
 
-  // Parse JSON fields
-  const assignedTo = normalizedTask?.assignedToDetails
-    ? typeof normalizedTask.assignedToDetails === 'string'
-      ? JSON.parse(normalizedTask.assignedToDetails)
-      : normalizedTask.assignedToDetails
-    : {}
+  // Parse JSON fields - handle both array and single object
+  let assignedToArray = []
+  if (normalizedTask?.assignedToDetails) {
+    try {
+      const parsed =
+        typeof normalizedTask.assignedToDetails === 'string'
+          ? JSON.parse(normalizedTask.assignedToDetails)
+          : normalizedTask.assignedToDetails
+      assignedToArray = Array.isArray(parsed)
+        ? parsed
+        : [parsed].filter(Boolean)
+    } catch (e) {
+      assignedToArray = []
+    }
+  }
+  const assignedTo = assignedToArray.length > 0 ? assignedToArray[0] : {}
   const createdBy = normalizedTask?.createdByDetails
     ? typeof normalizedTask.createdByDetails === 'string'
       ? JSON.parse(normalizedTask.createdByDetails)
@@ -108,13 +151,10 @@ function TaskDetailsModal({ open, onClose, taskId, onEdit, onStatusChange }) {
         : []
     : []
 
-  // Debug: Log comments when they change
-  React.useEffect(() => {
-    if (normalizedTask) {
-      console.log('Task comments updated:', comments)
-      console.log('Comments count:', comments.length)
-    }
-  }, [normalizedTask?.comments, comments.length])
+  const priorityColor = getPriorityColor(normalizedTask?.priority)
+  // Use pending status for color if status change is pending, otherwise use current status
+  const statusForColor = pendingStatusChange || normalizedTask?.status
+  const statusColor = getStatusColor(statusForColor)
 
   // Track original status when modal opens and initialize alert fields
   React.useEffect(() => {
@@ -158,36 +198,15 @@ function TaskDetailsModal({ open, onClose, taskId, onEdit, onStatusChange }) {
     }
   }, [open])
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'Pending':
-        return { bg: '#fff3e0', text: '#e65100', border: '#ff9800' }
-      case 'In Progress':
-        return { bg: '#e3f2fd', text: '#1565c0', border: '#2196f3' }
-      case 'Completed':
-        return { bg: '#e8f5e9', text: '#2e7d32', border: '#4caf50' }
-      case 'Cancelled':
-        return { bg: '#ffebee', text: '#c62828', border: '#f44336' }
-      default:
-        return { bg: '#f5f5f5', text: '#757575', border: '#9e9e9e' }
-    }
-  }
-
-  const statusColor = normalizedTask?.status
-    ? getStatusColor(normalizedTask.status)
-    : { bg: '#f5f5f5', text: '#757575', border: '#9e9e9e' }
-
-  const isAdmin = user?.roleDetails?.name?.toLowerCase() === 'admin'
-
   // Check if user can comment (Assigned User, Manager, Admin, Global Admin)
   const canComment = () => {
     if (!normalizedTask || !user) return false
     const userRole = user?.roleDetails?.name?.toLowerCase() || ''
-    const isAdminRole = userRole === 'admin' || userRole === 'global admin'
+    const isAdmin = userRole === 'admin' || userRole === 'global admin'
     const isManager = userRole === 'manager'
     const isAssignedUser = normalizedTask.assignedTo === user?.id
     const isCreator = normalizedTask.createdBy === user?.id
-    return isAdminRole || isManager || isAssignedUser || isCreator
+    return isAdmin || isManager || isAssignedUser || isCreator
   }
 
   // Update status mutation (for when status is changed with comment)
@@ -267,7 +286,10 @@ function TaskDetailsModal({ open, onClose, taskId, onEdit, onStatusChange }) {
       // If there's a pending status change, update it now
       if (pendingStatusChange && pendingStatusChange !== originalStatus) {
         updateStatusMutation.mutate(
-          { taskId: normalizedTask.id || taskId, status: pendingStatusChange },
+          {
+            taskId: normalizedTask.id || taskId,
+            status: pendingStatusChange,
+          },
           {
             onSuccess: () => {
               toast.success('Status updated and comment posted successfully!')
@@ -278,11 +300,9 @@ function TaskDetailsModal({ open, onClose, taskId, onEdit, onStatusChange }) {
               setStatusChangeRequiresComment(false)
               setOriginalStatus(pendingStatusChange)
               setCurrentStatus(pendingStatusChange)
-              // Invalidate and refetch to show new comment immediately
               queryClient.invalidateQueries({
                 queryKey: ['taskDetails', taskId],
               })
-              queryClient.refetchQueries({ queryKey: ['taskDetails', taskId] })
               queryClient.invalidateQueries({ queryKey: ['tasks'] })
             },
             onError: () => {
@@ -294,9 +314,7 @@ function TaskDetailsModal({ open, onClose, taskId, onEdit, onStatusChange }) {
         toast.success('Comment posted successfully!')
         setCommentText('')
         setCommentError('')
-        // Invalidate and refetch to show new comment immediately
         queryClient.invalidateQueries({ queryKey: ['taskDetails', taskId] })
-        queryClient.refetchQueries({ queryKey: ['taskDetails', taskId] })
         queryClient.invalidateQueries({ queryKey: ['tasks'] })
       }
     },
@@ -323,6 +341,8 @@ function TaskDetailsModal({ open, onClose, taskId, onEdit, onStatusChange }) {
     // Status is being changed - require comment
     setPendingStatusChange(newStatus)
     setStatusChangeRequiresComment(true)
+    // Don't update status yet - wait for comment
+    // Keep current status display as original
   }
 
   const handlePostComment = (e) => {
@@ -345,16 +365,60 @@ function TaskDetailsModal({ open, onClose, taskId, onEdit, onStatusChange }) {
       return
     }
 
-    // Ensure we have a valid taskId
-    const currentTaskId = normalizedTask?.id || taskId
-    if (!currentTaskId) {
-      setCommentError('Task ID is missing. Please refresh and try again.')
-      toast.error('Task ID is missing. Please refresh and try again.')
-      return
-    }
-
     // Post comment (which will trigger status update if pending)
     createCommentMutation.mutate(commentText.trim())
+  }
+
+  const isAdmin = user?.roleDetails?.name?.toLowerCase() === 'admin'
+
+  if (isLoading) {
+    return (
+      <Dialog
+        open={open}
+        onClose={onClose}
+        maxWidth="sm"
+        PaperProps={{ sx: { maxWidth: '500px' } }}
+      >
+        <DialogContent sx={{ px: 2, py: 1.5 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
+            <CircularProgress size={24} />
+          </Box>
+        </DialogContent>
+      </Dialog>
+    )
+  }
+
+  if (error || !normalizedTask) {
+    return (
+      <Dialog
+        open={open}
+        onClose={onClose}
+        maxWidth="sm"
+        PaperProps={{ sx: { maxWidth: '500px' } }}
+      >
+        <DialogTitle sx={{ pb: 1, pt: 1.5, px: 2 }}>
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
+          >
+            <Typography variant="h6" fontSize="1.1rem">
+              Task Details
+            </Typography>
+            <IconButton onClick={onClose} size="small" sx={{ p: 0.5 }}>
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent sx={{ px: 2, py: 1.5 }}>
+          <Typography color="error" fontSize="0.875rem">
+            {error?.message || 'Failed to load task details'}
+          </Typography>
+        </DialogContent>
+      </Dialog>
+    )
   }
 
   return (
@@ -362,12 +426,7 @@ function TaskDetailsModal({ open, onClose, taskId, onEdit, onStatusChange }) {
       open={open}
       onClose={onClose}
       maxWidth="sm"
-      PaperProps={{
-        sx: {
-          borderRadius: 2,
-          maxWidth: '500px',
-        },
-      }}
+      PaperProps={{ sx: { maxWidth: '500px', borderRadius: 2 } }}
     >
       <DialogTitle sx={{ pb: 1, pt: 1.5, px: 2 }}>
         <Box
@@ -385,61 +444,60 @@ function TaskDetailsModal({ open, onClose, taskId, onEdit, onStatusChange }) {
           </IconButton>
         </Box>
       </DialogTitle>
-      <DialogContent sx={{ px: 2, py: 1.5 }}>
-        {isLoading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
-            <Typography fontSize="0.875rem">Loading task details...</Typography>
-          </Box>
-        ) : error ? (
-          <Box sx={{ p: 2, textAlign: 'center' }}>
-            <Typography color="error" fontSize="0.875rem">
-              Failed to load task details. Please try again.
-            </Typography>
-          </Box>
-        ) : normalizedTask ? (
-          <Box>
-            {/* Task Name and Status */}
-            <Box sx={{ mb: 1.5 }}>
-              <Typography
-                variant="h6"
-                fontWeight={600}
-                fontSize="1.15rem"
-                sx={{ mb: 0.5 }}
-              >
-                {normalizedTask.taskName}
+      <DialogContent dividers sx={{ px: 2, py: 1.5 }}>
+        <Grid container spacing={1.5}>
+          {/* Task Code and Status */}
+          <Grid item xs={12}>
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                mb: 1,
+              }}
+            >
+              <Typography variant="h6" fontWeight={600} fontSize="1.15rem">
+                {normalizedTask.taskCode || `Task #${normalizedTask.id}`}
               </Typography>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Chip
-                  label={normalizedTask.status}
-                  size="small"
-                  sx={{
-                    bgcolor: statusColor.bg,
-                    color: statusColor.text,
-                    border: `1px solid ${statusColor.border}`,
-                    fontWeight: 500,
-                    height: '24px',
-                    fontSize: '0.75rem',
-                  }}
-                />
+              <Box sx={{ display: 'flex', gap: 0.75, alignItems: 'center' }}>
                 {(isAdmin || canComment()) &&
                 normalizedTask.status !== 'Completed' &&
                 normalizedTask.status !== 'Cancelled' ? (
-                  <FormControl size="small" sx={{ minWidth: 130 }}>
-                    <InputLabel sx={{ fontSize: '0.75rem' }}>
-                      Change Status
-                    </InputLabel>
+                  <FormControl size="small" sx={{ minWidth: 120 }}>
+                    <InputLabel sx={{ fontSize: '0.75rem' }}>Status</InputLabel>
                     <Select
                       value={
                         pendingStatusChange ||
                         currentStatus ||
-                        normalizedTask.status
+                        normalizedTask.status ||
+                        'Pending'
                       }
                       onChange={(e) => {
                         handleStatusChange(e.target.value)
                       }}
-                      label="Change Status"
+                      label="Status"
                       error={statusChangeRequiresComment && !commentText.trim()}
-                      sx={{ fontSize: '0.875rem', height: '32px' }}
+                      helperText={
+                        statusChangeRequiresComment && !commentText.trim()
+                          ? 'Comment required'
+                          : ''
+                      }
+                      sx={{
+                        bgcolor: statusColor.bg,
+                        color: statusColor.text,
+                        fontWeight: 600,
+                        fontSize: '0.875rem',
+                        height: '32px',
+                        '& .MuiOutlinedInput-notchedOutline': {
+                          borderColor: statusColor.border,
+                        },
+                        '&:hover .MuiOutlinedInput-notchedOutline': {
+                          borderColor: statusColor.border,
+                        },
+                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                          borderColor: statusColor.border,
+                        },
+                      }}
                     >
                       <MenuItem value="Pending" sx={{ fontSize: '0.875rem' }}>
                         Pending
@@ -458,517 +516,645 @@ function TaskDetailsModal({ open, onClose, taskId, onEdit, onStatusChange }) {
                       </MenuItem>
                     </Select>
                   </FormControl>
-                ) : null}
-              </Stack>
-            </Box>
-
-            <Divider sx={{ my: 1.5 }} />
-
-            {/* Task Information */}
-            <Grid container spacing={1.5}>
-              <Grid item xs={12}>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  fontSize="0.7rem"
-                >
-                  Remarks
-                </Typography>
-                <Typography variant="body2" sx={{ mt: 0.25, mb: 1 }}>
-                  {normalizedTask.remarks || (
-                    <Typography
-                      component="span"
-                      color="text.secondary"
-                      fontStyle="italic"
-                      fontSize="0.875rem"
-                    >
-                      No remarks
-                    </Typography>
-                  )}
-                </Typography>
-              </Grid>
-
-              <Grid item xs={12} sm={6}>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  fontSize="0.7rem"
-                >
-                  Start Date
-                </Typography>
-                <Typography variant="body2" sx={{ mt: 0.25, mb: 1 }}>
-                  {normalizedTask.startDate ? (
-                    dayjs(normalizedTask.startDate).format('MMM D, YYYY')
-                  ) : (
-                    <Typography
-                      component="span"
-                      color="text.secondary"
-                      fontStyle="italic"
-                      fontSize="0.875rem"
-                    >
-                      Not set
-                    </Typography>
-                  )}
-                </Typography>
-              </Grid>
-
-              <Grid item xs={12} sm={6}>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  fontSize="0.7rem"
-                >
-                  End Date
-                </Typography>
-                <Typography variant="body2" sx={{ mt: 0.25, mb: 1 }}>
-                  {normalizedTask.endDate ? (
-                    dayjs(normalizedTask.endDate).format('MMM D, YYYY')
-                  ) : (
-                    <Typography
-                      component="span"
-                      color="text.secondary"
-                      fontStyle="italic"
-                      fontSize="0.875rem"
-                    >
-                      Not set
-                    </Typography>
-                  )}
-                </Typography>
-              </Grid>
-
-              <Grid item xs={12} sm={6}>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  fontSize="0.7rem"
-                >
-                  Assigned To
-                </Typography>
-                <Box sx={{ mt: 0.25, mb: 1 }}>
-                  {assignedTo.fullName ? (
-                    <Box
-                      sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}
-                    >
-                      <Avatar
-                        sx={{
-                          width: 24,
-                          height: 24,
-                          bgcolor: '#06aee9',
-                          fontSize: '0.75rem',
-                        }}
-                      >
-                        {assignedTo.fullName?.charAt(0)?.toUpperCase() || 'U'}
-                      </Avatar>
-                      <Typography variant="body2" fontSize="0.875rem">
-                        {assignedTo.fullName}
-                      </Typography>
-                    </Box>
-                  ) : (
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      fontStyle="italic"
-                      fontSize="0.875rem"
-                    >
-                      Unassigned
-                    </Typography>
-                  )}
-                </Box>
-              </Grid>
-
-              <Grid item xs={12} sm={6}>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  fontSize="0.7rem"
-                >
-                  Created By
-                </Typography>
-                <Box sx={{ mt: 0.25, mb: 1 }}>
-                  {createdBy.fullName ? (
-                    <Box
-                      sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}
-                    >
-                      <Avatar
-                        sx={{
-                          width: 24,
-                          height: 24,
-                          bgcolor: '#10b981',
-                          fontSize: '0.75rem',
-                        }}
-                      >
-                        {createdBy.fullName?.charAt(0)?.toUpperCase() || 'U'}
-                      </Avatar>
-                      <Typography variant="body2" fontSize="0.875rem">
-                        {createdBy.fullName}
-                      </Typography>
-                    </Box>
-                  ) : (
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      fontStyle="italic"
-                      fontSize="0.875rem"
-                    >
-                      Unknown
-                    </Typography>
-                  )}
-                </Box>
-              </Grid>
-
-              <Grid item xs={12} sm={6}>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  fontSize="0.7rem"
-                >
-                  Created At
-                </Typography>
-                <Typography variant="body2" sx={{ mt: 0.25, mb: 1 }}>
-                  {normalizedTask.createdAt
-                    ? dayjs(normalizedTask.createdAt).format(
-                        'MMM D, YYYY hh:mm A',
-                      )
-                    : 'N/A'}
-                </Typography>
-              </Grid>
-
-              <Grid item xs={12} sm={6}>
-                <Typography
-                  variant="caption"
-                  color="text.secondary"
-                  fontSize="0.7rem"
-                >
-                  Last Updated
-                </Typography>
-                <Typography variant="body2" sx={{ mt: 0.25, mb: 1 }}>
-                  {normalizedTask.updatedAt
-                    ? dayjs(normalizedTask.updatedAt).format(
-                        'MMM D, YYYY hh:mm A',
-                      )
-                    : 'N/A'}
-                </Typography>
-              </Grid>
-
-              {/* Set Alert - Full Width */}
-              <Grid item xs={12}>
-                <Box
-                  sx={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    pt: 0.5,
-                  }}
-                >
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={alertEnabled}
-                        onChange={(e) => setAlertEnabled(e.target.checked)}
-                        size="small"
-                      />
-                    }
+                ) : (
+                  <Chip
                     label={
-                      <Typography
-                        sx={{ fontSize: '0.875rem', fontWeight: 500 }}
-                      >
-                        Set Alert
-                      </Typography>
+                      normalizedTask.status?.replace('_', ' ') || 'Pending'
                     }
-                    sx={{ m: 0 }}
+                    size="small"
+                    sx={{
+                      bgcolor: statusColor.bg,
+                      color: statusColor.text,
+                      border: `1px solid ${statusColor.border}`,
+                      fontWeight: 600,
+                      height: '24px',
+                      fontSize: '0.75rem',
+                    }}
                   />
-                  {canComment() && (
-                    <Button
-                      variant="contained"
-                      size="small"
-                      onClick={handleSaveAlert}
-                      disabled={
-                        !alertHasChanged() || updateAlertMutation.isPending
-                      }
-                      startIcon={
-                        updateAlertMutation.isPending ? (
-                          <CircularProgress size={14} color="inherit" />
-                        ) : null
-                      }
+                )}
+                <Chip
+                  label={normalizedTask.priority || 'Medium'}
+                  size="small"
+                  sx={{
+                    bgcolor: priorityColor.bg,
+                    color: priorityColor.text,
+                    border: `1px solid ${priorityColor.border}`,
+                    fontWeight: 600,
+                    height: '24px',
+                    fontSize: '0.75rem',
+                  }}
+                />
+              </Box>
+            </Box>
+          </Grid>
+
+          {/* Summary */}
+          <Grid item xs={12}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              fontSize="0.7rem"
+              sx={{ mb: 0.25, display: 'block' }}
+            >
+              Summary
+            </Typography>
+            <Typography
+              variant="body2"
+              sx={{
+                bgcolor: '#f9fafb',
+                p: 1,
+                borderRadius: 1,
+                fontSize: '0.875rem',
+              }}
+            >
+              {normalizedTask.taskName || 'No summary provided'}
+            </Typography>
+          </Grid>
+
+          {/* Remarks */}
+          <Grid item xs={12}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              fontSize="0.7rem"
+              sx={{ mb: 0.25, display: 'block' }}
+            >
+              Remarks
+            </Typography>
+            <Typography
+              variant="body2"
+              sx={{
+                bgcolor: '#f9fafb',
+                p: 1,
+                borderRadius: 1,
+                fontSize: '0.875rem',
+              }}
+            >
+              {normalizedTask.remarks || 'No remarks provided'}
+            </Typography>
+          </Grid>
+
+          {/* Task Description */}
+          {normalizedTask.description && (
+            <Grid item xs={12}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                fontSize="0.7rem"
+                sx={{ mb: 0.25, display: 'block' }}
+              >
+                Task Description
+              </Typography>
+              <Typography
+                variant="body2"
+                sx={{
+                  bgcolor: '#f9fafb',
+                  p: 1,
+                  borderRadius: 1,
+                  fontSize: '0.875rem',
+                }}
+              >
+                {normalizedTask.description}
+              </Typography>
+            </Grid>
+          )}
+
+          {/* Department and Category */}
+          <Grid item xs={12} sm={6}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              fontSize="0.7rem"
+              sx={{ mb: 0.25, display: 'block' }}
+            >
+              Department
+            </Typography>
+            {normalizedTask.department ? (
+              <Chip
+                label={normalizedTask.department}
+                size="small"
+                sx={{
+                  bgcolor: '#e8f5e9',
+                  color: '#2e7d32',
+                  fontWeight: 500,
+                  height: '24px',
+                  fontSize: '0.75rem',
+                }}
+              />
+            ) : (
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                fontSize="0.875rem"
+              >
+                No department
+              </Typography>
+            )}
+          </Grid>
+
+          <Grid item xs={12} sm={6}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              fontSize="0.7rem"
+              sx={{ mb: 0.25, display: 'block' }}
+            >
+              Category
+            </Typography>
+            {normalizedTask.category ? (
+              <Chip
+                label={normalizedTask.category}
+                size="small"
+                sx={{
+                  bgcolor: '#f3e5f5',
+                  color: '#7b1fa2',
+                  fontWeight: 500,
+                  height: '24px',
+                  fontSize: '0.75rem',
+                }}
+              />
+            ) : (
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                fontSize="0.875rem"
+              >
+                No category
+              </Typography>
+            )}
+          </Grid>
+
+          {/* Assigned To */}
+          <Grid item xs={12} sm={6}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              fontSize="0.7rem"
+              sx={{ mb: 0.25, display: 'block' }}
+            >
+              Assigned To
+            </Typography>
+            {assignedToArray.length > 0 ? (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                {assignedToArray.slice(0, 3).map((assignee, idx) => (
+                  <Box
+                    key={`${assignee?.id || 'unassigned'}-${idx}`}
+                    sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}
+                  >
+                    <Avatar
                       sx={{
+                        width: 24,
+                        height: 24,
                         bgcolor: '#06aee9',
-                        '&:hover': { bgcolor: '#0599d1' },
-                        '&:disabled': { bgcolor: '#ccc' },
                         fontSize: '0.75rem',
-                        px: 1.5,
-                        py: 0.5,
-                        minWidth: 90,
-                        textTransform: 'none',
                       }}
                     >
-                      {updateAlertMutation.isPending
-                        ? 'Saving...'
-                        : 'Save Alert'}
-                    </Button>
-                  )}
-                </Box>
-              </Grid>
-
-              {/* Alert Date & Time - Conditional, 40% Width */}
-              {alertEnabled && (
-                <Grid item xs={12}>
+                      {assignee.fullName?.charAt(0)?.toUpperCase() || 'U'}
+                    </Avatar>
+                    <Box>
+                      <Typography
+                        variant="body2"
+                        fontWeight={500}
+                        fontSize="0.875rem"
+                      >
+                        {assignee.fullName || 'Unassigned'}
+                      </Typography>
+                      {assignee.roleName && (
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          fontSize="0.7rem"
+                        >
+                          {assignee.roleName}
+                        </Typography>
+                      )}
+                    </Box>
+                  </Box>
+                ))}
+                {assignedToArray.length > 3 && (
                   <Typography
                     variant="caption"
                     color="text.secondary"
                     fontSize="0.7rem"
-                    sx={{ mb: 0.25, display: 'block' }}
+                    sx={{ ml: 3.5 }}
                   >
-                    Alert Date & Time
+                    +{assignedToArray.length - 3} more
                   </Typography>
-                  <Box sx={{ width: '40%' }}>
-                    <DatePicker
-                      value={alertDate}
-                      onChange={(value) => setAlertDate(value)}
-                      slotProps={{
-                        textField: {
-                          fullWidth: true,
-                          size: 'small',
-                          placeholder: 'Select alert date & time',
-                          sx: {
-                            '& .MuiOutlinedInput-root': {
-                              borderRadius: '6px',
-                              fontSize: '0.875rem',
-                            },
-                          },
-                        },
-                      }}
-                    />
-                  </Box>
-                </Grid>
-              )}
-
-              {/* Comments Section */}
-              <Grid item xs={12}>
-                <Divider sx={{ my: 1.5 }} />
-                <Typography
-                  variant="subtitle2"
-                  fontWeight={600}
-                  fontSize="0.9rem"
-                  sx={{ mb: 1 }}
+                )}
+              </Box>
+            ) : (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                <Avatar
+                  sx={{
+                    width: 24,
+                    height: 24,
+                    bgcolor: '#06aee9',
+                    fontSize: '0.75rem',
+                  }}
                 >
-                  Comments ({comments.length})
+                  U
+                </Avatar>
+                <Typography
+                  variant="body2"
+                  fontWeight={500}
+                  fontSize="0.875rem"
+                >
+                  Unassigned
                 </Typography>
-                {comments && comments.length > 0 ? (
-                  <Box sx={{ maxHeight: 200, overflowY: 'auto' }}>
-                    {[...comments].reverse().map((comment) => (
-                      <Box
-                        key={comment.commentId || comment.id}
-                        sx={{
-                          p: 1,
-                          mb: 0.75,
-                          bgcolor: '#f9fafb',
-                          borderRadius: 1,
-                        }}
-                      >
-                        <Box
-                          sx={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            mb: 0.5,
-                          }}
+              </Box>
+            )}
+          </Grid>
+
+          {/* Created By */}
+          <Grid item xs={12} sm={6}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              fontSize="0.7rem"
+              sx={{ mb: 0.25, display: 'block' }}
+            >
+              Created By
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+              <Avatar
+                sx={{
+                  width: 24,
+                  height: 24,
+                  bgcolor: '#10b981',
+                  fontSize: '0.75rem',
+                }}
+              >
+                {createdBy.fullName?.charAt(0)?.toUpperCase() || 'U'}
+              </Avatar>
+              <Box>
+                <Typography
+                  variant="body2"
+                  fontWeight={500}
+                  fontSize="0.875rem"
+                >
+                  {createdBy.fullName || 'Unknown'}
+                </Typography>
+                {createdBy.roleName && (
+                  <Typography
+                    variant="caption"
+                    color="text.secondary"
+                    fontSize="0.7rem"
+                  >
+                    {createdBy.roleName}
+                  </Typography>
+                )}
+              </Box>
+            </Box>
+          </Grid>
+
+          {/* Dates */}
+          <Grid item xs={12} sm={6}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              fontSize="0.7rem"
+              sx={{ mb: 0.25, display: 'block' }}
+            >
+              Created At
+            </Typography>
+            <Typography variant="body2" fontSize="0.875rem">
+              {normalizedTask.createdAt
+                ? dayjs(normalizedTask.createdAt).format('DD MMM YYYY, hh:mm A')
+                : 'N/A'}
+            </Typography>
+          </Grid>
+
+          <Grid item xs={12} sm={6}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              fontSize="0.7rem"
+              sx={{ mb: 0.25, display: 'block' }}
+            >
+              Last Updated
+            </Typography>
+            <Typography variant="body2" fontSize="0.875rem">
+              {normalizedTask.updatedAt
+                ? dayjs(normalizedTask.updatedAt).format('DD MMM YYYY, hh:mm A')
+                : 'N/A'}
+            </Typography>
+          </Grid>
+
+          {/* Set Alert - Full Width */}
+          <Grid item xs={12}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                pt: 0.5,
+              }}
+            >
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={alertEnabled}
+                    onChange={(e) => setAlertEnabled(e.target.checked)}
+                    size="small"
+                  />
+                }
+                label={
+                  <Typography sx={{ fontSize: '0.875rem', fontWeight: 500 }}>
+                    Set Alert
+                  </Typography>
+                }
+                sx={{ m: 0 }}
+              />
+              {canComment() && (
+                <Button
+                  variant="contained"
+                  size="small"
+                  onClick={handleSaveAlert}
+                  disabled={!alertHasChanged() || updateAlertMutation.isPending}
+                  startIcon={
+                    updateAlertMutation.isPending ? (
+                      <CircularProgress size={14} color="inherit" />
+                    ) : null
+                  }
+                  sx={{
+                    bgcolor: '#06aee9',
+                    '&:hover': { bgcolor: '#0599d1' },
+                    '&:disabled': { bgcolor: '#ccc' },
+                    fontSize: '0.75rem',
+                    px: 1.5,
+                    py: 0.5,
+                    minWidth: 90,
+                    textTransform: 'none',
+                  }}
+                >
+                  {updateAlertMutation.isPending ? 'Saving...' : 'Save Alert'}
+                </Button>
+              )}
+            </Box>
+          </Grid>
+
+          {/* Alert Date & Time - Conditional, 40% Width */}
+          {alertEnabled && (
+            <Grid item xs={12}>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                fontSize="0.7rem"
+                sx={{ mb: 0.25, display: 'block' }}
+              >
+                Alert Date & Time
+              </Typography>
+              <Box sx={{ width: '40%' }}>
+                <DatePicker
+                  value={alertDate}
+                  onChange={(value) => setAlertDate(value)}
+                  slotProps={{
+                    textField: {
+                      fullWidth: true,
+                      size: 'small',
+                      placeholder: 'Select alert date & time',
+                      sx: {
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: '6px',
+                          fontSize: '0.875rem',
+                        },
+                      },
+                    },
+                  }}
+                />
+              </Box>
+            </Grid>
+          )}
+
+          {/* Comments Section */}
+          <Grid item xs={12}>
+            <Divider sx={{ my: 1.5 }} />
+            <Typography
+              variant="subtitle2"
+              fontWeight={600}
+              fontSize="0.9rem"
+              sx={{ mb: 1 }}
+            >
+              Comments ({comments.length})
+            </Typography>
+            {comments && comments.length > 0 ? (
+              <Box sx={{ maxHeight: 200, overflowY: 'auto' }}>
+                {[...comments].reverse().map((comment) => (
+                  <Box
+                    key={comment.id || comment.commentId}
+                    sx={{
+                      p: 1,
+                      mb: 0.75,
+                      bgcolor: '#f9fafb',
+                      borderRadius: 1,
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        mb: 0.5,
+                      }}
+                    >
+                      <Box>
+                        <Typography
+                          variant="body2"
+                          fontWeight={500}
+                          fontSize="0.875rem"
                         >
-                          <Box>
-                            <Typography
-                              variant="body2"
-                              fontWeight={500}
-                              fontSize="0.875rem"
-                            >
-                              {comment.commentedByName || 'Unknown'}
-                            </Typography>
-                            {comment.commentedByRole && (
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                                fontSize="0.7rem"
-                              >
-                                {comment.commentedByRole}
-                              </Typography>
-                            )}
-                          </Box>
+                          {comment.commentedByName || 'Unknown'}
+                        </Typography>
+                        {comment.commentedByRole && (
                           <Typography
                             variant="caption"
                             color="text.secondary"
                             fontSize="0.7rem"
                           >
-                            {dayjs(comment.createdAt).format(
-                              'DD MMM YYYY, hh:mm A',
-                            )}
+                            {comment.commentedByRole}
                           </Typography>
-                        </Box>
-                        <Typography
-                          variant="body2"
-                          sx={{ whiteSpace: 'pre-wrap', fontSize: '0.875rem' }}
-                        >
-                          {comment.commentText}
-                        </Typography>
+                        )}
                       </Box>
-                    ))}
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        fontSize="0.7rem"
+                      >
+                        {dayjs(comment.createdAt).format(
+                          'DD MMM YYYY, hh:mm A',
+                        )}
+                      </Typography>
+                    </Box>
+                    <Typography
+                      variant="body2"
+                      sx={{ whiteSpace: 'pre-wrap', fontSize: '0.875rem' }}
+                    >
+                      {comment.commentText}
+                    </Typography>
                   </Box>
-                ) : (
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    fontSize="0.875rem"
-                  >
-                    No comments yet
-                  </Typography>
-                )}
+                ))}
+              </Box>
+            ) : (
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                fontSize="0.875rem"
+              >
+                No comments yet
+              </Typography>
+            )}
 
-                {/* Comment Input Form */}
-                {canComment() && (
-                  <Box sx={{ mt: 1.5 }}>
-                    <Divider sx={{ mb: 1.5 }} />
-                    <form onSubmit={handlePostComment}>
-                      {/* Status Change Requires Comment Warning */}
-                      {statusChangeRequiresComment && (
-                        <Box
-                          sx={{
-                            mb: 1.5,
-                            p: 1.5,
-                            bgcolor: '#fff3cd',
-                            border: '1px solid #ffc107',
-                            borderRadius: 1,
-                          }}
-                        >
-                          <Typography
-                            variant="body2"
-                            sx={{
-                              fontSize: '0.875rem',
-                              color: '#856404',
-                              fontWeight: 500,
-                              mb: 0.5,
-                            }}
-                          >
-                            ⚠️ <strong>Comment Required:</strong> You must
-                            provide a comment to update the task status.
-                          </Typography>
-                          <Typography
-                            variant="caption"
-                            sx={{ fontSize: '0.75rem', color: '#856404' }}
-                          >
-                            Status will be updated from{' '}
-                            <strong>{originalStatus}</strong> to{' '}
-                            <strong>{pendingStatusChange}</strong> when you post
-                            your comment.
-                          </Typography>
-                        </Box>
-                      )}
-
-                      <TextField
-                        fullWidth
-                        multiline
-                        rows={3}
-                        placeholder={
-                          statusChangeRequiresComment
-                            ? 'Add a comment to update status...'
-                            : 'Add a comment...'
-                        }
-                        value={commentText}
-                        onChange={(e) => {
-                          setCommentText(e.target.value)
-                          setCommentError('')
-                        }}
-                        error={
-                          !!commentError ||
-                          (statusChangeRequiresComment && !commentText.trim())
-                        }
-                        helperText={
-                          commentError ||
-                          (statusChangeRequiresComment && !commentText.trim()
-                            ? 'Comment is required to update the status.'
-                            : '')
-                        }
-                        disabled={
-                          createCommentMutation.isPending ||
-                          updateStatusMutation.isPending
-                        }
-                        required={statusChangeRequiresComment}
+            {/* Comment Input Form */}
+            {canComment() && (
+              <Box sx={{ mt: 1.5 }}>
+                <Divider sx={{ mb: 1.5 }} />
+                <form onSubmit={handlePostComment}>
+                  {/* Status Change Requires Comment Warning */}
+                  {statusChangeRequiresComment && (
+                    <Box
+                      sx={{
+                        mb: 1.5,
+                        p: 1.5,
+                        bgcolor: '#fff3cd',
+                        border: '1px solid #ffc107',
+                        borderRadius: 1,
+                      }}
+                    >
+                      <Typography
+                        variant="body2"
                         sx={{
-                          mb: 1.5,
-                          '& .MuiInputBase-root': { fontSize: '0.875rem' },
-                        }}
-                        size="small"
-                      />
-                      <Box
-                        sx={{
-                          display: 'flex',
-                          justifyContent: 'flex-end',
-                          gap: 1,
+                          fontSize: '0.875rem',
+                          color: '#856404',
+                          fontWeight: 500,
+                          mb: 0.5,
                         }}
                       >
-                        <Button
-                          type="button"
-                          variant="outlined"
-                          size="small"
-                          onClick={() => {
-                            setCommentText('')
-                            setCommentError('')
-                            setPendingStatusChange(null)
-                            setStatusChangeRequiresComment(false)
-                            setCurrentStatus(originalStatus)
-                          }}
-                          disabled={
-                            createCommentMutation.isPending ||
-                            updateStatusMutation.isPending
-                          }
-                          sx={{ fontSize: '0.875rem', px: 1.5 }}
-                        >
-                          Cancel
-                        </Button>
-                        <Button
-                          type="submit"
-                          variant="contained"
-                          size="small"
-                          disabled={
-                            createCommentMutation.isPending ||
-                            updateStatusMutation.isPending ||
-                            !commentText.trim() ||
-                            (statusChangeRequiresComment && !commentText.trim())
-                          }
-                          startIcon={
-                            createCommentMutation.isPending ||
-                            updateStatusMutation.isPending ? (
-                              <CircularProgress size={14} />
-                            ) : (
-                              <CommentIcon sx={{ fontSize: '1rem' }} />
-                            )
-                          }
-                          sx={{
-                            bgcolor: '#06aee9',
-                            '&:hover': { bgcolor: '#0599d1' },
-                            '&:disabled': { bgcolor: '#ccc' },
-                            fontSize: '0.875rem',
-                            px: 1.5,
-                          }}
-                        >
-                          {statusChangeRequiresComment
-                            ? updateStatusMutation.isPending
-                              ? 'Saving...'
-                              : 'Save'
-                            : createCommentMutation.isPending
-                              ? 'Saving...'
-                              : 'Save'}
-                        </Button>
-                      </Box>
-                    </form>
+                        ⚠️ <strong>Comment Required:</strong> You must provide a
+                        comment to update the task status.
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        sx={{ fontSize: '0.75rem', color: '#856404' }}
+                      >
+                        Status will be updated from{' '}
+                        <strong>{originalStatus?.replace('_', ' ')}</strong> to{' '}
+                        <strong>
+                          {pendingStatusChange?.replace('_', ' ')}
+                        </strong>{' '}
+                        when you post your comment.
+                      </Typography>
+                    </Box>
+                  )}
+
+                  <TextField
+                    fullWidth
+                    multiline
+                    rows={3}
+                    placeholder={
+                      statusChangeRequiresComment
+                        ? 'Add a comment to update status...'
+                        : 'Add a comment...'
+                    }
+                    value={commentText}
+                    onChange={(e) => {
+                      setCommentText(e.target.value)
+                      setCommentError('')
+                    }}
+                    error={
+                      !!commentError ||
+                      (statusChangeRequiresComment && !commentText.trim())
+                    }
+                    helperText={
+                      commentError ||
+                      (statusChangeRequiresComment && !commentText.trim()
+                        ? 'Comment is required to update the status.'
+                        : '')
+                    }
+                    disabled={
+                      createCommentMutation.isPending ||
+                      updateStatusMutation.isPending
+                    }
+                    required={statusChangeRequiresComment}
+                    sx={{
+                      mb: 1.5,
+                      '& .MuiInputBase-root': { fontSize: '0.875rem' },
+                    }}
+                    size="small"
+                  />
+                  <Box
+                    sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1 }}
+                  >
+                    <Button
+                      type="button"
+                      variant="outlined"
+                      size="small"
+                      onClick={() => {
+                        setCommentText('')
+                        setCommentError('')
+                        setPendingStatusChange(null)
+                        setStatusChangeRequiresComment(false)
+                        setCurrentStatus(originalStatus)
+                      }}
+                      disabled={
+                        createCommentMutation.isPending ||
+                        updateStatusMutation.isPending
+                      }
+                      sx={{ fontSize: '0.875rem', px: 1.5 }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      variant="contained"
+                      size="small"
+                      disabled={
+                        createCommentMutation.isPending ||
+                        updateStatusMutation.isPending ||
+                        !commentText.trim() ||
+                        (statusChangeRequiresComment && !commentText.trim())
+                      }
+                      startIcon={
+                        createCommentMutation.isPending ||
+                        updateStatusMutation.isPending ? (
+                          <CircularProgress size={14} />
+                        ) : (
+                          <CommentIcon sx={{ fontSize: '1rem' }} />
+                        )
+                      }
+                      sx={{
+                        bgcolor:
+                          statusChangeRequiresComment && commentText.trim()
+                            ? '#06aee9'
+                            : '#06aee9',
+                        '&:hover': { bgcolor: '#0599d1' },
+                        '&:disabled': { bgcolor: '#ccc' },
+                        fontSize: '0.875rem',
+                        px: 1.5,
+                      }}
+                    >
+                      {statusChangeRequiresComment
+                        ? updateStatusMutation.isPending
+                          ? 'Saving...'
+                          : 'Save'
+                        : createCommentMutation.isPending
+                          ? 'Saving...'
+                          : 'Save'}
+                    </Button>
                   </Box>
-                )}
-              </Grid>
-            </Grid>
-          </Box>
-        ) : (
-          <Box sx={{ p: 2, textAlign: 'center' }}>
-            <Typography color="text.secondary" fontSize="0.875rem">
-              Task not found
-            </Typography>
-          </Box>
-        )}
+                </form>
+              </Box>
+            )}
+          </Grid>
+        </Grid>
       </DialogContent>
+      <DialogActions sx={{ p: 1.5, pt: 1 }}>
+        <Button
+          onClick={onClose}
+          size="small"
+          sx={{ fontSize: '0.875rem', px: 2 }}
+        >
+          Cancel
+        </Button>
+      </DialogActions>
     </Dialog>
   )
 }

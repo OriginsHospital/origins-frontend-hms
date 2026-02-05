@@ -19,6 +19,7 @@ import {
   Paper,
   Select,
   Switch,
+  Checkbox,
   Table,
   TableBody,
   TableCell,
@@ -34,6 +35,7 @@ import {
   Autocomplete,
   Tabs,
   Tab,
+  Menu,
 } from '@mui/material'
 import {
   Close as CloseIcon,
@@ -44,6 +46,8 @@ import {
   Comment as CommentIcon,
   Visibility as VisibilityIcon,
   Download as DownloadIcon,
+  MoreVert as MoreVertIcon,
+  Refresh as RefreshIcon,
 } from '@mui/icons-material'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSelector } from 'react-redux'
@@ -1230,13 +1234,14 @@ const getStatusColor = (status) => {
   }
 }
 
-// Create Ticket Modal Component
-function CreateTicketModal({ open, onClose, onSuccess }) {
+// Create/Edit Ticket Modal Component
+function CreateTicketModal({ open, onClose, onSuccess, ticket }) {
   const user = useSelector((store) => store.user)
   const [formData, setFormData] = useState({
     taskDescription: '',
     summary: '',
     assignedTo: '',
+    assignedToMultiple: [],
     priority: 'MEDIUM',
     department: '',
     category: '',
@@ -1245,7 +1250,9 @@ function CreateTicketModal({ open, onClose, onSuccess }) {
     alertEnabled: false,
     alertDate: null,
   })
+  const [allowMultipleAssignees, setAllowMultipleAssignees] = useState(false)
   const [errors, setErrors] = useState({})
+  const isEditMode = !!ticket
 
   // Predefined departments
   const departments = [
@@ -1283,6 +1290,103 @@ function CreateTicketModal({ open, onClose, onSuccess }) {
 
   const staff = staffData?.data || []
 
+  // Populate form when ticket is provided (edit mode)
+  React.useEffect(() => {
+    if (ticket && open) {
+      console.log('Populating form with ticket data:', ticket)
+      const assignedToValue = ticket.assignedTo || ticket.assigned_to
+      let assignedToDetails = ticket.assignedToDetails
+        ? typeof ticket.assignedToDetails === 'string'
+          ? JSON.parse(ticket.assignedToDetails)
+          : ticket.assignedToDetails
+        : null
+
+      // Handle case where assignedToDetails might be a single object instead of array
+      if (assignedToDetails && !Array.isArray(assignedToDetails)) {
+        assignedToDetails = [assignedToDetails]
+      }
+
+      // Check if multiple assignees exist
+      const isMultiple =
+        Array.isArray(assignedToDetails) && assignedToDetails.length > 1
+
+      // For single assignee, get the ID from assignedToDetails if available
+      let singleAssigneeId = assignedToValue
+      if (!isMultiple && assignedToDetails && assignedToDetails.length === 1) {
+        singleAssigneeId = assignedToDetails[0]?.id || assignedToValue
+      }
+
+      setFormData({
+        taskDescription:
+          ticket.taskDescription || ticket.task_description || '',
+        summary: ticket.summary || '',
+        assignedTo: isMultiple ? '' : singleAssigneeId || '',
+        assignedToMultiple:
+          isMultiple && assignedToDetails
+            ? assignedToDetails.map((a) => a.id).filter(Boolean)
+            : [],
+        priority: ticket.priority || 'MEDIUM',
+        department: ticket.department || '',
+        category: ticket.category || '',
+        startDate: null,
+        endDate: null,
+        alertEnabled: false,
+        alertDate: null,
+      })
+      setAllowMultipleAssignees(isMultiple)
+      console.log(
+        'Form populated - isMultiple:',
+        isMultiple,
+        'assignedTo:',
+        isMultiple ? 'multiple' : singleAssigneeId,
+      )
+    } else if (!ticket && open) {
+      // Reset form for create mode
+      setFormData({
+        taskDescription: '',
+        summary: '',
+        assignedTo: '',
+        assignedToMultiple: [],
+        priority: 'MEDIUM',
+        department: '',
+        category: '',
+        startDate: null,
+        endDate: null,
+        alertEnabled: false,
+        alertDate: null,
+      })
+      setAllowMultipleAssignees(false)
+    }
+  }, [ticket, open])
+
+  // Update ticket mutation
+  const updateMutation = useMutation({
+    mutationFn: (data) => {
+      console.log('Update mutation called with data:', data)
+      return updateTicket(user?.accessToken, data)
+    },
+    onSuccess: (response) => {
+      console.log('Ticket update response:', response)
+      if (response.status === 200 || response.status === 201) {
+        toast.success(response.message || 'Ticket updated successfully!')
+        handleClose()
+        setTimeout(() => {
+          onSuccess()
+        }, 500)
+      } else {
+        toast.error(response.message || 'Failed to update ticket')
+      }
+    },
+    onError: (error) => {
+      console.error('Error updating ticket:', error)
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        'Failed to update ticket. Please try again.'
+      toast.error(errorMessage)
+    },
+  })
+
   // Create ticket mutation
   const createMutation = useMutation({
     mutationFn: (data) => {
@@ -1293,8 +1397,13 @@ function CreateTicketModal({ open, onClose, onSuccess }) {
       console.log('Ticket creation response:', response)
       if (response.status === 201 || response.status === 200) {
         toast.success(response.message || 'Ticket created successfully!')
-        onSuccess()
+        // Close modal first
         handleClose()
+        // Trigger refetch after a delay to ensure backend transaction is committed
+        setTimeout(() => {
+          console.log('Triggering onSuccess callback to refetch tickets')
+          onSuccess()
+        }, 1000) // Delay to ensure backend has fully committed the transaction
       } else {
         toast.error(response.message || 'Failed to create ticket')
       }
@@ -1319,6 +1428,7 @@ function CreateTicketModal({ open, onClose, onSuccess }) {
       taskDescription: '',
       summary: '',
       assignedTo: '',
+      assignedToMultiple: [],
       priority: 'MEDIUM',
       department: '',
       category: '',
@@ -1327,6 +1437,7 @@ function CreateTicketModal({ open, onClose, onSuccess }) {
       alertEnabled: false,
       alertDate: null,
     })
+    setAllowMultipleAssignees(false)
     setErrors({})
     onClose()
   }
@@ -1341,12 +1452,22 @@ function CreateTicketModal({ open, onClose, onSuccess }) {
       // Validation fails but no error message shown
       return false
     }
-    if (
-      !formData.assignedTo ||
-      formData.assignedTo === '' ||
-      isNaN(Number(formData.assignedTo))
-    ) {
-      newErrors.assignedTo = 'Please assign the ticket to a staff member'
+    if (allowMultipleAssignees) {
+      if (
+        !formData.assignedToMultiple ||
+        formData.assignedToMultiple.length === 0
+      ) {
+        newErrors.assignedTo =
+          'Please assign the ticket to at least one staff member'
+      }
+    } else {
+      if (
+        !formData.assignedTo ||
+        formData.assignedTo === '' ||
+        isNaN(Number(formData.assignedTo))
+      ) {
+        newErrors.assignedTo = 'Please assign the ticket to a staff member'
+      }
     }
     if (!formData.department || formData.department.trim() === '') {
       newErrors.department = 'Please select a department'
@@ -1358,11 +1479,14 @@ function CreateTicketModal({ open, onClose, onSuccess }) {
   const handleSubmit = (e) => {
     e.preventDefault()
     if (validate()) {
-      // Convert assignedTo to number and prepare payload
+      // Convert assignedTo to number or array and prepare payload
       // Only include fields that are supported by the backend schema
       const payload = {
+        ticketId: isEditMode ? ticket.id : undefined,
         taskDescription: formData.taskDescription,
-        assignedTo: Number(formData.assignedTo),
+        assignedTo: allowMultipleAssignees
+          ? formData.assignedToMultiple.map((id) => Number(id))
+          : Number(formData.assignedTo),
         priority: formData.priority,
         department: formData.department,
         summary: formData.summary || null,
@@ -1371,7 +1495,11 @@ function CreateTicketModal({ open, onClose, onSuccess }) {
         // These fields are kept in the UI for future use but excluded from the payload
       }
       console.log('Submitting ticket with payload:', payload)
-      createMutation.mutate(payload)
+      if (isEditMode) {
+        updateMutation.mutate(payload)
+      } else {
+        createMutation.mutate(payload)
+      }
     }
   }
 
@@ -1428,24 +1556,33 @@ function CreateTicketModal({ open, onClose, onSuccess }) {
       PaperProps={{
         sx: {
           borderRadius: 2,
-          maxHeight: '90vh',
+          width: '600px',
+          maxWidth: '600px',
+          height: '85vh',
+          maxHeight: '85vh',
+          minHeight: '85vh',
+          display: 'flex',
+          flexDirection: 'column',
         },
       }}
     >
-      <DialogTitle sx={{ pb: 2, pr: 1, pt: 2.5 }}>
+      <DialogTitle
+        sx={{
+          pb: 2,
+          pr: 1,
+          pt: 2.5,
+          px: 3,
+          flexShrink: 0,
+          borderBottom: '1px solid #e5e7eb',
+        }}
+      >
         <Box
           sx={{
             display: 'flex',
-            justifyContent: 'space-between',
+            justifyContent: 'flex-end',
             alignItems: 'center',
           }}
         >
-          <Typography
-            variant="h6"
-            sx={{ fontWeight: 600, fontSize: '1.25rem' }}
-          >
-            Create Ticket
-          </Typography>
           <IconButton
             onClick={handleClose}
             size="small"
@@ -1455,8 +1592,26 @@ function CreateTicketModal({ open, onClose, onSuccess }) {
           </IconButton>
         </Box>
       </DialogTitle>
-      <DialogContent sx={{ pt: 2, pb: 2, px: 3 }}>
-        <form onSubmit={handleSubmit}>
+      <DialogContent
+        sx={{
+          pt: 2.5,
+          pb: 0,
+          px: 3,
+          flex: 1,
+          overflowY: 'auto',
+          '&::-webkit-scrollbar': {
+            width: '8px',
+          },
+          '&::-webkit-scrollbar-track': {
+            background: '#f1f1f1',
+          },
+          '&::-webkit-scrollbar-thumb': {
+            background: '#c1c1c1',
+            borderRadius: '4px',
+          },
+        }}
+      >
+        <form onSubmit={handleSubmit} id="create-ticket-form">
           <Grid container spacing={2.5}>
             {/* Summary - Full Width */}
             <Grid item xs={12}>
@@ -1498,36 +1653,137 @@ function CreateTicketModal({ open, onClose, onSuccess }) {
 
             {/* Assign To / Priority - 2 Column Grid */}
             <Grid item xs={12} sm={6}>
-              <Typography sx={labelStyle}>Assign To</Typography>
-              <FormControl fullWidth error={!!errors.assignedTo} size="small">
-                <Select
-                  value={formData.assignedTo}
-                  onChange={(e) =>
-                    setFormData({ ...formData, assignedTo: e.target.value })
-                  }
-                  displayEmpty
-                  disabled={staffLoading}
-                  sx={selectStyle}
-                >
-                  <MenuItem value="">Select a staff member</MenuItem>
-                  {staff.map((member) => (
-                    <MenuItem key={member.id} value={member.id}>
-                      {member.fullName} ({member.roleDetails?.name || 'Staff'})
-                    </MenuItem>
-                  ))}
-                </Select>
-                {errors.assignedTo && (
-                  <Typography
-                    variant="caption"
-                    color="error"
-                    sx={{ mt: 0.5, ml: 1.5, fontSize: '0.75rem' }}
-                  >
-                    {errors.assignedTo}
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={allowMultipleAssignees}
+                    onChange={(e) => {
+                      setAllowMultipleAssignees(e.target.checked)
+                      // Reset assignee fields when toggling
+                      if (e.target.checked) {
+                        setFormData({
+                          ...formData,
+                          assignedTo: '',
+                          assignedToMultiple: [],
+                        })
+                      } else {
+                        setFormData({
+                          ...formData,
+                          assignedTo: '',
+                          assignedToMultiple: [],
+                        })
+                      }
+                      if (errors.assignedTo) {
+                        setErrors({ ...errors, assignedTo: '' })
+                      }
+                    }}
+                    size="small"
+                  />
+                }
+                label={
+                  <Typography sx={{ fontSize: '0.875rem', fontWeight: 500 }}>
+                    Assign to multiple employees
                   </Typography>
-                )}
-              </FormControl>
+                }
+                sx={{
+                  m: 0,
+                  mb: 0.75,
+                  height: '24px',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              />
+              <Typography sx={labelStyle}>Assign To</Typography>
+              {allowMultipleAssignees ? (
+                <Autocomplete
+                  multiple
+                  size="small"
+                  options={staff}
+                  getOptionLabel={(option) =>
+                    `${option.fullName} (${option.roleDetails?.name || 'Staff'})`
+                  }
+                  getOptionKey={(option) => option.id || option.fullName}
+                  isOptionEqualToValue={(option, value) =>
+                    option.id === value.id
+                  }
+                  value={
+                    staff.filter((member) =>
+                      formData.assignedToMultiple.includes(member.id),
+                    ) || []
+                  }
+                  onChange={(e, newValue) => {
+                    setFormData({
+                      ...formData,
+                      assignedToMultiple: newValue.map((member) => member.id),
+                    })
+                    if (errors.assignedTo) {
+                      setErrors({ ...errors, assignedTo: '' })
+                    }
+                  }}
+                  disabled={staffLoading}
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      placeholder="Select staff members"
+                      error={!!errors.assignedTo}
+                      helperText={errors.assignedTo}
+                      sx={autocompleteStyle}
+                    />
+                  )}
+                />
+              ) : (
+                <FormControl fullWidth error={!!errors.assignedTo} size="small">
+                  <Select
+                    value={formData.assignedTo}
+                    onChange={(e) =>
+                      setFormData({ ...formData, assignedTo: e.target.value })
+                    }
+                    displayEmpty
+                    disabled={staffLoading}
+                    sx={selectStyle}
+                  >
+                    <MenuItem value="">Select a staff member</MenuItem>
+                    {staff.map((member) => (
+                      <MenuItem key={member.id} value={member.id}>
+                        {member.fullName} ({member.roleDetails?.name || 'Staff'}
+                        )
+                      </MenuItem>
+                    ))}
+                  </Select>
+                  {errors.assignedTo && (
+                    <Typography
+                      variant="caption"
+                      color="error"
+                      sx={{ mt: 0.5, ml: 1.5, fontSize: '0.75rem' }}
+                    >
+                      {errors.assignedTo}
+                    </Typography>
+                  )}
+                </FormControl>
+              )}
             </Grid>
             <Grid item xs={12} sm={6}>
+              <FormControlLabel
+                control={<Box sx={{ width: '20px', height: '20px' }} />}
+                label={
+                  <Typography
+                    sx={{
+                      fontSize: '0.875rem',
+                      fontWeight: 500,
+                      visibility: 'hidden',
+                    }}
+                  >
+                    Assign to multiple employees
+                  </Typography>
+                }
+                sx={{
+                  m: 0,
+                  mb: 0.75,
+                  height: '24px',
+                  display: 'flex',
+                  alignItems: 'center',
+                }}
+              />
               <Typography sx={labelStyle}>Priority</Typography>
               <FormControl fullWidth size="small">
                 <Select
@@ -1662,33 +1918,40 @@ function CreateTicketModal({ open, onClose, onSuccess }) {
               </Box>
             </Grid>
 
-            {/* Alert Date & Time - Conditional, 40% Width */}
+            {/* Alert Date & Time - Conditional, Full Width */}
             {formData.alertEnabled && (
               <Grid item xs={12}>
                 <Typography sx={labelStyle}>Alert Date & Time</Typography>
-                <Box sx={{ width: '40%' }}>
-                  <DatePicker
-                    value={formData.alertDate}
-                    onChange={(value) =>
-                      setFormData({ ...formData, alertDate: value })
-                    }
-                    slotProps={{
-                      textField: {
-                        fullWidth: true,
-                        size: 'small',
-                        placeholder: 'Select alert date & time',
-                        sx: inputStyle,
-                      },
-                    }}
-                  />
-                </Box>
+                <DatePicker
+                  value={formData.alertDate}
+                  onChange={(value) =>
+                    setFormData({ ...formData, alertDate: value })
+                  }
+                  slotProps={{
+                    textField: {
+                      fullWidth: true,
+                      size: 'small',
+                      placeholder: 'Select alert date & time',
+                      sx: { ...inputStyle, maxWidth: '400px' },
+                    },
+                  }}
+                />
               </Grid>
             )}
           </Grid>
         </form>
       </DialogContent>
       <DialogActions
-        sx={{ p: 2.5, pt: 2, gap: 1.5, justifyContent: 'flex-end' }}
+        sx={{
+          p: 2.5,
+          pt: 2,
+          pb: 2.5,
+          px: 3,
+          gap: 1.5,
+          justifyContent: 'flex-end',
+          flexShrink: 0,
+          borderTop: '1px solid #e5e7eb',
+        }}
       >
         <Button
           onClick={handleClose}
@@ -1708,7 +1971,8 @@ function CreateTicketModal({ open, onClose, onSuccess }) {
           Cancel
         </Button>
         <Button
-          onClick={handleSubmit}
+          type="submit"
+          form="create-ticket-form"
           variant="contained"
           size="medium"
           disabled={createMutation.isPending}
@@ -1727,7 +1991,7 @@ function CreateTicketModal({ open, onClose, onSuccess }) {
             fontWeight: 500,
           }}
         >
-          Create
+          {isEditMode ? 'Update' : 'Create'}
         </Button>
       </DialogActions>
     </Dialog>
@@ -1745,6 +2009,17 @@ function Ticketing() {
   const [exportDateModalOpen, setExportDateModalOpen] = useState(false)
   const [exportFromDate, setExportFromDate] = useState(null)
   const [exportToDate, setExportToDate] = useState(null)
+  const [actionMenuAnchor, setActionMenuAnchor] = useState(null)
+  const [selectedActionTicket, setSelectedActionTicket] = useState(null)
+  const [commentDialogOpen, setCommentDialogOpen] = useState(false)
+  const [pendingAction, setPendingAction] = useState(null)
+  const [actionComment, setActionComment] = useState('')
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [selectedEditTicket, setSelectedEditTicket] = useState(null)
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false)
+  const [priorityDialogOpen, setPriorityDialogOpen] = useState(false)
+  const [selectedNewStatus, setSelectedNewStatus] = useState('')
+  const [selectedNewPriority, setSelectedNewPriority] = useState('')
 
   // Handle navigation from inbox
   React.useEffect(() => {
@@ -1775,7 +2050,7 @@ function Ticketing() {
   )
 
   // Fetch tickets
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['tickets', user?.accessToken, filters, page],
     queryFn: () =>
       getTickets(user?.accessToken, {
@@ -1784,6 +2059,8 @@ function Ticketing() {
         limit,
       }),
     enabled: !!user?.accessToken,
+    refetchOnWindowFocus: true, // Refetch when window regains focus
+    refetchOnMount: true, // Always refetch on mount
   })
 
   const tickets = data?.data?.tickets || []
@@ -1805,13 +2082,64 @@ function Ticketing() {
 
   // Delete ticket mutation
   const deleteMutation = useMutation({
-    mutationFn: (ticketId) => deleteTicket(user?.accessToken, ticketId),
+    mutationFn: ({ ticketId, comment }) => {
+      // First create comment if provided
+      if (comment && comment.trim()) {
+        return createTicketComment(user?.accessToken, ticketId, comment).then(
+          () => deleteTicket(user?.accessToken, ticketId),
+        )
+      }
+      return deleteTicket(user?.accessToken, ticketId)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tickets'] })
+      queryClient.invalidateQueries({ queryKey: ['ticketDetails'] })
       toast.success('Ticket deleted successfully')
     },
     onError: (error) => {
       toast.error(error.message || 'Failed to delete ticket')
+    },
+  })
+
+  // Update ticket mutation (for priority and other fields)
+  const updateTicketMutation = useMutation({
+    mutationFn: ({ ticketId, payload, comment }) => {
+      // First create comment if provided
+      if (comment && comment.trim()) {
+        return createTicketComment(user?.accessToken, ticketId, comment).then(
+          () => updateTicket(user?.accessToken, payload),
+        )
+      }
+      return updateTicket(user?.accessToken, payload)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tickets'] })
+      queryClient.invalidateQueries({ queryKey: ['ticketDetails'] })
+      toast.success('Ticket updated successfully')
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to update ticket')
+    },
+  })
+
+  // Update status with comment
+  const updateStatusWithCommentMutation = useMutation({
+    mutationFn: ({ ticketId, status, comment }) => {
+      // First create comment if provided
+      if (comment && comment.trim()) {
+        return createTicketComment(user?.accessToken, ticketId, comment).then(
+          () => updateTicketStatus(user?.accessToken, ticketId, status),
+        )
+      }
+      return updateTicketStatus(user?.accessToken, ticketId, status)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tickets'] })
+      queryClient.invalidateQueries({ queryKey: ['ticketDetails'] })
+      toast.success('Ticket status updated successfully')
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to update ticket status')
     },
   })
 
@@ -1823,6 +2151,174 @@ function Ticketing() {
     if (window.confirm('Are you sure you want to delete this ticket?')) {
       deleteMutation.mutate(ticketId)
     }
+  }
+
+  // Action menu handlers
+  const handleMenuOpen = (event, ticket) => {
+    setActionMenuAnchor(event.currentTarget)
+    setSelectedActionTicket(ticket)
+  }
+
+  const handleMenuClose = () => {
+    setActionMenuAnchor(null)
+    // Don't clear selectedActionTicket here - it's needed for the comment dialog
+  }
+
+  const handleActionClick = (action) => {
+    // Store the ticket before closing menu
+    const ticket = selectedActionTicket
+    setActionMenuAnchor(null) // Close menu but keep ticket data
+
+    if (action === 'view') {
+      if (ticket?.id) {
+        setSelectedTicketId(ticket.id)
+        setViewModalOpen(true)
+      }
+      setSelectedActionTicket(null) // Clear after use
+      return
+    }
+
+    // For other actions, show comment dialog
+    // Keep selectedActionTicket set so comment dialog can use it
+    setPendingAction(action)
+    setCommentDialogOpen(true)
+  }
+
+  const handleCommentSubmit = async () => {
+    const ticket = selectedActionTicket
+    const comment = actionComment.trim()
+
+    // Validate that we have a ticket
+    if (!ticket || !ticket.id) {
+      toast.error('Ticket information is missing. Please try again.')
+      setCommentDialogOpen(false)
+      setActionComment('')
+      setPendingAction(null)
+      return
+    }
+
+    switch (pendingAction) {
+      case 'edit':
+        // Save comment if provided
+        if (comment && comment.trim()) {
+          try {
+            await createTicketComment(user?.accessToken, ticket.id, comment)
+          } catch (error) {
+            console.error('Error saving comment:', error)
+            // Continue even if comment fails
+          }
+        }
+        // Use the ticket data we already have from the table
+        // Try to fetch full details, but fallback to table data if fetch fails
+        try {
+          const ticketDetails = await getTicketDetails(
+            user?.accessToken,
+            ticket.id,
+          )
+          console.log('Ticket details response:', ticketDetails)
+          // Handle different response structures
+          const ticketData = ticketDetails?.data || ticketDetails
+          if (ticketData) {
+            setSelectedEditTicket(ticketData)
+            setCommentDialogOpen(false)
+            setActionComment('')
+            setEditModalOpen(true)
+          } else {
+            // Fallback to using table ticket data
+            setSelectedEditTicket(ticket)
+            setCommentDialogOpen(false)
+            setActionComment('')
+            setEditModalOpen(true)
+          }
+        } catch (error) {
+          console.error('Error fetching ticket details:', error)
+          // Fallback to using table ticket data
+          setSelectedEditTicket(ticket)
+          setCommentDialogOpen(false)
+          setActionComment('')
+          setEditModalOpen(true)
+        }
+        break
+
+      case 'updateStatus':
+        // Show status selection dialog
+        setCommentDialogOpen(false)
+        setStatusDialogOpen(true)
+        // Comment will be used when status is confirmed
+        break
+
+      case 'updatePriority':
+        setCommentDialogOpen(false)
+        setPriorityDialogOpen(true)
+        // Comment will be used when priority is confirmed
+        break
+
+      case 'delete':
+        deleteMutation.mutate({ ticketId: ticket.id, comment })
+        setCommentDialogOpen(false)
+        setActionComment('')
+        break
+
+      case 'reopen':
+        // Require comment for reopening
+        if (!comment || !comment.trim()) {
+          toast.error('Please enter a comment to reopen the issue')
+          return // Don't close dialog, let user enter comment
+        }
+        updateStatusWithCommentMutation.mutate({
+          ticketId: ticket.id,
+          status: 'OPEN',
+          comment,
+        })
+        setCommentDialogOpen(false)
+        setActionComment('')
+        setSelectedActionTicket(null) // Clear after use
+        break
+
+      default:
+        setCommentDialogOpen(false)
+        setActionComment('')
+    }
+  }
+
+  const handleStatusConfirm = () => {
+    if (!selectedNewStatus) {
+      toast.error('Please select a status')
+      return
+    }
+    const ticket = selectedActionTicket
+    const comment = actionComment.trim()
+    updateStatusWithCommentMutation.mutate({
+      ticketId: ticket.id,
+      status: selectedNewStatus,
+      comment,
+    })
+    setStatusDialogOpen(false)
+    setSelectedNewStatus('')
+    setActionComment('')
+  }
+
+  const handlePriorityConfirm = () => {
+    if (!selectedNewPriority) {
+      toast.error('Please select a priority')
+      return
+    }
+    const ticket = selectedActionTicket
+    const comment = actionComment.trim()
+    updateTicketMutation.mutate({
+      ticketId: ticket.id,
+      payload: { ticketId: ticket.id, priority: selectedNewPriority },
+      comment,
+    })
+    setPriorityDialogOpen(false)
+    setSelectedNewPriority('')
+    setActionComment('')
+  }
+
+  const handleCommentDialogClose = () => {
+    setCommentDialogOpen(false)
+    setActionComment('')
+    setPendingAction(null)
   }
 
   const handleSearchChange = (e) => {
@@ -2011,8 +2507,8 @@ function Ticketing() {
               },
             }}
           >
-            <Tab label="Tickets" />
-            <Tab label="Tasks" />
+            <Tab label="Issue Log" />
+            <Tab label="Task Tracker" />
           </Tabs>
         </Box>
       </Card>
@@ -2120,7 +2616,7 @@ function Ticketing() {
                 }}
               >
                 <Typography variant="h6" fontWeight={600}>
-                  All Tickets
+                  All Issues
                 </Typography>
                 <Button
                   variant="outlined"
@@ -2173,6 +2669,7 @@ function Ticketing() {
                         <TableCell sx={{ fontWeight: 600 }}>Task</TableCell>
                         <TableCell sx={{ fontWeight: 600 }}>Category</TableCell>
                         <TableCell sx={{ fontWeight: 600 }}>Priority</TableCell>
+                        <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
                         <TableCell sx={{ fontWeight: 600 }}>
                           Assigned By
                         </TableCell>
@@ -2304,6 +2801,18 @@ function Ticketing() {
                               />
                             </TableCell>
                             <TableCell>
+                              <Chip
+                                label={ticket.status || 'OPEN'}
+                                size="small"
+                                sx={{
+                                  bgcolor: statusColor.bg,
+                                  color: statusColor.text,
+                                  border: `1px solid ${statusColor.border}`,
+                                  fontWeight: 500,
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell>
                               <Box
                                 sx={{
                                   display: 'flex',
@@ -2328,31 +2837,13 @@ function Ticketing() {
                               </Box>
                             </TableCell>
                             <TableCell>
-                              <Stack direction="row" spacing={1}>
-                                <Tooltip title="View Details">
-                                  <IconButton
-                                    size="small"
-                                    color="primary"
-                                    onClick={() => {
-                                      setSelectedTicketId(ticket.id)
-                                      setViewModalOpen(true)
-                                    }}
-                                  >
-                                    <VisibilityIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                                {isAdmin && (
-                                  <Tooltip title="Delete">
-                                    <IconButton
-                                      size="small"
-                                      color="error"
-                                      onClick={() => handleDelete(ticket.id)}
-                                    >
-                                      <DeleteIcon fontSize="small" />
-                                    </IconButton>
-                                  </Tooltip>
-                                )}
-                              </Stack>
+                              <IconButton
+                                size="small"
+                                onClick={(e) => handleMenuOpen(e, ticket)}
+                                sx={{ color: 'text.secondary' }}
+                              >
+                                <MoreVertIcon fontSize="small" />
+                              </IconButton>
                             </TableCell>
                           </TableRow>
                         )
@@ -2404,8 +2895,40 @@ function Ticketing() {
           <CreateTicketModal
             open={createModalOpen}
             onClose={() => setCreateModalOpen(false)}
-            onSuccess={() => {
+            onSuccess={async () => {
+              // Reset to page 1 to show the newly created ticket (it appears at the top)
+              setPage(1)
+              // Clear all ticket-related cache entries
+              queryClient.removeQueries({
+                queryKey: ['tickets'],
+                exact: false,
+              })
+              // Wait a moment for the backend to fully commit
+              await new Promise((resolve) => setTimeout(resolve, 1000))
+              // Force refetch with current filters
+              await queryClient.refetchQueries({
+                queryKey: ['tickets'],
+                type: 'active',
+                exact: false,
+              })
+              console.log('Tickets cache cleared and refetched after creation')
+            }}
+          />
+
+          {/* Edit Ticket Modal */}
+          <CreateTicketModal
+            open={editModalOpen}
+            ticket={selectedEditTicket}
+            onClose={() => {
+              setEditModalOpen(false)
+              setSelectedEditTicket(null)
+            }}
+            onSuccess={async () => {
+              // Invalidate queries to refresh data
               queryClient.invalidateQueries({ queryKey: ['tickets'] })
+              queryClient.invalidateQueries({ queryKey: ['ticketDetails'] })
+              setEditModalOpen(false)
+              setSelectedEditTicket(null)
             }}
           />
 
@@ -2536,6 +3059,204 @@ function Ticketing() {
                 }}
               >
                 Export
+              </Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Action Menu */}
+          <Menu
+            anchorEl={actionMenuAnchor}
+            open={Boolean(actionMenuAnchor)}
+            onClose={handleMenuClose}
+            anchorOrigin={{
+              vertical: 'bottom',
+              horizontal: 'right',
+            }}
+            transformOrigin={{
+              vertical: 'top',
+              horizontal: 'right',
+            }}
+          >
+            <MenuItem onClick={() => handleActionClick('view')}>
+              <VisibilityIcon fontSize="small" sx={{ mr: 1 }} />
+              View Details
+            </MenuItem>
+            <MenuItem onClick={() => handleActionClick('edit')}>
+              <EditIcon fontSize="small" sx={{ mr: 1 }} />
+              Edit
+            </MenuItem>
+            {selectedActionTicket?.status === 'COMPLETED' ||
+            selectedActionTicket?.status === 'CLOSED' ? (
+              <MenuItem onClick={() => handleActionClick('reopen')}>
+                <RefreshIcon fontSize="small" sx={{ mr: 1 }} />
+                Re-open Issue
+              </MenuItem>
+            ) : (
+              <MenuItem onClick={() => handleActionClick('updateStatus')}>
+                <RefreshIcon fontSize="small" sx={{ mr: 1 }} />
+                Update Status
+              </MenuItem>
+            )}
+            <MenuItem onClick={() => handleActionClick('updatePriority')}>
+              <EditIcon fontSize="small" sx={{ mr: 1 }} />
+              Update Priority
+            </MenuItem>
+            {isAdmin && (
+              <MenuItem
+                onClick={() => handleActionClick('delete')}
+                sx={{ color: 'error.main' }}
+              >
+                <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
+                Delete
+              </MenuItem>
+            )}
+          </Menu>
+
+          {/* Comment Dialog */}
+          <Dialog
+            open={commentDialogOpen}
+            onClose={handleCommentDialogClose}
+            maxWidth="sm"
+            fullWidth
+          >
+            <DialogTitle>
+              {pendingAction === 'edit' && 'Add Comment for Edit'}
+              {pendingAction === 'updateStatus' &&
+                'Add Comment for Status Update'}
+              {pendingAction === 'updatePriority' &&
+                'Add Comment for Priority Update'}
+              {pendingAction === 'delete' && 'Add Comment for Delete'}
+              {pendingAction === 'reopen' &&
+                'Add Comment to Re-open Issue (Required)'}
+            </DialogTitle>
+            <DialogContent>
+              <TextField
+                autoFocus
+                margin="dense"
+                label={
+                  pendingAction === 'reopen' ? 'Comment (Required)' : 'Comment'
+                }
+                fullWidth
+                multiline
+                rows={4}
+                value={actionComment}
+                onChange={(e) => setActionComment(e.target.value)}
+                placeholder={
+                  pendingAction === 'reopen'
+                    ? 'Enter a comment to reopen the issue (required)...'
+                    : 'Enter a comment for this action...'
+                }
+                required={pendingAction === 'reopen'}
+                error={pendingAction === 'reopen' && !actionComment.trim()}
+                helperText={
+                  pendingAction === 'reopen' && !actionComment.trim()
+                    ? 'Comment is required to reopen the issue'
+                    : ''
+                }
+                sx={{ mt: 2 }}
+              />
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2 }}>
+              <Button onClick={handleCommentDialogClose}>Cancel</Button>
+              <Button
+                variant="contained"
+                onClick={handleCommentSubmit}
+                disabled={pendingAction === 'reopen' && !actionComment.trim()}
+                sx={{ bgcolor: '#06aee9', '&:hover': { bgcolor: '#0599d1' } }}
+              >
+                Continue
+              </Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Status Selection Dialog */}
+          <Dialog
+            open={statusDialogOpen}
+            onClose={() => {
+              setStatusDialogOpen(false)
+              setSelectedNewStatus('')
+              setActionComment('')
+            }}
+            maxWidth="sm"
+            fullWidth
+          >
+            <DialogTitle>Select New Status</DialogTitle>
+            <DialogContent>
+              <FormControl fullWidth sx={{ mt: 2 }}>
+                <InputLabel>Status</InputLabel>
+                <Select
+                  value={selectedNewStatus}
+                  onChange={(e) => setSelectedNewStatus(e.target.value)}
+                  label="Status"
+                >
+                  <MenuItem value="OPEN">Open</MenuItem>
+                  <MenuItem value="IN_PROGRESS">In Progress</MenuItem>
+                  <MenuItem value="COMPLETED">Completed</MenuItem>
+                </Select>
+              </FormControl>
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2 }}>
+              <Button
+                onClick={() => {
+                  setStatusDialogOpen(false)
+                  setSelectedNewStatus('')
+                  setActionComment('')
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="contained"
+                onClick={handleStatusConfirm}
+                sx={{ bgcolor: '#06aee9', '&:hover': { bgcolor: '#0599d1' } }}
+              >
+                Update Status
+              </Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Priority Selection Dialog */}
+          <Dialog
+            open={priorityDialogOpen}
+            onClose={() => {
+              setPriorityDialogOpen(false)
+              setSelectedNewPriority('')
+              setActionComment('')
+            }}
+            maxWidth="sm"
+            fullWidth
+          >
+            <DialogTitle>Select New Priority</DialogTitle>
+            <DialogContent>
+              <FormControl fullWidth sx={{ mt: 2 }}>
+                <InputLabel>Priority</InputLabel>
+                <Select
+                  value={selectedNewPriority}
+                  onChange={(e) => setSelectedNewPriority(e.target.value)}
+                  label="Priority"
+                >
+                  <MenuItem value="LOW">Low</MenuItem>
+                  <MenuItem value="MEDIUM">Medium</MenuItem>
+                  <MenuItem value="HIGH">High</MenuItem>
+                </Select>
+              </FormControl>
+            </DialogContent>
+            <DialogActions sx={{ px: 3, pb: 2 }}>
+              <Button
+                onClick={() => {
+                  setPriorityDialogOpen(false)
+                  setSelectedNewPriority('')
+                  setActionComment('')
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="contained"
+                onClick={handlePriorityConfirm}
+                sx={{ bgcolor: '#06aee9', '&:hover': { bgcolor: '#0599d1' } }}
+              >
+                Update Priority
               </Button>
             </DialogActions>
           </Dialog>

@@ -31,6 +31,13 @@ import {
   TextField,
   InputAdornment,
   TablePagination,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Menu,
+  ListItemIcon,
+  ListItemText,
 } from '@mui/material'
 
 import React, { useEffect, useState, useMemo } from 'react'
@@ -42,12 +49,15 @@ import {
   getPatientVisits,
   getPaymentHistoryByVisitId,
   getTreatmentsHistoryByVisitId,
+  updatePaymentHistory,
+  deletePaymentHistory,
 } from '@/constants/apis'
 import { useDispatch, useSelector } from 'react-redux'
 import { closeModal, openModal } from '@/redux/modalSlice'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import noImage from '@/assets/no-image.png'
+import { toast } from 'react-toastify'
 import {
   ExpandMore,
   Download,
@@ -59,6 +69,9 @@ import {
   ExitToApp,
   ArrowBack,
   Close,
+  Edit,
+  Delete,
+  MoreVert,
 } from '@mui/icons-material'
 import { Generate_Invoice } from '@/constants/apis'
 import { useRouter } from 'next/router'
@@ -69,7 +82,7 @@ import { usePermissionCheck, withPermission } from '@/components/withPermission'
 
 // EmbryologyDetails Component
 const EmbryologyDetails = ({ details }) => {
-  const handleOpenTemplate = template => {
+  const handleOpenTemplate = (template) => {
     if (!template) return
     const newWindow = window.open()
     newWindow.document.write(template)
@@ -204,7 +217,8 @@ const EmbryologyTab = ({
 
 // PaymentHistoryTab Component
 const PaymentHistoryTab = ({ data }) => {
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
+  const queryClient = useQueryClient()
   const [page, setPage] = useState(0)
   const [rowsPerPage, setRowsPerPage] = useState(5)
   const [filters, setFilters] = useState({
@@ -216,9 +230,150 @@ const PaymentHistoryTab = ({ data }) => {
     },
     search: '',
   })
+  const [editPayment, setEditPayment] = useState(null)
+  const [deleteConfirm, setDeleteConfirm] = useState(null)
+  const [menuAnchor, setMenuAnchor] = useState(null)
+  const [selectedPayment, setSelectedPayment] = useState(null)
+  const [editFormData, setEditFormData] = useState({
+    totalOrderAmount: '',
+    discountAmount: '',
+    paidOrderAmount: '',
+    paymentMode: '',
+    productType: '',
+    orderDate: '',
+  })
+
+  // Check if user is admin
+  const isAdmin = user?.roleDetails?.name?.toLowerCase() === 'admin'
+
+  // Handle menu open
+  const handleMenuOpen = (event, payment) => {
+    setMenuAnchor(event.currentTarget)
+    setSelectedPayment(payment)
+  }
+
+  // Handle menu close
+  const handleMenuClose = () => {
+    setMenuAnchor(null)
+    setSelectedPayment(null)
+  }
+
+  // Handle edit click
+  const handleEditClick = () => {
+    if (selectedPayment) {
+      setEditPayment(selectedPayment)
+      setEditFormData({
+        totalOrderAmount: selectedPayment.totalOrderAmount || '',
+        discountAmount: selectedPayment.discountAmount || '',
+        paidOrderAmount: selectedPayment.paidOrderAmount || '',
+        paymentMode: selectedPayment.paymentMode || '',
+        productType: selectedPayment.productType || '',
+        orderDate: selectedPayment.orderDate
+          ? dayjs(selectedPayment.orderDate).format('YYYY-MM-DD')
+          : '',
+      })
+    }
+    handleMenuClose()
+  }
+
+  // Handle delete click
+  const handleDeleteClick = () => {
+    if (selectedPayment) {
+      setDeleteConfirm(selectedPayment)
+    }
+    handleMenuClose()
+  }
+
+  // Update payment mutation
+  const updatePaymentMutation = useMutation({
+    mutationFn: async ({ paymentId, paymentData }) => {
+      return await updatePaymentHistory(
+        user.accessToken,
+        paymentId,
+        paymentData,
+      )
+    },
+    onSuccess: () => {
+      toast.success('Payment record updated successfully')
+      setEditPayment(null)
+      setEditFormData({
+        totalOrderAmount: '',
+        discountAmount: '',
+        paidOrderAmount: '',
+        paymentMode: '',
+        productType: '',
+        orderDate: '',
+      })
+      // Invalidate payment history query to refresh data
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          return query.queryKey[0] === 'paymentHistory'
+        },
+      })
+    },
+    onError: (error) => {
+      toast.error(
+        error?.response?.data?.message ||
+          error?.message ||
+          'Failed to update payment record',
+      )
+    },
+  })
+
+  // Delete payment mutation
+  const deletePaymentMutation = useMutation({
+    mutationFn: async (paymentId) => {
+      return await deletePaymentHistory(user.accessToken, paymentId)
+    },
+    onSuccess: () => {
+      toast.success('Payment record deleted successfully')
+      setDeleteConfirm(null)
+      // Invalidate payment history query to refresh data
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          return query.queryKey[0] === 'paymentHistory'
+        },
+      })
+    },
+    onError: (error) => {
+      toast.error(
+        error?.response?.data?.message ||
+          error?.message ||
+          'Failed to delete payment record',
+      )
+    },
+  })
+
+  // Handle edit form submit
+  const handleEditSubmit = () => {
+    if (!editPayment) return
+
+    const paymentData = {
+      totalOrderAmount: parseFloat(editFormData.totalOrderAmount) || 0,
+      discountAmount: parseFloat(editFormData.discountAmount) || 0,
+      paidOrderAmount: parseFloat(editFormData.paidOrderAmount) || 0,
+      paymentMode: editFormData.paymentMode,
+      productType: editFormData.productType,
+      orderDate: editFormData.orderDate
+        ? dayjs(editFormData.orderDate).format('YYYY-MM-DD HH:mm:ss')
+        : null,
+    }
+
+    updatePaymentMutation.mutate({
+      paymentId: editPayment.id,
+      paymentData,
+    })
+  }
+
+  // Handle delete confirm
+  const handleDeleteConfirm = () => {
+    if (deleteConfirm) {
+      deletePaymentMutation.mutate(deleteConfirm.id)
+    }
+  }
 
   const generateReport = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const result = await Generate_Invoice(user.accessToken, payload)
       if (result.status === 200) {
         const newWindow = window.open()
@@ -231,7 +386,7 @@ const PaymentHistoryTab = ({ data }) => {
 
   // Filter data based on current filters
   const filteredData = useMemo(() => {
-    return data?.filter(payment => {
+    return data?.filter((payment) => {
       const matchesType =
         filters.type === 'all' || payment.type === filters.type
       const matchesPaymentMode =
@@ -268,11 +423,11 @@ const PaymentHistoryTab = ({ data }) => {
 
   // Get unique types and payment modes for filters
   const uniqueTypes = useMemo(
-    () => [...new Set(data?.map(payment => payment.type))],
+    () => [...new Set(data?.map((payment) => payment.type))],
     [data],
   )
   const uniquePaymentModes = useMemo(
-    () => [...new Set(data?.map(payment => payment.paymentMode))],
+    () => [...new Set(data?.map((payment) => payment.paymentMode))],
     [data],
   )
 
@@ -282,7 +437,7 @@ const PaymentHistoryTab = ({ data }) => {
   }
 
   // Handle rows per page change
-  const handleChangeRowsPerPage = event => {
+  const handleChangeRowsPerPage = (event) => {
     setRowsPerPage(parseInt(event.target.value, 10))
     setPage(0)
   }
@@ -328,8 +483,8 @@ const PaymentHistoryTab = ({ data }) => {
             label="Search"
             variant="outlined"
             value={filters.search}
-            onChange={e =>
-              setFilters(prev => ({
+            onChange={(e) =>
+              setFilters((prev) => ({
                 ...prev,
                 search: e.target.value,
               }))
@@ -349,15 +504,15 @@ const PaymentHistoryTab = ({ data }) => {
             <Select
               value={filters.type}
               label="Type"
-              onChange={e =>
-                setFilters(prev => ({
+              onChange={(e) =>
+                setFilters((prev) => ({
                   ...prev,
                   type: e.target.value,
                 }))
               }
             >
               <MenuItem value="all">All Types</MenuItem>
-              {uniqueTypes.map(type => (
+              {uniqueTypes.map((type) => (
                 <MenuItem key={type} value={type}>
                   {type}
                 </MenuItem>
@@ -371,15 +526,15 @@ const PaymentHistoryTab = ({ data }) => {
             <Select
               value={filters.paymentMode}
               label="Payment Mode"
-              onChange={e =>
-                setFilters(prev => ({
+              onChange={(e) =>
+                setFilters((prev) => ({
                   ...prev,
                   paymentMode: e.target.value,
                 }))
               }
             >
               <MenuItem value="all">All Modes</MenuItem>
-              {uniquePaymentModes.map(mode => (
+              {uniquePaymentModes.map((mode) => (
                 <MenuItem key={mode} value={mode}>
                   {mode}
                 </MenuItem>
@@ -393,8 +548,8 @@ const PaymentHistoryTab = ({ data }) => {
             label="Start Date"
             type="date"
             value={filters.dateRange.start}
-            onChange={e =>
-              setFilters(prev => ({
+            onChange={(e) =>
+              setFilters((prev) => ({
                 ...prev,
                 dateRange: {
                   ...prev.dateRange,
@@ -413,8 +568,8 @@ const PaymentHistoryTab = ({ data }) => {
             label="End Date"
             type="date"
             value={filters.dateRange.end}
-            onChange={e =>
-              setFilters(prev => ({
+            onChange={(e) =>
+              setFilters((prev) => ({
                 ...prev,
                 dateRange: {
                   ...prev.dateRange,
@@ -433,7 +588,9 @@ const PaymentHistoryTab = ({ data }) => {
               <Chip
                 size="small"
                 label={`Type: ${filters.type}`}
-                onDelete={() => setFilters(prev => ({ ...prev, type: 'all' }))}
+                onDelete={() =>
+                  setFilters((prev) => ({ ...prev, type: 'all' }))
+                }
               />
             )}
             {filters.paymentMode !== 'all' && (
@@ -441,7 +598,7 @@ const PaymentHistoryTab = ({ data }) => {
                 size="small"
                 label={`Mode: ${filters.paymentMode}`}
                 onDelete={() =>
-                  setFilters(prev => ({ ...prev, paymentMode: 'all' }))
+                  setFilters((prev) => ({ ...prev, paymentMode: 'all' }))
                 }
               />
             )}
@@ -469,6 +626,11 @@ const PaymentHistoryTab = ({ data }) => {
               <TableCell className="font-semibold text-center">
                 Invoice
               </TableCell>
+              {isAdmin && (
+                <TableCell className="font-semibold text-center">
+                  Actions
+                </TableCell>
+              )}
             </TableRow>
           </TableHead>
           <TableBody>
@@ -573,7 +735,7 @@ const PaymentHistoryTab = ({ data }) => {
                   </Typography>
                 </TableCell>
 
-                {/* Actions */}
+                {/* Invoice */}
                 <TableCell align="center">
                   <Tooltip title="Download Invoice">
                     <IconButton
@@ -592,11 +754,283 @@ const PaymentHistoryTab = ({ data }) => {
                     </IconButton>
                   </Tooltip>
                 </TableCell>
+
+                {/* Actions Menu - Admin Only */}
+                {isAdmin && (
+                  <TableCell align="center">
+                    <Tooltip title="More options">
+                      <IconButton
+                        size="small"
+                        onClick={(e) => handleMenuOpen(e, payment)}
+                        sx={{
+                          color: 'text.secondary',
+                          '&:hover': {
+                            backgroundColor: 'action.hover',
+                          },
+                        }}
+                      >
+                        <MoreVert className="w-5 h-5" />
+                      </IconButton>
+                    </Tooltip>
+                  </TableCell>
+                )}
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </TableContainer>
+
+      {/* Actions Menu */}
+      <Menu
+        anchorEl={menuAnchor}
+        open={Boolean(menuAnchor)}
+        onClose={handleMenuClose}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'right',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'right',
+        }}
+      >
+        <MenuItem onClick={handleEditClick}>
+          <ListItemIcon>
+            <Edit fontSize="small" sx={{ color: 'primary.main' }} />
+          </ListItemIcon>
+          <ListItemText>Edit</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={handleDeleteClick}>
+          <ListItemIcon>
+            <Delete fontSize="small" sx={{ color: 'error.main' }} />
+          </ListItemIcon>
+          <ListItemText>Delete</ListItemText>
+        </MenuItem>
+      </Menu>
+
+      {/* Edit Payment Dialog */}
+      <Dialog
+        open={!!editPayment}
+        onClose={() => {
+          setEditPayment(null)
+          setEditFormData({
+            totalOrderAmount: '',
+            discountAmount: '',
+            paidOrderAmount: '',
+            paymentMode: '',
+            productType: '',
+            orderDate: '',
+          })
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Edit Payment Record</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+            {/* Order ID (Read-only) */}
+            <TextField
+              label="Order ID"
+              value={editPayment?.orderId || ''}
+              disabled
+              fullWidth
+              size="small"
+            />
+
+            {/* Type (Read-only) */}
+            <TextField
+              label="Type"
+              value={editPayment?.type || ''}
+              disabled
+              fullWidth
+              size="small"
+            />
+
+            {/* Product Type */}
+            <TextField
+              label="Product Type"
+              value={editFormData.productType}
+              onChange={(e) =>
+                setEditFormData((prev) => ({
+                  ...prev,
+                  productType: e.target.value,
+                }))
+              }
+              fullWidth
+              size="small"
+            />
+
+            {/* Payment Mode */}
+            <FormControl fullWidth size="small">
+              <InputLabel>Payment Mode</InputLabel>
+              <Select
+                value={editFormData.paymentMode}
+                label="Payment Mode"
+                onChange={(e) =>
+                  setEditFormData((prev) => ({
+                    ...prev,
+                    paymentMode: e.target.value,
+                  }))
+                }
+              >
+                <MenuItem value="CASH">CASH</MenuItem>
+                <MenuItem value="ONLINE">ONLINE</MenuItem>
+                <MenuItem value="CARD">CARD</MenuItem>
+                <MenuItem value="UPI">UPI</MenuItem>
+              </Select>
+            </FormControl>
+
+            {/* Order Date */}
+            <TextField
+              label="Order Date"
+              type="date"
+              value={editFormData.orderDate}
+              onChange={(e) =>
+                setEditFormData((prev) => ({
+                  ...prev,
+                  orderDate: e.target.value,
+                }))
+              }
+              fullWidth
+              size="small"
+              InputLabelProps={{
+                shrink: true,
+              }}
+            />
+
+            {/* Total Order Amount */}
+            <TextField
+              label="Total Amount"
+              type="number"
+              value={editFormData.totalOrderAmount}
+              onChange={(e) =>
+                setEditFormData((prev) => ({
+                  ...prev,
+                  totalOrderAmount: e.target.value,
+                }))
+              }
+              fullWidth
+              size="small"
+              inputProps={{
+                step: '0.01',
+                min: 0,
+              }}
+            />
+
+            {/* Discount Amount */}
+            <TextField
+              label="Discount Amount"
+              type="number"
+              value={editFormData.discountAmount}
+              onChange={(e) =>
+                setEditFormData((prev) => ({
+                  ...prev,
+                  discountAmount: e.target.value,
+                }))
+              }
+              fullWidth
+              size="small"
+              inputProps={{
+                step: '0.01',
+                min: 0,
+              }}
+            />
+
+            {/* Paid Order Amount */}
+            <TextField
+              label="Paid Amount"
+              type="number"
+              value={editFormData.paidOrderAmount}
+              onChange={(e) =>
+                setEditFormData((prev) => ({
+                  ...prev,
+                  paidOrderAmount: e.target.value,
+                }))
+              }
+              fullWidth
+              size="small"
+              inputProps={{
+                step: '0.01',
+                min: 0,
+              }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setEditPayment(null)
+              setEditFormData({
+                totalOrderAmount: '',
+                discountAmount: '',
+                paidOrderAmount: '',
+                paymentMode: '',
+                productType: '',
+                orderDate: '',
+              })
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleEditSubmit}
+            disabled={updatePaymentMutation.isPending}
+          >
+            {updatePaymentMutation.isPending ? 'Updating...' : 'Update'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={!!deleteConfirm}
+        onClose={() => setDeleteConfirm(null)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Confirm Delete</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            Are you sure you want to delete this payment record? This action
+            cannot be undone.
+          </Typography>
+          {deleteConfirm && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body2">
+                <strong>Order ID:</strong> {deleteConfirm.orderId}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Type:</strong> {deleteConfirm.type}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Product:</strong> {deleteConfirm.productType || 'N/A'}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Amount:</strong> ₹
+                {parseFloat(deleteConfirm.totalOrderAmount).toLocaleString(
+                  'en-IN',
+                )}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Date:</strong>{' '}
+                {dayjs(deleteConfirm.orderDate).format('DD MMM, YYYY')}
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteConfirm(null)}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleDeleteConfirm}
+            disabled={deletePaymentMutation.isPending}
+          >
+            {deletePaymentMutation.isPending ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Pagination */}
       <TablePagination
@@ -640,7 +1074,7 @@ const PaymentHistoryTab = ({ data }) => {
 function PatientHistory({ patient, onClose }) {
   const dispatch = useDispatch()
   const router = useRouter()
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const [activeTab, setActiveTab] = useState(0)
   const [selectedVisit, setSelectedVisit] = useState()
   // patient?.activeVisitId
@@ -1036,7 +1470,7 @@ function PatientHistory({ patient, onClose }) {
     return <PaymentHistoryTab data={paymentHistory.data} />
   }
 
-  const handleAppointmentClick = appointment => {
+  const handleAppointmentClick = (appointment) => {
     setSelectedAppointment(appointment)
     setShowAppointmentDetail(true)
   }
@@ -1110,11 +1544,11 @@ function PatientHistory({ patient, onClose }) {
                     <InputLabel id="visit-select-label">Visit</InputLabel>
                     <Select
                       value={selectedVisit || ''}
-                      onChange={e => setSelectedVisit(e.target.value)}
+                      onChange={(e) => setSelectedVisit(e.target.value)}
                       label="Visit"
                       labelId="visit-select-label"
                     >
-                      {visits?.data?.visitDetails?.map(visit => (
+                      {visits?.data?.visitDetails?.map((visit) => (
                         <MenuItem
                           key={visit.visitId}
                           value={visit.visitId}

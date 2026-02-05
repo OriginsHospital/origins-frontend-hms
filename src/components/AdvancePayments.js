@@ -8,6 +8,8 @@ import {
   sendOtherPaymentsTransactionId,
   downloadOtherPaymentsInvoice,
   downloadPDF,
+  updateAdvancePaymentHistory,
+  deleteAdvancePaymentHistory,
 } from '@/constants/apis'
 import React, { useState, useEffect, useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -29,6 +31,14 @@ import {
   Select,
   FormControl,
   InputLabel,
+  Menu,
+  ListItemIcon,
+  ListItemText,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Box,
 } from '@mui/material'
 import {
   Close,
@@ -42,6 +52,9 @@ import {
   CreditCard,
   Money,
   Download,
+  Edit,
+  Delete,
+  MoreVert,
 } from '@mui/icons-material'
 import dayjs from 'dayjs'
 import { toast } from 'react-toastify'
@@ -109,6 +122,17 @@ function AdvancePayments({ formData }) {
   const [showInvoicePreview, setShowInvoicePreview] = useState(false)
   const [expandedPaymentIndex, setExpandedPaymentIndex] = useState(null)
   const [newlyAddedPayment, setNewlyAddedPayment] = useState(null)
+  const [menuAnchor, setMenuAnchor] = useState(null)
+  const [selectedPaymentHistory, setSelectedPaymentHistory] = useState(null)
+  const [editPaymentHistory, setEditPaymentHistory] = useState(null)
+  const [deleteConfirm, setDeleteConfirm] = useState(null)
+  const [editFormData, setEditFormData] = useState({
+    paidOrderAmount: '',
+    discountAmount: '',
+    paymentMode: '',
+    orderDate: '',
+    couponCode: '',
+  })
 
   // Validation errors
   const [errors, setErrors] = useState({})
@@ -116,6 +140,163 @@ function AdvancePayments({ formData }) {
   // Check if user is admin (role ID 1 or 7)
   const isAdmin =
     userDetails.roleDetails?.id === 1 || userDetails.roleDetails?.id === 7
+
+  // Handle menu open
+  const handleMenuOpen = (event, paymentHistory) => {
+    event.stopPropagation() // Prevent accordion from expanding
+    setMenuAnchor(event.currentTarget)
+    setSelectedPaymentHistory(paymentHistory)
+  }
+
+  // Handle menu close
+  const handleMenuClose = () => {
+    setMenuAnchor(null)
+    setSelectedPaymentHistory(null)
+  }
+
+  // Handle edit click
+  const handleEditClick = () => {
+    if (selectedPaymentHistory) {
+      setEditPaymentHistory(selectedPaymentHistory)
+      // The query returns paidOrderAmountBeforeDiscount as 'paidOrderAmount' in the JSON
+      // So we need to calculate the actual paid amount (after discount) for editing
+      const paidAmountBeforeDiscount = parseFloat(
+        selectedPaymentHistory.paidOrderAmount || 0,
+      )
+      const discount = parseFloat(selectedPaymentHistory.discountAmount || 0)
+      const paidAmountAfterDiscount = paidAmountBeforeDiscount - discount
+
+      setEditFormData({
+        paidOrderAmount:
+          paidAmountAfterDiscount > 0
+            ? paidAmountAfterDiscount.toString()
+            : paidAmountBeforeDiscount.toString(),
+        discountAmount: selectedPaymentHistory.discountAmount || '',
+        paymentMode: selectedPaymentHistory.paymentMode || '',
+        orderDate: selectedPaymentHistory.paymentDate
+          ? dayjs(selectedPaymentHistory.paymentDate).format('YYYY-MM-DD')
+          : '',
+        couponCode: selectedPaymentHistory.couponCode || '',
+      })
+    }
+    handleMenuClose()
+  }
+
+  // Handle delete click
+  const handleDeleteClick = () => {
+    if (selectedPaymentHistory) {
+      setDeleteConfirm(selectedPaymentHistory)
+    }
+    handleMenuClose()
+  }
+
+  // Update payment history mutation
+  const updatePaymentHistoryMutation = useMutation({
+    mutationFn: async ({ paymentHistoryId, paymentData }) => {
+      return await updateAdvancePaymentHistory(
+        userDetails.accessToken,
+        paymentHistoryId,
+        paymentData,
+      )
+    },
+    onSuccess: async () => {
+      toast.success('Payment history updated successfully', toastconfig)
+      setEditPaymentHistory(null)
+      setEditFormData({
+        paidOrderAmount: '',
+        discountAmount: '',
+        paymentMode: '',
+        orderDate: '',
+        couponCode: '',
+      })
+      // Invalidate queries first
+      queryClient.invalidateQueries({
+        queryKey: ['otherPaymentsStatus', formData.id],
+      })
+      // Refetch after a delay to ensure backend has processed the update
+      setTimeout(async () => {
+        try {
+          const result = await refetchPayments()
+          console.log('Payment data refetched after update:', result?.data)
+        } catch (error) {
+          console.error('Error refetching payments after update:', error)
+        }
+      }, 600)
+    },
+    onError: (error) => {
+      console.error('Error updating payment history:', error)
+      toast.error(
+        error?.response?.data?.message ||
+          error?.message ||
+          'Failed to update payment history',
+        toastconfig,
+      )
+    },
+  })
+
+  // Delete payment history mutation
+  const deletePaymentHistoryMutation = useMutation({
+    mutationFn: async (paymentHistoryId) => {
+      return await deleteAdvancePaymentHistory(
+        userDetails.accessToken,
+        paymentHistoryId,
+      )
+    },
+    onSuccess: async () => {
+      toast.success('Payment history deleted successfully', toastconfig)
+      setDeleteConfirm(null)
+      setSelectedPaymentHistory(null)
+      // Invalidate queries first
+      queryClient.invalidateQueries({
+        queryKey: ['otherPaymentsStatus', formData.id],
+      })
+      // Refetch after a delay to ensure backend has processed the deletion
+      setTimeout(async () => {
+        try {
+          const result = await refetchPayments()
+          console.log('Payment data refetched after delete:', result?.data)
+        } catch (error) {
+          console.error('Error refetching payments after delete:', error)
+        }
+      }, 600)
+    },
+    onError: (error) => {
+      console.error('Error deleting payment history:', error)
+      toast.error(
+        error?.response?.data?.message ||
+          error?.message ||
+          'Failed to delete payment history',
+        toastconfig,
+      )
+    },
+  })
+
+  // Handle edit form submit
+  const handleEditSubmit = () => {
+    if (!editPaymentHistory) return
+
+    const paymentData = {
+      paidOrderAmount: parseFloat(editFormData.paidOrderAmount) || 0,
+      discountAmount: parseFloat(editFormData.discountAmount) || 0,
+      paymentMode: editFormData.paymentMode,
+      orderDate: editFormData.orderDate
+        ? dayjs(editFormData.orderDate).format('YYYY-MM-DD HH:mm:ss')
+        : null,
+      couponCode: editFormData.couponCode || null,
+    }
+
+    updatePaymentHistoryMutation.mutate({
+      paymentHistoryId: editPaymentHistory.id,
+      paymentData,
+    })
+  }
+
+  // Handle delete confirm
+  const handleDeleteConfirm = () => {
+    if (deleteConfirm) {
+      deletePaymentHistoryMutation.mutate(deleteConfirm.id)
+    }
+  }
 
   const {
     data: otherPaymentsStatus,
@@ -203,7 +384,7 @@ function AdvancePayments({ formData }) {
   const isFormValid = () => {
     if (!category) return false
     if (isSubCategoryRequired() && !subCategory) return false
-    if (!description || description.trim().length < 10) return false
+    // Description is now optional, so we don't check it
     if (!amount || parseFloat(amount) <= 0) return false
     return true
   }
@@ -220,10 +401,7 @@ function AdvancePayments({ formData }) {
       newErrors.subCategory = 'Sub-Category is required'
     }
 
-    if (!description || description.trim().length < 10) {
-      newErrors.description =
-        'Description is required and must be at least 10 characters'
-    }
+    // Description is now optional, so we don't validate it
 
     if (!amount || parseFloat(amount) <= 0) {
       newErrors.amount = 'Amount is required and must be greater than 0'
@@ -244,7 +422,10 @@ function AdvancePayments({ formData }) {
     if (isSubCategoryRequired() && subCategory) {
       appointmentReason += ` - ${subCategory}`
     }
-    appointmentReason += `: ${description.trim()}`
+    // Add description only if provided (description is now optional)
+    if (description && description.trim()) {
+      appointmentReason += `: ${description.trim()}`
+    }
 
     const payload = {
       patientId: formData.id,
@@ -747,6 +928,17 @@ function AdvancePayments({ formData }) {
                                           size="small"
                                         />
                                       )}
+                                      {isAdmin && (
+                                        <IconButton
+                                          size="small"
+                                          onClick={(e) =>
+                                            handleMenuOpen(e, history)
+                                          }
+                                          sx={{ ml: 1 }}
+                                        >
+                                          <MoreVert fontSize="small" />
+                                        </IconButton>
+                                      )}
                                     </div>
                                   </div>
                                 </AccordionSummary>
@@ -854,7 +1046,12 @@ function AdvancePayments({ formData }) {
 
       <Modal
         uniqueKey="advance-payment-modal"
-        maxWidth={'sm'}
+        maxWidth={'md'}
+        paperSx={{
+          maxHeight: '80vh',
+          width: '100%',
+          maxWidth: '600px',
+        }}
         onClose={() => {
           setCategory('')
           setSubCategory('')
@@ -864,131 +1061,140 @@ function AdvancePayments({ formData }) {
           dispatch(closeModal('advance-payment-modal'))
         }}
       >
-        <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold">Advance Payment</h1>
-          <IconButton
-            onClick={() => {
-              setCategory('')
-              setSubCategory('')
-              setDescription('')
-              setAmount('')
-              setErrors({})
-              dispatch(closeModal('advance-payment-modal'))
-            }}
-          >
-            <Close />
-          </IconButton>
-        </div>
-
-        <div className="flex flex-col gap-4 mt-4">
-          {/* Category Dropdown */}
-          <FormControl fullWidth required error={!!errors.category}>
-            <InputLabel id="category-label">Category</InputLabel>
-            <Select
-              labelId="category-label"
-              label="Category"
-              value={category}
-              onChange={(e) => handleCategoryChange(e.target.value)}
+        <Box
+          sx={{
+            padding: '32px',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl font-bold">Advance Payment</h1>
+            <IconButton
+              onClick={() => {
+                setCategory('')
+                setSubCategory('')
+                setDescription('')
+                setAmount('')
+                setErrors({})
+                dispatch(closeModal('advance-payment-modal'))
+              }}
             >
-              {CATEGORIES.map((cat) => (
-                <MenuItem key={cat} value={cat}>
-                  {cat}
-                </MenuItem>
-              ))}
-            </Select>
-            {errors.category && (
-              <Typography variant="caption" color="error" className="mt-1 ml-2">
-                {errors.category}
-              </Typography>
-            )}
-          </FormControl>
+              <Close />
+            </IconButton>
+          </div>
 
-          {/* Sub-Category Dropdown - Conditional */}
-          {isSubCategoryRequired() && (
-            <FormControl fullWidth required error={!!errors.subCategory}>
-              <InputLabel id="subcategory-label">Sub-Category</InputLabel>
+          <div className="flex flex-col gap-6">
+            {/* Category Dropdown */}
+            <FormControl fullWidth required error={!!errors.category}>
+              <InputLabel id="category-label">Category</InputLabel>
               <Select
-                labelId="subcategory-label"
-                label="Sub-Category"
-                value={subCategory}
-                onChange={(e) => {
-                  setSubCategory(e.target.value)
-                  setErrors((prev) => ({ ...prev, subCategory: '' }))
-                }}
+                labelId="category-label"
+                label="Category"
+                value={category}
+                onChange={(e) => handleCategoryChange(e.target.value)}
               >
-                {getSubCategories().map((subCat) => (
-                  <MenuItem key={subCat} value={subCat}>
-                    {subCat}
+                {CATEGORIES.map((cat) => (
+                  <MenuItem key={cat} value={cat}>
+                    {cat}
                   </MenuItem>
                 ))}
               </Select>
-              {errors.subCategory && (
+              {errors.category && (
                 <Typography
                   variant="caption"
                   color="error"
                   className="mt-1 ml-2"
                 >
-                  {errors.subCategory}
+                  {errors.category}
                 </Typography>
               )}
             </FormControl>
-          )}
 
-          {/* Description Field */}
-          <TextField
-            label="Description"
-            value={description}
-            onChange={(e) => {
-              setDescription(e.target.value)
-              setErrors((prev) => ({ ...prev, description: '' }))
-            }}
-            fullWidth
-            required
-            multiline
-            rows={3}
-            placeholder="Enter description (minimum 10 characters)"
-            error={!!errors.description}
-            helperText={
-              errors.description ||
-              `${description.length}/10 characters minimum`
-            }
-          />
+            {/* Sub-Category Dropdown - Conditional */}
+            {isSubCategoryRequired() && (
+              <FormControl fullWidth required error={!!errors.subCategory}>
+                <InputLabel id="subcategory-label">Sub-Category</InputLabel>
+                <Select
+                  labelId="subcategory-label"
+                  label="Sub-Category"
+                  value={subCategory}
+                  onChange={(e) => {
+                    setSubCategory(e.target.value)
+                    setErrors((prev) => ({ ...prev, subCategory: '' }))
+                  }}
+                >
+                  {getSubCategories().map((subCat) => (
+                    <MenuItem key={subCat} value={subCat}>
+                      {subCat}
+                    </MenuItem>
+                  ))}
+                </Select>
+                {errors.subCategory && (
+                  <Typography
+                    variant="caption"
+                    color="error"
+                    className="mt-1 ml-2"
+                  >
+                    {errors.subCategory}
+                  </Typography>
+                )}
+              </FormControl>
+            )}
 
-          {/* Amount Field */}
-          <TextField
-            label="Amount"
-            type="number"
-            value={amount}
-            onChange={(e) => {
-              setAmount(e.target.value)
-              setErrors((prev) => ({ ...prev, amount: '' }))
-            }}
-            fullWidth
-            required
-            placeholder="Enter amount"
-            error={!!errors.amount}
-            helperText={errors.amount}
-            InputProps={{
-              startAdornment: <span className="text-gray-500 mr-1">₹</span>,
-              inputProps: {
-                min: 0,
-                step: '0.01',
-              },
-            }}
-          />
+            {/* Description Field */}
+            <TextField
+              label="Description"
+              value={description}
+              onChange={(e) => {
+                setDescription(e.target.value)
+                setErrors((prev) => ({ ...prev, description: '' }))
+              }}
+              fullWidth
+              multiline
+              rows={3}
+              placeholder="Enter description (optional)"
+              error={!!errors.description}
+              helperText={errors.description || 'Optional field'}
+            />
 
-          <div className="flex justify-end">
-            <Button
-              variant="outlined"
-              color="primary"
-              className="capitalize"
-              onClick={() => handleAddOtherPayment()}
-              disabled={addOtherPaymentLoading || !isFormValid()}
-            >
-              {addOtherPaymentLoading ? 'Adding...' : 'Add'}
-            </Button>
+            {/* Amount Field */}
+            <TextField
+              label="Amount"
+              type="number"
+              value={amount}
+              onChange={(e) => {
+                setAmount(e.target.value)
+                setErrors((prev) => ({ ...prev, amount: '' }))
+              }}
+              fullWidth
+              required
+              placeholder="Enter amount"
+              error={!!errors.amount}
+              helperText={errors.amount}
+              InputProps={{
+                startAdornment: <span className="text-gray-500 mr-1">₹</span>,
+                inputProps: {
+                  min: 0,
+                  step: '0.01',
+                },
+              }}
+            />
+
+            <div className="flex justify-end mt-4">
+              <Button
+                variant="outlined"
+                color="primary"
+                className="capitalize"
+                onClick={() => handleAddOtherPayment()}
+                disabled={addOtherPaymentLoading || !isFormValid()}
+                sx={{ minWidth: '120px', height: '40px' }}
+              >
+                {addOtherPaymentLoading ? 'Adding...' : 'Add'}
+              </Button>
+            </div>
           </div>
-        </div>
+        </Box>
       </Modal>
 
       {/* Payment Modal */}
@@ -1035,6 +1241,216 @@ function AdvancePayments({ formData }) {
           </div>
         )}
       </Modal>
+
+      {/* 3-dot Menu */}
+      <Menu
+        anchorEl={menuAnchor}
+        open={Boolean(menuAnchor)}
+        onClose={handleMenuClose}
+        PaperProps={{
+          sx: {
+            boxShadow: '0px 4px 20px rgba(0, 0, 0, 0.1)',
+            borderRadius: '8px',
+          },
+        }}
+      >
+        <MenuItem onClick={handleEditClick}>
+          <ListItemIcon>
+            <Edit fontSize="small" sx={{ color: 'primary.main' }} />
+          </ListItemIcon>
+          <ListItemText>Edit</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={handleDeleteClick}>
+          <ListItemIcon>
+            <Delete fontSize="small" sx={{ color: 'error.main' }} />
+          </ListItemIcon>
+          <ListItemText>Delete</ListItemText>
+        </MenuItem>
+      </Menu>
+
+      {/* Edit Payment History Dialog */}
+      <Dialog
+        open={!!editPaymentHistory}
+        onClose={() => {
+          setEditPaymentHistory(null)
+          setEditFormData({
+            paidOrderAmount: '',
+            discountAmount: '',
+            paymentMode: '',
+            orderDate: '',
+            couponCode: '',
+          })
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Edit Payment History</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+            {/* Payment Mode */}
+            <FormControl fullWidth size="small">
+              <InputLabel>Payment Mode</InputLabel>
+              <Select
+                value={editFormData.paymentMode}
+                label="Payment Mode"
+                onChange={(e) =>
+                  setEditFormData((prev) => ({
+                    ...prev,
+                    paymentMode: e.target.value,
+                  }))
+                }
+              >
+                <MenuItem value="CASH">CASH</MenuItem>
+                <MenuItem value="ONLINE">ONLINE</MenuItem>
+                <MenuItem value="UPI">UPI</MenuItem>
+              </Select>
+            </FormControl>
+
+            {/* Payment Date */}
+            <TextField
+              label="Payment Date"
+              type="date"
+              value={editFormData.orderDate}
+              onChange={(e) =>
+                setEditFormData((prev) => ({
+                  ...prev,
+                  orderDate: e.target.value,
+                }))
+              }
+              fullWidth
+              size="small"
+              InputLabelProps={{
+                shrink: true,
+              }}
+            />
+
+            {/* Paid Amount */}
+            <TextField
+              label="Paid Amount"
+              type="number"
+              value={editFormData.paidOrderAmount}
+              onChange={(e) =>
+                setEditFormData((prev) => ({
+                  ...prev,
+                  paidOrderAmount: e.target.value,
+                }))
+              }
+              fullWidth
+              size="small"
+              inputProps={{
+                step: '0.01',
+                min: 0,
+              }}
+              InputProps={{
+                startAdornment: <span className="text-gray-500 mr-1">₹</span>,
+              }}
+            />
+
+            {/* Discount Amount */}
+            <TextField
+              label="Discount Amount"
+              type="number"
+              value={editFormData.discountAmount}
+              onChange={(e) =>
+                setEditFormData((prev) => ({
+                  ...prev,
+                  discountAmount: e.target.value,
+                }))
+              }
+              fullWidth
+              size="small"
+              inputProps={{
+                step: '0.01',
+                min: 0,
+              }}
+              InputProps={{
+                startAdornment: <span className="text-gray-500 mr-1">₹</span>,
+              }}
+            />
+
+            {/* Coupon Code */}
+            <TextField
+              label="Coupon Code"
+              value={editFormData.couponCode}
+              onChange={(e) =>
+                setEditFormData((prev) => ({
+                  ...prev,
+                  couponCode: e.target.value,
+                }))
+              }
+              fullWidth
+              size="small"
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setEditPaymentHistory(null)
+              setEditFormData({
+                paidOrderAmount: '',
+                discountAmount: '',
+                paymentMode: '',
+                orderDate: '',
+                couponCode: '',
+              })
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleEditSubmit}
+            disabled={updatePaymentHistoryMutation.isPending}
+          >
+            {updatePaymentHistoryMutation.isPending ? 'Updating...' : 'Update'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={!!deleteConfirm}
+        onClose={() => setDeleteConfirm(null)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Confirm Delete</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            Are you sure you want to delete this payment history entry? This
+            action cannot be undone.
+          </Typography>
+          {deleteConfirm && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body2">
+                <strong>Payment Mode:</strong> {deleteConfirm.paymentMode}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Amount:</strong> ₹
+                {parseFloat(deleteConfirm.paidOrderAmount).toLocaleString(
+                  'en-IN',
+                )}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Date:</strong>{' '}
+                {dayjs(deleteConfirm.paymentDate).format('DD MMM, YYYY')}
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteConfirm(null)}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleDeleteConfirm}
+            disabled={deletePaymentHistoryMutation.isPending}
+          >
+            {deletePaymentHistoryMutation.isPending ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </div>
   )
 }
@@ -1076,180 +1492,235 @@ const PaymentModal = ({
   const payableAmount = isAdmin ? editablePayableAmount : remainingAmount
 
   return (
-    <Modal uniqueKey="payment-modal" maxWidth={'sm'} onClose={onClose}>
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-bold">Payment Details</h1>
-        <IconButton onClick={onClose}>
-          <Close />
-        </IconButton>
-      </div>
-
-      <div className="space-y-4">
-        {/* Payment Summary */}
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Typography variant="body2" color="textSecondary">
-                Total Amount
-              </Typography>
-              <Typography variant="h6" className="font-bold">
-                ₹{totalAmount.toLocaleString()}
-              </Typography>
-            </div>
-            <div>
-              <Typography variant="body2" color="textSecondary">
-                Paid Amount
-              </Typography>
-              <Typography variant="h6" className="font-bold text-green-600">
-                ₹{payment.paidAmount.toLocaleString()}
-              </Typography>
-            </div>
-            <div>
-              <Typography variant="body2" color="textSecondary">
-                Remaining Amount
-              </Typography>
-              <Typography variant="h6" className="font-bold text-orange-600">
-                ₹{remainingAmount.toLocaleString()}
-              </Typography>
-            </div>
-            <div>
-              <Typography variant="body2" color="textSecondary">
-                Payment Reason
-              </Typography>
-              <Typography variant="body1" className="font-medium">
-                {payment.paymentReason}
-              </Typography>
-            </div>
-          </div>
+    <Modal
+      uniqueKey="payment-modal"
+      maxWidth={'lg'}
+      paperSx={{
+        maxHeight: '95vh',
+        width: '100%',
+        maxWidth: '800px',
+        borderRadius: '12px',
+      }}
+      onClose={onClose}
+    >
+      <Box
+        sx={{
+          padding: '24px 32px 32px 32px',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        <div className="flex justify-between items-center mb-3">
+          <h1 className="text-2xl font-bold">Payment Details</h1>
+          <IconButton onClick={onClose} size="small">
+            <Close />
+          </IconButton>
         </div>
 
-        {/* Admin Payable Amount Field */}
-        {isAdmin && (
-          <div>
-            <Typography variant="h6" className="mb-2">
-              Payable Amount (Admin)
-            </Typography>
-            <TextField
-              type="number"
-              label="Payable Amount"
-              value={editablePayableAmount || ''}
-              onChange={(e) =>
-                onPayableAmountChange(e.target.value, remainingAmount)
-              }
-              fullWidth
-              InputProps={{
-                startAdornment: <span className="text-gray-500 mr-1">₹</span>,
-                inputProps: {
-                  min: 0,
-                  max: remainingAmount,
-                  step: '0.01',
-                },
-              }}
-              helperText={`Max: ₹${remainingAmount.toLocaleString()}`}
-            />
-          </div>
-        )}
-
-        {/* Coupon Section */}
-        <div>
-          <Typography variant="h6" className="mb-2">
-            Apply Coupon
-          </Typography>
-          <Autocomplete
-            options={coupons || []}
-            getOptionLabel={(option) =>
-              `${option.couponCode} (${option.discountPercentage}% off)`
-            }
-            value={selectedCoupon}
-            onChange={(event, newValue) => setSelectedCoupon(newValue)}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Select Coupon"
-                variant="outlined"
-                fullWidth
-              />
-            )}
-          />
-        </div>
-
-        {/* Discount Summary */}
-        {selectedCoupon && (
-          <div className="bg-green-50 p-4 rounded-lg">
-            <div className="space-y-2">
-              <div className="flex justify-between text-green-600">
-                <span>Discount ({selectedCoupon.discountPercentage}%)</span>
-                <span>-₹{(payableAmount - discountedAmount).toFixed(2)}</span>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 2.5,
+          }}
+        >
+          {/* Payment Summary */}
+          <Box
+            sx={{
+              bgcolor: 'grey.50',
+              p: 2,
+              borderRadius: 2,
+            }}
+          >
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Typography variant="body2" color="textSecondary">
+                  Total Amount
+                </Typography>
+                <Typography variant="h6" className="font-bold">
+                  ₹{totalAmount.toLocaleString()}
+                </Typography>
               </div>
-              <div className="border-t border-green-200 pt-2">
-                <div className="flex justify-between font-bold text-green-700">
-                  <span>Final Amount</span>
-                  <span>₹{discountedAmount.toFixed(2)}</span>
+              <div>
+                <Typography variant="body2" color="textSecondary">
+                  Paid Amount
+                </Typography>
+                <Typography variant="h6" className="font-bold text-green-600">
+                  ₹{payment.paidAmount.toLocaleString()}
+                </Typography>
+              </div>
+              <div>
+                <Typography variant="body2" color="textSecondary">
+                  Remaining Amount
+                </Typography>
+                <Typography variant="h6" className="font-bold text-orange-600">
+                  ₹{remainingAmount.toLocaleString()}
+                </Typography>
+              </div>
+              <div>
+                <Typography variant="body2" color="textSecondary">
+                  Payment Reason
+                </Typography>
+                <Typography variant="body1" className="font-medium">
+                  {payment.paymentReason}
+                </Typography>
+              </div>
+            </div>
+          </Box>
+
+          {/* Admin Payable Amount Field */}
+          {isAdmin && (
+            <Box>
+              <Typography variant="h6" sx={{ mb: 1.5 }} fontWeight={600}>
+                Payable Amount (Admin)
+              </Typography>
+              <TextField
+                type="number"
+                label="Payable Amount"
+                value={editablePayableAmount || ''}
+                onChange={(e) =>
+                  onPayableAmountChange(e.target.value, remainingAmount)
+                }
+                fullWidth
+                size="small"
+                InputProps={{
+                  startAdornment: <span className="text-gray-500 mr-1">₹</span>,
+                  inputProps: {
+                    min: 0,
+                    max: remainingAmount,
+                    step: '0.01',
+                  },
+                }}
+                helperText={`Max: ₹${remainingAmount.toLocaleString()}`}
+              />
+            </Box>
+          )}
+
+          {/* Coupon Section */}
+          <Box>
+            <Typography variant="h6" sx={{ mb: 1.5 }} fontWeight={600}>
+              Apply Coupon
+            </Typography>
+            <Autocomplete
+              options={coupons || []}
+              getOptionLabel={(option) =>
+                `${option.couponCode} (${option.discountPercentage}% off)`
+              }
+              value={selectedCoupon}
+              onChange={(event, newValue) => setSelectedCoupon(newValue)}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Select Coupon"
+                  variant="outlined"
+                  fullWidth
+                />
+              )}
+            />
+          </Box>
+
+          {/* Discount Summary */}
+          {selectedCoupon && (
+            <Box
+              sx={{
+                bgcolor: 'success.50',
+                p: 2.5,
+                borderRadius: 2,
+              }}
+            >
+              <div className="space-y-2">
+                <div className="flex justify-between text-green-600">
+                  <Typography variant="body1" fontWeight={500}>
+                    Discount ({selectedCoupon.discountPercentage}%)
+                  </Typography>
+                  <Typography variant="body1" fontWeight={500}>
+                    -₹{(payableAmount - discountedAmount).toFixed(2)}
+                  </Typography>
+                </div>
+                <div className="border-t border-green-200 pt-2">
+                  <div className="flex justify-between font-bold text-green-700">
+                    <Typography variant="h6" fontWeight={600}>
+                      Final Amount
+                    </Typography>
+                    <Typography variant="h6" fontWeight={600}>
+                      ₹{discountedAmount.toFixed(2)}
+                    </Typography>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
-        )}
+            </Box>
+          )}
 
-        {/* Payment Buttons */}
-        <div className="grid grid-cols-3 gap-4">
-          <Button
-            variant="contained"
-            color="primary"
-            className="capitalize py-3"
-            onClick={() =>
-              onPayment('ONLINE', {
-                refId: payment.refId,
-                totalAmount: payableAmount,
-                payableAmount: payableAmount,
-                discountedAmount: discountedAmount,
-                discountAmount: payableAmount - discountedAmount,
-                couponCode: selectedCoupon?.id,
-              })
-            }
-            startIcon={<CreditCard />}
-            disabled={true}
+          {/* Payment Buttons */}
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: 2,
+              mt: 1,
+            }}
           >
-            Pay Online
-          </Button>
-          <Button
-            variant="outlined"
-            color="primary"
-            className="capitalize py-3"
-            onClick={() =>
-              onPayment('UPI', {
-                refId: payment.refId,
-                totalAmount: payableAmount,
-                payableAmount: payableAmount,
-                discountedAmount: discountedAmount,
-                discountAmount: payableAmount - discountedAmount,
-                couponCode: selectedCoupon?.id,
-              })
-            }
-            startIcon={<Money />}
-          >
-            Pay UPI
-          </Button>
-          <Button
-            variant="outlined"
-            color="primary"
-            className="capitalize py-3"
-            onClick={() =>
-              onPayment('CASH', {
-                refId: payment.refId,
-                totalAmount: payableAmount,
-                payableAmount: payableAmount,
-                discountedAmount: discountedAmount,
-                discountAmount: payableAmount - discountedAmount,
-                couponCode: selectedCoupon?.id,
-              })
-            }
-            startIcon={<Money />}
-          >
-            Pay Cash
-          </Button>
-        </div>
-      </div>
+            <Button
+              variant="contained"
+              color="primary"
+              className="capitalize"
+              onClick={() =>
+                onPayment('ONLINE', {
+                  refId: payment.refId,
+                  totalAmount: payableAmount,
+                  payableAmount: payableAmount,
+                  discountedAmount: discountedAmount,
+                  discountAmount: payableAmount - discountedAmount,
+                  couponCode: selectedCoupon?.id,
+                })
+              }
+              startIcon={<CreditCard />}
+              disabled={true}
+              sx={{ height: '44px', fontSize: '0.95rem' }}
+            >
+              Pay Online
+            </Button>
+            <Button
+              variant="outlined"
+              color="primary"
+              className="capitalize"
+              onClick={() =>
+                onPayment('UPI', {
+                  refId: payment.refId,
+                  totalAmount: payableAmount,
+                  payableAmount: payableAmount,
+                  discountedAmount: discountedAmount,
+                  discountAmount: payableAmount - discountedAmount,
+                  couponCode: selectedCoupon?.id,
+                })
+              }
+              startIcon={<Money />}
+              sx={{ height: '44px', fontSize: '0.95rem' }}
+            >
+              Pay UPI
+            </Button>
+            <Button
+              variant="outlined"
+              color="primary"
+              className="capitalize"
+              onClick={() =>
+                onPayment('CASH', {
+                  refId: payment.refId,
+                  totalAmount: payableAmount,
+                  payableAmount: payableAmount,
+                  discountedAmount: discountedAmount,
+                  discountAmount: payableAmount - discountedAmount,
+                  couponCode: selectedCoupon?.id,
+                })
+              }
+              startIcon={<Money />}
+              sx={{ height: '44px', fontSize: '0.95rem' }}
+            >
+              Pay Cash
+            </Button>
+          </Box>
+        </Box>
+      </Box>
     </Modal>
   )
 }

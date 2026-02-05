@@ -32,13 +32,13 @@ import {
 import {
   Search as SearchIcon,
   FilterList as FilterListIcon,
-  Edit as EditIcon,
   Delete as DeleteIcon,
-  MoreVert as MoreVertIcon,
-  Add as AddIcon,
   Visibility as VisibilityIcon,
   Download as DownloadIcon,
   Close as CloseIcon,
+  MoreVert as MoreVertIcon,
+  Edit as EditIcon,
+  Refresh as RefreshIcon,
 } from '@mui/icons-material'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useSelector } from 'react-redux'
@@ -51,6 +51,8 @@ import {
   updateTaskStatus,
   deleteTask,
   getActiveStaff,
+  createTaskComment,
+  getTaskDetails,
 } from '@/constants/apis'
 import dayjs from 'dayjs'
 import { DatePicker } from '@mui/x-date-pickers'
@@ -99,21 +101,64 @@ const TabPanel = ({ children, value, index }) => (
   <div hidden={value !== index}>{value === index && <Box>{children}</Box>}</div>
 )
 
+// Priority badge colors
+const getPriorityColor = (priority) => {
+  switch (priority) {
+    case 'HIGH':
+      return { bg: '#fee2e2', text: '#dc2626', border: '#fecaca' }
+    case 'MEDIUM':
+      return { bg: '#dbeafe', text: '#2563eb', border: '#bfdbfe' }
+    case 'LOW':
+      return { bg: '#f3f4f6', text: '#6b7280', border: '#e5e7eb' }
+    default:
+      return { bg: '#f3f4f6', text: '#6b7280', border: '#e5e7eb' }
+  }
+}
+
+// Status badge colors
+const getStatusColor = (status) => {
+  switch (status) {
+    case 'OPEN':
+    case 'Pending':
+      return { bg: '#ffffff', text: '#374151', border: '#d1d5db' }
+    case 'IN_PROGRESS':
+    case 'In Progress':
+      return { bg: '#dbeafe', text: '#2563eb', border: '#bfdbfe' }
+    case 'COMPLETED':
+    case 'Completed':
+      return { bg: '#d1fae5', text: '#059669', border: '#a7f3d0' }
+    case 'Cancelled':
+      return { bg: '#ffebee', text: '#c62828', border: '#f44336' }
+    default:
+      return { bg: '#f3f4f6', text: '#6b7280', border: '#e5e7eb' }
+  }
+}
+
 function TaskTracker() {
   const user = useSelector((store) => store.user)
   const queryClient = useQueryClient()
-  const [filters, setFilters] = useState({ status: '', search: '' })
+  const [filters, setFilters] = useState({
+    status: '',
+    priority: '',
+    search: '',
+  })
   const [page, setPage] = useState(1)
-  const [searchTerm, setSearchTerm] = useState('')
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [editTask, setEditTask] = useState(null)
   const [viewModalOpen, setViewModalOpen] = useState(false)
   const [selectedTaskId, setSelectedTaskId] = useState(null)
-  const [anchorEl, setAnchorEl] = useState(null)
-  const [selectedTask, setSelectedTask] = useState(null)
   const [exportDateModalOpen, setExportDateModalOpen] = useState(false)
   const [exportFromDate, setExportFromDate] = useState(null)
   const [exportToDate, setExportToDate] = useState(null)
+  const [actionMenuAnchor, setActionMenuAnchor] = useState(null)
+  const [selectedActionTask, setSelectedActionTask] = useState(null)
+  const [commentDialogOpen, setCommentDialogOpen] = useState(false)
+  const [pendingAction, setPendingAction] = useState(null)
+  const [actionComment, setActionComment] = useState('')
+  const [statusDialogOpen, setStatusDialogOpen] = useState(false)
+  const [priorityDialogOpen, setPriorityDialogOpen] = useState(false)
+  const [selectedNewStatus, setSelectedNewStatus] = useState('')
+  const [selectedNewPriority, setSelectedNewPriority] = useState('')
   const limit = 50
 
   // Debounced search
@@ -127,9 +172,7 @@ function TaskTracker() {
   )
 
   const handleSearchChange = (e) => {
-    const value = e.target.value
-    setSearchTerm(value)
-    debouncedSearch(value)
+    debouncedSearch(e.target.value)
   }
 
   // Fetch tasks
@@ -157,9 +200,17 @@ function TaskTracker() {
   })
 
   // Handle different response structures
-  const tasks = data?.data?.tasks || data?.tasks || []
+  let tasks = data?.data?.tasks || data?.tasks || []
   const pagination = data?.data?.pagination ||
     data?.pagination || { total: 0, totalPages: 1 }
+
+  // Client-side priority filtering (if API doesn't support it)
+  if (filters.priority && tasks.length > 0) {
+    tasks = tasks.filter((task) => {
+      const taskPriority = task.priority || 'MEDIUM'
+      return taskPriority.toUpperCase() === filters.priority.toUpperCase()
+    })
+  }
 
   // Debug logging
   if (data) {
@@ -255,8 +306,7 @@ function TaskTracker() {
   }
 
   const clearFilters = () => {
-    setFilters({ status: '', search: '' })
-    setSearchTerm('')
+    setFilters({ status: '', priority: '', search: '' })
     setPage(1)
   }
 
@@ -361,11 +411,30 @@ function TaskTracker() {
       ]
 
       const getRowData = (task) => {
-        const assignedTo = task.assignedToDetails
-          ? typeof task.assignedToDetails === 'string'
-            ? JSON.parse(task.assignedToDetails)
-            : task.assignedToDetails
-          : {}
+        // Handle multiple assignees
+        let assignedToArray = []
+        if (task.assignedToDetails) {
+          try {
+            const parsed =
+              typeof task.assignedToDetails === 'string'
+                ? JSON.parse(task.assignedToDetails)
+                : task.assignedToDetails
+            assignedToArray = Array.isArray(parsed)
+              ? parsed
+              : [parsed].filter(Boolean)
+          } catch (e) {
+            assignedToArray = []
+          }
+        }
+        const assigneeNames =
+          assignedToArray.length > 0
+            ? assignedToArray.map((a) => a.fullName).join('; ')
+            : 'Unassigned'
+        const assigneeEmails =
+          assignedToArray.length > 0
+            ? assignedToArray.map((a) => a.email).join('; ')
+            : ''
+
         const createdBy = task.createdByDetails
           ? typeof task.createdByDetails === 'string'
             ? JSON.parse(task.createdByDetails)
@@ -383,8 +452,8 @@ function TaskTracker() {
           task.endDate || task.end_date
             ? dayjs(task.endDate || task.end_date).format('YYYY-MM-DD')
             : '',
-          assignedTo.fullName || 'Unassigned',
-          assignedTo.email || '',
+          assigneeNames,
+          assigneeEmails,
           createdBy.fullName || 'Unknown',
           createdBy.email || '',
           task.createdAt || task.created_at
@@ -420,66 +489,270 @@ function TaskTracker() {
     }
   }
 
+  const handleStatusChange = (taskId, newStatus) => {
+    updateStatusMutation.mutate({ taskId, status: newStatus })
+  }
+
+  const handleDelete = (taskId) => {
+    if (window.confirm('Are you sure you want to delete this task?')) {
+      deleteTaskMutation.mutate(taskId)
+    }
+  }
+
+  // Update status with comment mutation
+  const updateStatusWithCommentMutation = useMutation({
+    mutationFn: ({ taskId, status, comment }) => {
+      // First create comment if provided
+      if (comment && comment.trim()) {
+        return createTaskComment(user?.accessToken, {
+          taskId,
+          commentText: comment,
+        }).then(() => updateTaskStatus(user?.accessToken, taskId, status))
+      }
+      return updateTaskStatus(user?.accessToken, taskId, status)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['taskDetails'] })
+      toast.success('Task status updated successfully')
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to update task status')
+    },
+  })
+
+  // Update task mutation (for priority and other fields)
+  const updateTaskWithCommentMutation = useMutation({
+    mutationFn: ({ taskId, payload, comment }) => {
+      // First create comment if provided
+      if (comment && comment.trim()) {
+        return createTaskComment(user?.accessToken, {
+          taskId,
+          commentText: comment,
+        }).then(() => updateTask(user?.accessToken, payload))
+      }
+      return updateTask(user?.accessToken, payload)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['taskDetails'] })
+      toast.success('Task updated successfully')
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to update task')
+    },
+  })
+
+  // Delete task with comment mutation
+  const deleteTaskWithCommentMutation = useMutation({
+    mutationFn: ({ taskId, comment }) => {
+      // First create comment if provided
+      if (comment && comment.trim()) {
+        return createTaskComment(user?.accessToken, {
+          taskId,
+          commentText: comment,
+        }).then(() => deleteTask(user?.accessToken, taskId))
+      }
+      return deleteTask(user?.accessToken, taskId)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      queryClient.invalidateQueries({ queryKey: ['taskDetails'] })
+      toast.success('Task deleted successfully')
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to delete task')
+    },
+  })
+
+  // Action menu handlers
   const handleMenuOpen = (event, task) => {
-    setAnchorEl(event.currentTarget)
-    setSelectedTask(task)
+    setActionMenuAnchor(event.currentTarget)
+    setSelectedActionTask(task)
   }
 
   const handleMenuClose = () => {
-    setAnchorEl(null)
-    setSelectedTask(null)
+    setActionMenuAnchor(null)
+    // Don't clear selectedActionTask here - it's needed for the comment dialog
   }
 
-  const handleEdit = () => {
-    setEditTask(selectedTask)
-    setCreateModalOpen(true)
-    handleMenuClose()
-  }
+  const handleActionClick = (action) => {
+    // Store the task before closing menu
+    const task = selectedActionTask
+    setActionMenuAnchor(null) // Close menu but keep task data
 
-  const handleStatusChange = (status) => {
-    if (selectedTask) {
-      updateStatusMutation.mutate({ taskId: selectedTask.id, status })
-    }
-  }
-
-  const handleDelete = () => {
-    if (selectedTask) {
-      if (window.confirm('Are you sure you want to delete this task?')) {
-        deleteTaskMutation.mutate(selectedTask.id)
+    if (action === 'view') {
+      if (task?.id) {
+        setSelectedTaskId(task.id)
+        setViewModalOpen(true)
       }
+      setSelectedActionTask(null) // Clear after use
+      return
+    }
+
+    // For other actions, show comment dialog
+    // Keep selectedActionTask set so comment dialog can use it
+    setPendingAction(action)
+    setCommentDialogOpen(true)
+  }
+
+  const handleCommentSubmit = async () => {
+    const task = selectedActionTask
+    const comment = actionComment.trim()
+
+    // Validate that we have a task
+    if (!task || !task.id) {
+      toast.error('Task information is missing. Please try again.')
+      setCommentDialogOpen(false)
+      setActionComment('')
+      setPendingAction(null)
+      return
+    }
+
+    switch (pendingAction) {
+      case 'edit':
+        // Save comment if provided
+        if (comment && comment.trim()) {
+          try {
+            await createTaskComment(user?.accessToken, {
+              taskId: task.id,
+              commentText: comment,
+            })
+          } catch (error) {
+            console.error('Error saving comment:', error)
+            // Continue even if comment fails
+          }
+        }
+        // Use the task data we already have from the table
+        // Try to fetch full details, but fallback to table data if fetch fails
+        try {
+          const taskDetails = await getTaskDetails(user?.accessToken, task.id)
+          console.log('Task details response:', taskDetails)
+          // Handle different response structures
+          const taskData = taskDetails?.data || taskDetails
+          if (taskData) {
+            setEditTask(taskData)
+            setCommentDialogOpen(false)
+            setActionComment('')
+            setCreateModalOpen(true)
+          } else {
+            // Fallback to using table task data
+            setEditTask(task)
+            setCommentDialogOpen(false)
+            setActionComment('')
+            setCreateModalOpen(true)
+          }
+        } catch (error) {
+          console.error('Error fetching task details:', error)
+          // Fallback to using table task data
+          setEditTask(task)
+          setCommentDialogOpen(false)
+          setActionComment('')
+          setCreateModalOpen(true)
+        }
+        break
+
+      case 'updateStatus':
+        setCommentDialogOpen(false)
+        setStatusDialogOpen(true)
+        // Don't clear selectedActionTask yet - needed for status confirmation
+        break
+
+      case 'updatePriority':
+        setCommentDialogOpen(false)
+        setPriorityDialogOpen(true)
+        // Don't clear selectedActionTask yet - needed for priority confirmation
+        break
+
+      case 'delete':
+        deleteTaskWithCommentMutation.mutate({ taskId: task.id, comment })
+        setCommentDialogOpen(false)
+        setActionComment('')
+        setSelectedActionTask(null) // Clear after use
+        break
+
+      case 'reopen':
+        // Require comment for reopening
+        if (!comment || !comment.trim()) {
+          toast.error('Please enter a comment to reopen the task')
+          return // Don't close dialog, let user enter comment
+        }
+        updateStatusWithCommentMutation.mutate({
+          taskId: task.id,
+          status: 'Pending',
+          comment,
+        })
+        setCommentDialogOpen(false)
+        setActionComment('')
+        setSelectedActionTask(null) // Clear after use
+        break
+
+      default:
+        setCommentDialogOpen(false)
+        setActionComment('')
+        setSelectedActionTask(null) // Clear after use
     }
   }
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'Pending':
-        return { bg: '#fff3e0', text: '#e65100', border: '#ff9800' }
-      case 'In Progress':
-        return { bg: '#e3f2fd', text: '#1565c0', border: '#2196f3' }
-      case 'Completed':
-        return { bg: '#e8f5e9', text: '#2e7d32', border: '#4caf50' }
-      case 'Cancelled':
-        return { bg: '#ffebee', text: '#c62828', border: '#f44336' }
-      default:
-        return { bg: '#f5f5f5', text: '#757575', border: '#9e9e9e' }
+  const handleCommentDialogClose = () => {
+    setCommentDialogOpen(false)
+    setActionComment('')
+    setPendingAction(null)
+    setSelectedActionTask(null) // Clear when dialog is closed
+  }
+
+  const handleStatusConfirm = () => {
+    if (!selectedNewStatus) {
+      toast.error('Please select a status')
+      return
     }
+    const task = selectedActionTask
+    const comment = actionComment.trim()
+    updateStatusWithCommentMutation.mutate({
+      taskId: task.id,
+      status: selectedNewStatus,
+      comment,
+    })
+    setStatusDialogOpen(false)
+    setSelectedNewStatus('')
+    setActionComment('')
+  }
+
+  const handlePriorityConfirm = () => {
+    if (!selectedNewPriority) {
+      toast.error('Please select a priority')
+      return
+    }
+    const task = selectedActionTask
+    const comment = actionComment.trim()
+    updateTaskWithCommentMutation.mutate({
+      taskId: task.id,
+      payload: { taskId: task.id, priority: selectedNewPriority },
+      comment,
+    })
+    setPriorityDialogOpen(false)
+    setSelectedNewPriority('')
+    setActionComment('')
   }
 
   const isAdmin = user?.roleDetails?.name?.toLowerCase() === 'admin'
 
   return (
-    <Box sx={{ p: 3, bgcolor: '#f5f7fa', minHeight: '100vh' }}>
+    <Box>
       {/* Filters and Search */}
       <Card
-        sx={{ mb: 3, borderRadius: 2, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}
+        sx={{
+          mb: 3,
+          borderRadius: 2,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+        }}
       >
         <CardContent>
           <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={6}>
+            <Grid item xs={12} md={4}>
               <TextField
                 fullWidth
-                placeholder="Search tasks or assignees..."
-                value={searchTerm}
+                placeholder="Search by task or ticket code..."
                 InputProps={{
                   startAdornment: (
                     <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
@@ -489,15 +762,15 @@ function TaskTracker() {
                 size="small"
               />
             </Grid>
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} md={2}>
               <FormControl fullWidth size="small">
-                <InputLabel>All Statuses</InputLabel>
+                <InputLabel>Status</InputLabel>
                 <Select
                   value={filters.status}
                   onChange={(e) => handleFilterChange('status', e.target.value)}
-                  label="All Statuses"
+                  label="Status"
                 >
-                  <MenuItem value="">All Statuses</MenuItem>
+                  <MenuItem value="">All</MenuItem>
                   <MenuItem value="Pending">Pending</MenuItem>
                   <MenuItem value="In Progress">In Progress</MenuItem>
                   <MenuItem value="Completed">Completed</MenuItem>
@@ -505,21 +778,49 @@ function TaskTracker() {
                 </Select>
               </FormControl>
             </Grid>
-            <Grid item xs={12} md={3}>
+            <Grid item xs={12} md={2}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Priority</InputLabel>
+                <Select
+                  value={filters.priority}
+                  onChange={(e) =>
+                    handleFilterChange('priority', e.target.value)
+                  }
+                  label="Priority"
+                >
+                  <MenuItem value="">All</MenuItem>
+                  <MenuItem value="HIGH">High</MenuItem>
+                  <MenuItem value="MEDIUM">Medium</MenuItem>
+                  <MenuItem value="LOW">Low</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} md={2}>
+              <Button
+                fullWidth
+                variant="outlined"
+                startIcon={<FilterListIcon />}
+                onClick={clearFilters}
+                size="small"
+              >
+                Clear Filters
+              </Button>
+            </Grid>
+            <Grid item xs={12} md={2}>
               <Button
                 fullWidth
                 variant="contained"
-                startIcon={<AddIcon />}
                 onClick={() => {
                   setEditTask(null)
                   setCreateModalOpen(true)
                 }}
+                size="small"
                 sx={{
                   bgcolor: '#06aee9',
                   '&:hover': { bgcolor: '#0599d1' },
                 }}
               >
-                Add Task
+                CREATE
               </Button>
             </Grid>
           </Grid>
@@ -554,30 +855,16 @@ function TaskTracker() {
               Download Report
             </Button>
           </Box>
+
           {isLoading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
               <CircularProgress />
             </Box>
           ) : error ? (
             <Box sx={{ p: 3, textAlign: 'center' }}>
-              <Typography color="error" variant="h6" gutterBottom>
-                Failed to load tasks
+              <Typography color="error">
+                Failed to load tasks. Please try again.
               </Typography>
-              <Typography color="error" variant="body2">
-                {error?.message ||
-                  'Please try again or check the console for details.'}
-              </Typography>
-              {error && (
-                <Button
-                  variant="outlined"
-                  onClick={() =>
-                    queryClient.invalidateQueries({ queryKey: ['tasks'] })
-                  }
-                  sx={{ mt: 2 }}
-                >
-                  Retry
-                </Button>
-              )}
             </Box>
           ) : tasks.length === 0 ? (
             <Box sx={{ p: 4, textAlign: 'center' }}>
@@ -599,26 +886,42 @@ function TaskTracker() {
               <Table>
                 <TableHead>
                   <TableRow sx={{ bgcolor: '#f9fafb' }}>
-                    <TableCell sx={{ fontWeight: 600 }}>Task Name</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Created Date</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Assigned To</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Task</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Category</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Priority</TableCell>
                     <TableCell sx={{ fontWeight: 600 }}>Status</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Start Date</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>End Date</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Assigned By</TableCell>
                     <TableCell sx={{ fontWeight: 600 }}>Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {tasks.map((task) => {
-                    const statusColor = getStatusColor(task.status)
-                    const assignedTo = task.assignedToDetails
-                      ? typeof task.assignedToDetails === 'string'
-                        ? JSON.parse(task.assignedToDetails)
-                        : task.assignedToDetails
-                      : {}
+                    // Handle multiple assignees - assignedToDetails is now an array
+                    let assignedToArray = []
+                    if (task.assignedToDetails) {
+                      try {
+                        const parsed =
+                          typeof task.assignedToDetails === 'string'
+                            ? JSON.parse(task.assignedToDetails)
+                            : task.assignedToDetails
+                        assignedToArray = Array.isArray(parsed)
+                          ? parsed
+                          : [parsed].filter(Boolean)
+                      } catch (e) {
+                        assignedToArray = []
+                      }
+                    }
                     const createdBy = task.createdByDetails
                       ? typeof task.createdByDetails === 'string'
                         ? JSON.parse(task.createdByDetails)
                         : task.createdByDetails
                       : {}
+                    const priorityColor = getPriorityColor(
+                      task.priority || 'MEDIUM',
+                    )
+                    const statusColor = getStatusColor(task.status)
 
                     return (
                       <TableRow
@@ -626,32 +929,148 @@ function TaskTracker() {
                         hover
                         sx={{
                           '&:hover': { bgcolor: '#f9fafb' },
+                          cursor: 'pointer',
                         }}
                       >
                         <TableCell>
-                          <Typography variant="body2" fontWeight={600}>
-                            {task.taskName || task.task_name}
+                          <Typography variant="body2" fontWeight={500}>
+                            {task.createdAt || task.created_at
+                              ? dayjs(task.createdAt || task.created_at).format(
+                                  'DD MMM YYYY',
+                                )
+                              : 'N/A'}
                           </Typography>
-                          {task.description && (
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
+                          <Typography variant="caption" color="text.secondary">
+                            {task.createdAt || task.created_at
+                              ? dayjs(task.createdAt || task.created_at).format(
+                                  'hh:mm A',
+                                )
+                              : ''}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          {assignedToArray.length > 0 ? (
+                            <Box
                               sx={{
-                                display: 'block',
-                                mt: 0.5,
-                                maxWidth: 400,
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 0.5,
                               }}
                             >
-                              {task.description}
+                              {assignedToArray
+                                .slice(0, 2)
+                                .map((assignee, idx) => (
+                                  <Box
+                                    key={`${assignee?.id || 'unassigned'}-${idx}`}
+                                    sx={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 1,
+                                    }}
+                                  >
+                                    <Avatar
+                                      sx={{
+                                        width: 32,
+                                        height: 32,
+                                        bgcolor: '#06aee9',
+                                      }}
+                                    >
+                                      {assignee?.fullName
+                                        ?.charAt(0)
+                                        ?.toUpperCase() || 'U'}
+                                    </Avatar>
+                                    <Typography variant="body2">
+                                      {assignee?.fullName || 'Unassigned'}
+                                    </Typography>
+                                  </Box>
+                                ))}
+                              {assignedToArray.length > 2 && (
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                  sx={{ ml: 5 }}
+                                >
+                                  +{assignedToArray.length - 2} more
+                                </Typography>
+                              )}
+                            </Box>
+                          ) : (
+                            <Box
+                              sx={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 1,
+                              }}
+                            >
+                              <Avatar
+                                sx={{
+                                  width: 32,
+                                  height: 32,
+                                  bgcolor: '#06aee9',
+                                }}
+                              >
+                                U
+                              </Avatar>
+                              <Typography variant="body2">
+                                Unassigned
+                              </Typography>
+                            </Box>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              maxWidth: 200,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                            title={
+                              task.taskName ||
+                              task.task_name ||
+                              task.description ||
+                              ''
+                            }
+                          >
+                            {task.taskName ||
+                              task.task_name ||
+                              task.description ||
+                              '-'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          {task.category ? (
+                            <Chip
+                              label={task.category}
+                              size="small"
+                              sx={{
+                                bgcolor: '#f3e5f5',
+                                color: '#7b1fa2',
+                                fontWeight: 500,
+                              }}
+                            />
+                          ) : (
+                            <Typography variant="body2" color="text.secondary">
+                              -
                             </Typography>
                           )}
                         </TableCell>
                         <TableCell>
                           <Chip
-                            label={task.status}
+                            label={task.priority || 'Medium'}
+                            size="small"
+                            sx={{
+                              bgcolor: priorityColor.bg,
+                              color: priorityColor.text,
+                              border: `1px solid ${priorityColor.border}`,
+                              fontWeight: 500,
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={task.status || 'Pending'}
                             size="small"
                             sx={{
                               bgcolor: statusColor.bg,
@@ -662,44 +1081,36 @@ function TaskTracker() {
                           />
                         </TableCell>
                         <TableCell>
-                          <Typography variant="body2">
-                            {task.startDate || task.start_date
-                              ? dayjs(task.startDate || task.start_date).format(
-                                  'MMM D, YYYY',
-                                )
-                              : '-'}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2">
-                            {task.endDate || task.end_date
-                              ? dayjs(task.endDate || task.end_date).format(
-                                  'MMM D, YYYY',
-                                )
-                              : '-'}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Stack direction="row" spacing={1}>
-                            <Tooltip title="View Details">
-                              <IconButton
-                                size="small"
-                                color="primary"
-                                onClick={() => {
-                                  setSelectedTaskId(task.id)
-                                  setViewModalOpen(true)
-                                }}
-                              >
-                                <VisibilityIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                            <IconButton
-                              size="small"
-                              onClick={(e) => handleMenuOpen(e, task)}
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 1,
+                            }}
+                          >
+                            <Avatar
+                              sx={{
+                                width: 32,
+                                height: 32,
+                                bgcolor: '#10b981',
+                              }}
                             >
-                              <MoreVertIcon fontSize="small" />
-                            </IconButton>
-                          </Stack>
+                              {createdBy.fullName?.charAt(0)?.toUpperCase() ||
+                                'U'}
+                            </Avatar>
+                            <Typography variant="body2">
+                              {createdBy.fullName || 'Unknown'}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell>
+                          <IconButton
+                            size="small"
+                            onClick={(e) => handleMenuOpen(e, task)}
+                            sx={{ color: 'text.secondary' }}
+                          >
+                            <MoreVertIcon fontSize="small" />
+                          </IconButton>
                         </TableCell>
                       </TableRow>
                     )
@@ -747,24 +1158,6 @@ function TaskTracker() {
         </CardContent>
       </Card>
 
-      {/* Actions Menu */}
-      <Menu
-        anchorEl={anchorEl}
-        open={Boolean(anchorEl)}
-        onClose={handleMenuClose}
-      >
-        <MenuItem onClick={handleEdit}>
-          <EditIcon sx={{ mr: 1, fontSize: 18 }} />
-          Edit
-        </MenuItem>
-        {isAdmin && (
-          <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>
-            <DeleteIcon sx={{ mr: 1, fontSize: 18 }} />
-            Delete
-          </MenuItem>
-        )}
-      </Menu>
-
       {/* Add/Edit Task Modal */}
       <AddTaskModal
         open={createModalOpen}
@@ -793,9 +1186,7 @@ function TaskTracker() {
           setEditTask(task)
           setCreateModalOpen(true)
         }}
-        onStatusChange={(taskId, newStatus) => {
-          updateStatusMutation.mutate({ taskId, status: newStatus })
-        }}
+        onStatusChange={handleStatusChange}
       />
 
       {/* Export Date Range Modal */}
@@ -913,6 +1304,204 @@ function TaskTracker() {
             }}
           >
             Export
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Action Menu */}
+      <Menu
+        anchorEl={actionMenuAnchor}
+        open={Boolean(actionMenuAnchor)}
+        onClose={handleMenuClose}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'right',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'right',
+        }}
+      >
+        <MenuItem onClick={() => handleActionClick('view')}>
+          <VisibilityIcon fontSize="small" sx={{ mr: 1 }} />
+          View Details
+        </MenuItem>
+        <MenuItem onClick={() => handleActionClick('edit')}>
+          <EditIcon fontSize="small" sx={{ mr: 1 }} />
+          Edit
+        </MenuItem>
+        {selectedActionTask?.status === 'Completed' ||
+        selectedActionTask?.status === 'Cancelled' ? (
+          <MenuItem onClick={() => handleActionClick('reopen')}>
+            <RefreshIcon fontSize="small" sx={{ mr: 1 }} />
+            Re-open Task
+          </MenuItem>
+        ) : (
+          <MenuItem onClick={() => handleActionClick('updateStatus')}>
+            <RefreshIcon fontSize="small" sx={{ mr: 1 }} />
+            Update Status
+          </MenuItem>
+        )}
+        <MenuItem onClick={() => handleActionClick('updatePriority')}>
+          <EditIcon fontSize="small" sx={{ mr: 1 }} />
+          Update Priority
+        </MenuItem>
+        {isAdmin && (
+          <MenuItem
+            onClick={() => handleActionClick('delete')}
+            sx={{ color: 'error.main' }}
+          >
+            <DeleteIcon fontSize="small" sx={{ mr: 1 }} />
+            Delete
+          </MenuItem>
+        )}
+      </Menu>
+
+      {/* Comment Dialog */}
+      <Dialog
+        open={commentDialogOpen}
+        onClose={handleCommentDialogClose}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          {pendingAction === 'edit' && 'Add Comment for Edit'}
+          {pendingAction === 'updateStatus' && 'Add Comment for Status Update'}
+          {pendingAction === 'updatePriority' &&
+            'Add Comment for Priority Update'}
+          {pendingAction === 'delete' && 'Add Comment for Delete'}
+          {pendingAction === 'reopen' &&
+            'Add Comment to Re-open Task (Required)'}
+        </DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label={
+              pendingAction === 'reopen' ? 'Comment (Required)' : 'Comment'
+            }
+            fullWidth
+            multiline
+            rows={4}
+            value={actionComment}
+            onChange={(e) => setActionComment(e.target.value)}
+            placeholder={
+              pendingAction === 'reopen'
+                ? 'Enter a comment to reopen the task (required)...'
+                : 'Enter a comment for this action...'
+            }
+            required={pendingAction === 'reopen'}
+            error={pendingAction === 'reopen' && !actionComment.trim()}
+            helperText={
+              pendingAction === 'reopen' && !actionComment.trim()
+                ? 'Comment is required to reopen the task'
+                : ''
+            }
+            sx={{ mt: 2 }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={handleCommentDialogClose}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleCommentSubmit}
+            disabled={pendingAction === 'reopen' && !actionComment.trim()}
+            sx={{ bgcolor: '#06aee9', '&:hover': { bgcolor: '#0599d1' } }}
+          >
+            Continue
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Status Selection Dialog */}
+      <Dialog
+        open={statusDialogOpen}
+        onClose={() => {
+          setStatusDialogOpen(false)
+          setSelectedNewStatus('')
+          setActionComment('')
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Select New Status</DialogTitle>
+        <DialogContent>
+          <FormControl fullWidth sx={{ mt: 2 }}>
+            <InputLabel>Status</InputLabel>
+            <Select
+              value={selectedNewStatus}
+              onChange={(e) => setSelectedNewStatus(e.target.value)}
+              label="Status"
+            >
+              <MenuItem value="Pending">Pending</MenuItem>
+              <MenuItem value="In Progress">In Progress</MenuItem>
+              <MenuItem value="Completed">Completed</MenuItem>
+              <MenuItem value="Cancelled">Cancelled</MenuItem>
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() => {
+              setStatusDialogOpen(false)
+              setSelectedNewStatus('')
+              setActionComment('')
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleStatusConfirm}
+            sx={{ bgcolor: '#06aee9', '&:hover': { bgcolor: '#0599d1' } }}
+          >
+            Update Status
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Priority Selection Dialog */}
+      <Dialog
+        open={priorityDialogOpen}
+        onClose={() => {
+          setPriorityDialogOpen(false)
+          setSelectedNewPriority('')
+          setActionComment('')
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Select New Priority</DialogTitle>
+        <DialogContent>
+          <FormControl fullWidth sx={{ mt: 2 }}>
+            <InputLabel>Priority</InputLabel>
+            <Select
+              value={selectedNewPriority}
+              onChange={(e) => setSelectedNewPriority(e.target.value)}
+              label="Priority"
+            >
+              <MenuItem value="LOW">Low</MenuItem>
+              <MenuItem value="MEDIUM">Medium</MenuItem>
+              <MenuItem value="HIGH">High</MenuItem>
+            </Select>
+          </FormControl>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() => {
+              setPriorityDialogOpen(false)
+              setSelectedNewPriority('')
+              setActionComment('')
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handlePriorityConfirm}
+            sx={{ bgcolor: '#06aee9', '&:hover': { bgcolor: '#0599d1' } }}
+          >
+            Update Priority
           </Button>
         </DialogActions>
       </Dialog>

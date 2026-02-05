@@ -252,13 +252,14 @@ const Column = ({
   activeSearchColumn,
   setActiveSearchColumn,
 }) => {
+  const user = useSelector((store) => store.user)
   const [active, setActive] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchAnchorEl, setSearchAnchorEl] = useState(null)
   const searchOpen = Boolean(searchAnchorEl) && activeSearchColumn === stage
 
   // Handle search icon click
-  const handleSearchClick = event => {
+  const handleSearchClick = (event) => {
     if (activeSearchColumn === stage) {
       setActiveSearchColumn(null)
       setSearchAnchorEl(null)
@@ -286,7 +287,7 @@ const Column = ({
     e.dataTransfer.setData('cardId', patientDetails.appointmentId)
   }
 
-  const handleDragEnd = e => {
+  const handleDragEnd = (e) => {
     const cardId = e.dataTransfer.getData('cardId')
     setActive(false)
     clearHighlights()
@@ -299,9 +300,52 @@ const Column = ({
     if (before !== cardId) {
       let copy = [...cards]
       // console.log(copy)
-      let cardToTransfer = copy.find(c => c.appointmentId == cardId)
+      let cardToTransfer = copy.find((c) => c.appointmentId == cardId)
       // console.log(cardToTransfer)
       if (!cardToTransfer) return
+
+      // Check if moving from "Scan" (Check-In / Vitals) to "Doctor" stage
+      if (cardToTransfer.stage === 'Scan' && stage === 'Doctor') {
+        // Check if patient has pending amount
+        const pendingAmountDetails = cardToTransfer.pendingAmountDetails || []
+        const hasPendingAmount = pendingAmountDetails.some(
+          (item) => item.pending_amount > 0,
+        )
+
+        // Get user role information
+        const userRoleId = user?.roleDetails?.id
+        const userRoleName = user?.roleDetails?.name?.toLowerCase() || ''
+
+        // Check if user is Admin (ID: 1)
+        const isAdmin = userRoleId === 1
+
+        // Check if user is Receptionist (ID: 6) or Frontdesk (by name)
+        const isReceptionist = userRoleId === 6
+        const isFrontdesk =
+          userRoleName === 'frontdesk' || userRoleName === 'front desk'
+
+        // Validate based on pending amount and user role
+        if (hasPendingAmount) {
+          // Patient has pending amount - only Admin can move
+          if (!isAdmin) {
+            toast.error(
+              'Only Admin can move patients with pending amounts to Doctor stage',
+              toastconfig,
+            )
+            return
+          }
+        } else {
+          // Patient has no pending amount - Admin, Receptionist, and Frontdesk can move
+          if (!isAdmin && !isReceptionist && !isFrontdesk) {
+            toast.error(
+              'Only Admin, Receptionist, and Frontdesk users can move patients to Doctor stage',
+              toastconfig,
+            )
+            return
+          }
+        }
+      }
+
       cardToTransfer = { ...cardToTransfer, stage }
       // console.log(cardToTransfer)
       const payload = {
@@ -314,7 +358,7 @@ const Column = ({
         isPackageExists: cardToTransfer.isPackageExists,
       }
       updateStage.mutate(payload)
-      copy = copy.filter(c => c.appointmentId != cardId)
+      copy = copy.filter((c) => c.appointmentId != cardId)
 
       // const moveToBack = before == -1
       // console.log(moveToBack, copy, cardId, stage)
@@ -331,22 +375,22 @@ const Column = ({
     }
   }
 
-  const handleDragOver = e => {
+  const handleDragOver = (e) => {
     e.preventDefault()
     highlightIndicator(e)
 
     setActive(true)
   }
 
-  const clearHighlights = els => {
+  const clearHighlights = (els) => {
     const indicators = els || getIndicators()
 
-    indicators.forEach(i => {
+    indicators.forEach((i) => {
       i.style.opacity = '0'
     })
   }
 
-  const highlightIndicator = e => {
+  const highlightIndicator = (e) => {
     const indicators = getIndicators()
 
     clearHighlights(indicators)
@@ -390,7 +434,7 @@ const Column = ({
   }
 
   // Filter cards by stage and search query
-  const filteredCards = cards?.filter(c => {
+  const filteredCards = cards?.filter((c) => {
     const matchesStage = c.stage === stage
     const matchesSearch = c.patientName
       ?.toLowerCase()
@@ -430,7 +474,7 @@ const Column = ({
                     size="small"
                     placeholder="Search patient..."
                     value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
+                    onChange={(e) => setSearchQuery(e.target.value)}
                     className="flex-1"
                     autoFocus
                     InputProps={{
@@ -462,7 +506,7 @@ const Column = ({
           active ? 'bg-secondary' : 'bg-primary'
         }`}
       >
-        {filteredCards?.map(c => {
+        {filteredCards?.map((c) => {
           return (
             <Card
               key={c.appointmentId}
@@ -481,18 +525,18 @@ const Column = ({
 const Card = ({ patientDetails, stage, handleDragStart }) => {
   const dispatch = useDispatch()
   const router = useRouter()
-  const user = useSelector(store => store.user)
-  const modalState = useSelector(store => store.modal)
+  const user = useSelector((store) => store.user)
+  const modalState = useSelector((store) => store.modal)
   const queryClient = useQueryClient()
   const [previewContent, setPreviewContent] = useState(null)
   const [anchorEl, setAnchorEl] = useState(null)
   const open = Boolean(anchorEl)
   const [treatmentPendings, setTreatmentPendings] = useState(null)
-  const handleStatusClick = event => {
+  const handleStatusClick = (event) => {
     setAnchorEl(event.currentTarget) // Just set the anchor element
   }
 
-  const handleEditAppointments = event => {
+  const handleEditAppointments = (event) => {
     dispatch(openModal('editAppointment' + patientDetails?.appointmentId))
   }
 
@@ -538,7 +582,7 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
   useEffect(() => {
     // if (modalState?.key == `pendingAmount${patientDetails?.appointmentId}${patientDetails?.type}`) {
     let totalPendings = patientDetails?.pendingAmountDetails?.filter(
-      item =>
+      (item) =>
         // item.mileStoneStartedDate !== 'NA' &&
         item.pending_amount > 0,
     )
@@ -606,7 +650,7 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
     dispatch(openSideDrawer())
   }
   const generateReport = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       dispatch(showLoader())
       const res = await Generate_Invoice(user.accessToken, payload)
       try {
@@ -684,7 +728,7 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
     enabled: stage === 'Scan',
   })
   const createVitalsMutation = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const result = await createVitalsDetails(user.accessToken, payload)
       if (result.status === 200) {
         queryClient.invalidateQueries(['allAppointments'])
@@ -695,7 +739,7 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
   })
 
   const editVitalsMutation = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const result = await editVitalsDetails(user.accessToken, payload)
       if (result.status === 200) {
         queryClient.invalidateQueries(['allAppointments'])
@@ -722,7 +766,7 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
     }
   }
 
-  const getBgClass = visitType => {
+  const getBgClass = (visitType) => {
     if (visitType.startsWith('Fe')) return 'bg-blue-100 text-blue-700'
     if (visitType.startsWith('An')) return 'bg-purple-100 text-purple-700'
     if (visitType.startsWith('Gy')) return 'bg-emerald-100 text-emerald-700'
@@ -751,21 +795,19 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
       dispatch(hideLoader())
     }
   }
-  const {
-    data: pendingInformation,
-    isLoading: pendingInformationLoading,
-  } = useQuery({
-    queryKey: ['pendingInformation', patientDetails?.appointmentId],
-    queryFn: async () => {
-      const res = await getPendingInformation(
-        user.accessToken,
-        patientDetails?.appointmentId,
-        patientDetails?.type,
-      )
-      return res.data
-    },
-    enabled: open, // Only fetch when popper is open
-  })
+  const { data: pendingInformation, isLoading: pendingInformationLoading } =
+    useQuery({
+      queryKey: ['pendingInformation', patientDetails?.appointmentId],
+      queryFn: async () => {
+        const res = await getPendingInformation(
+          user.accessToken,
+          patientDetails?.appointmentId,
+          patientDetails?.type,
+        )
+        return res.data
+      },
+      enabled: open, // Only fetch when popper is open
+    })
 
   return (
     <>
@@ -773,7 +815,7 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
       <motion.div
         layoutId={patientDetails?.appointmentId}
         draggable="true"
-        onDragStart={e => handleDragStart(e, patientDetails)}
+        onDragStart={(e) => handleDragStart(e, patientDetails)}
         className={`cursor-grab rounded-lg bg-white p-2 shadow-md hover:shadow-lg transition-all duration-200 relative ${
           stage === 'Doctor' && patientDetails?.isPrescribed === 1
             ? 'border-t-4 border-t-green-500'
@@ -1289,7 +1331,7 @@ const DropIndicator = ({ beforeId, stage }) => {
   )
 }
 const ConsultationFee = ({ patientDetails }) => {
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const queryClient = useQueryClient()
   const dispatch = useDispatch()
   const [selectedCoupon, setSelectedCoupon] = useState(null)
@@ -1308,7 +1350,7 @@ const ConsultationFee = ({ patientDetails }) => {
       return res.data
     },
   })
-  const calculateDiscountedAmount = coupon => {
+  const calculateDiscountedAmount = (coupon) => {
     if (!coupon) return patientDetails?.amountToBePaid
     const discount =
       (patientDetails?.amountToBePaid * coupon.discountPercentage) / 100
@@ -1352,7 +1394,7 @@ const ConsultationFee = ({ patientDetails }) => {
           description: 'Test Transaction',
           order_id: order.data.orderId, //{ data.orderId}
           'theme.color': '#FF6C22',
-          handler: async response => {
+          handler: async (response) => {
             console.log(response)
             const order_details = {
               orderId: response.razorpay_order_id,
@@ -1372,13 +1414,13 @@ const ConsultationFee = ({ patientDetails }) => {
         }
         const paymentObject = new window.Razorpay(options)
         paymentObject.open()
-        paymentObject.on('payment.failed', function(response) {
+        paymentObject.on('payment.failed', function (response) {
           console.log(response.error.code)
           console.log(response.error.description)
           console.log(response.error.source)
         })
 
-        paymentObject.on('payment.success', function(response) {
+        paymentObject.on('payment.success', function (response) {
           //queryClient.invalidateQueries(['pharmacyModuleInfoByDate'])
           console.log('on success ', response)
         })
@@ -1438,7 +1480,7 @@ const ConsultationFee = ({ patientDetails }) => {
       <div className="mb-6">
         <Autocomplete
           options={coupons}
-          getOptionLabel={option =>
+          getOptionLabel={(option) =>
             `${option.couponCode} (${option.discountPercentage}% off)`
           }
           value={selectedCoupon}
@@ -1446,7 +1488,7 @@ const ConsultationFee = ({ patientDetails }) => {
             console.log('newValue', newValue)
             setSelectedCoupon(newValue)
           }}
-          renderInput={params => (
+          renderInput={(params) => (
             <TextField
               {...params}
               label="Apply Coupon"
@@ -1968,7 +2010,7 @@ const ConsultationFee = ({ patientDetails }) => {
 // }
 
 const EditAppointment = ({ patientDetails }) => {
-  const userDetails = useSelector(store => store.user)
+  const userDetails = useSelector((store) => store.user)
   const queryClient = useQueryClient()
   const dispatch = useDispatch()
   const [editAppointmentForm, setEditAppointmentForm] = useState({})
@@ -1998,7 +2040,7 @@ const EditAppointment = ({ patientDetails }) => {
       !!editAppointmentForm?.appointmentDate && !!editAppointmentForm?.doctorId,
   })
 
-  const handleEditChangeForm = event => {
+  const handleEditChangeForm = (event) => {
     setEditAppointmentForm({
       ...editAppointmentForm,
       [event.target.name]: event.target.value,
@@ -2045,7 +2087,7 @@ const EditAppointment = ({ patientDetails }) => {
               : null
           }
           name="appointmentDate"
-          onChange={newValue =>
+          onChange={(newValue) =>
             setEditAppointmentForm({
               ...editAppointmentForm,
               appointmentDate: dayjs(newValue).format('YYYY-MM-DD'),
@@ -2066,7 +2108,7 @@ const EditAppointment = ({ patientDetails }) => {
             label="Doctor"
             onChange={handleEditChangeForm}
           >
-            {doctorsList?.data?.map(each => (
+            {doctorsList?.data?.map((each) => (
               <MenuItem key={each.doctorId} value={each.doctorId}>
                 {each.name}
               </MenuItem>
@@ -2086,7 +2128,7 @@ const EditAppointment = ({ patientDetails }) => {
             label="Time Slot"
             onChange={handleEditChangeForm}
           >
-            {availableSlots?.data?.map(each => (
+            {availableSlots?.data?.map((each) => (
               <MenuItem key={each} value={each}>
                 {each}
               </MenuItem>
@@ -2103,7 +2145,7 @@ const EditAppointment = ({ patientDetails }) => {
 }
 
 const NoShow = ({ patientDetails }) => {
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const queryClient = useQueryClient()
   const dispatch = useDispatch()
 
@@ -2136,7 +2178,7 @@ const NoShow = ({ patientDetails }) => {
         variant="outlined"
         fullWidth
         value={noShowReason}
-        onChange={e => setNoShowReason(e.target.value)}
+        onChange={(e) => setNoShowReason(e.target.value)}
       />
       <Button
         variant="contained"
@@ -2160,7 +2202,7 @@ export function PatientFullDetail({
 }) {
   const [horizontalTabInModal, setHorizontalTabInModal] = useState()
   const dispatch = useDispatch()
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   // console.log(lineBillsAndNotesData)
   const queryClient = useQueryClient()
   const router = useRouter()
@@ -2189,7 +2231,7 @@ export function PatientFullDetail({
       const detailsCopy = bill.billTypeValues
       //refid, type, itemName, purchaseDetails, totalCost
       let paymentDBFormat = []
-      detailsCopy.map(eachInfo => {
+      detailsCopy.map((eachInfo) => {
         paymentDBFormat.push({
           refId: eachInfo.refId,
           itemName: eachInfo.name,
@@ -2233,7 +2275,7 @@ export function PatientFullDetail({
     const detailsCopy = bill.billTypeValues
     //refid, type, itemName, purchaseDetails, totalCost
     let paymentDBFormat = []
-    detailsCopy.map(eachInfo => {
+    detailsCopy.map((eachInfo) => {
       paymentDBFormat.push({
         refId: eachInfo.refId,
         itemName: eachInfo.name,
@@ -2270,7 +2312,7 @@ export function PatientFullDetail({
         description: 'Test Transaction',
         order_id: data.data.orderId, //{ data.orderId}
         'theme.color': '#FF6C22',
-        handler: async response => {
+        handler: async (response) => {
           console.log(response)
           const order_details = {
             orderId: response.razorpay_order_id,
@@ -2295,13 +2337,13 @@ export function PatientFullDetail({
       const paymentObject = new window.Razorpay(options)
       paymentObject.open()
 
-      paymentObject.on('payment.failed', function(response) {
+      paymentObject.on('payment.failed', function (response) {
         console.log(response.error.code)
         console.log(response.error.description)
         console.log(response.error.source)
       })
 
-      paymentObject.on('payment.success', function(response) {
+      paymentObject.on('payment.success', function (response) {
         //queryClient.invalidateQueries(['pharmacyModuleInfoByDate'])
         console.log('on success ', response)
       })
@@ -2388,7 +2430,7 @@ export function PatientFullDetail({
     },
   })
 
-  const calculateBillTotal = billTypeValues => {
+  const calculateBillTotal = (billTypeValues) => {
     return billTypeValues?.reduce(
       (sum, value) => sum + Number(value.amount || 0),
       0,
@@ -2569,7 +2611,7 @@ export function PatientFullDetail({
                         onChange={handleHorizontalTabChangeInModal}
                         aria-label="line bills and notes"
                       >
-                        {lineBillsAndNotesData?.lineBillsData?.map(bill => (
+                        {lineBillsAndNotesData?.lineBillsData?.map((bill) => (
                           <Tab
                             key={bill.billType.id}
                             label={bill.billType.name}
@@ -2579,7 +2621,7 @@ export function PatientFullDetail({
                         ))}
                       </TabList>
                     </Box>
-                    {lineBillsAndNotesData?.lineBillsData?.map(bill => (
+                    {lineBillsAndNotesData?.lineBillsData?.map((bill) => (
                       <TabPanel
                         className="p-3 h-auto min-w-full"
                         key={
@@ -2674,38 +2716,38 @@ const BillTypePanel = React.memo(
     const [optOutItems, setOptOutItems] = useState([])
     const [selectedItems, setSelectedItems] = useState([])
     const [activeTab, setActiveTab] = useState('patient') // New state for patient/spouse tabs
-    const user = useSelector(store => store.user)
+    const user = useSelector((store) => store.user)
     const queryClient = useQueryClient()
 
     // Initialize items on component mount or when bill changes
     useEffect(() => {
       const due =
-        bill.billTypeValues?.filter(item => item.status === 'DUE') || []
+        bill.billTypeValues?.filter((item) => item.status === 'DUE') || []
       const paid =
-        bill.billTypeValues?.filter(item => item.status === 'PAID') || []
+        bill.billTypeValues?.filter((item) => item.status === 'PAID') || []
       const optOut =
-        bill.billTypeValues?.filter(item => item.status === 'OPT_OUT') || []
+        bill.billTypeValues?.filter((item) => item.status === 'OPT_OUT') || []
       setDueItems(due)
       setPaidItems(paid)
       setOptOutItems(optOut)
       // Only select items for the active tab (patient/spouse)
       setSelectedItems(
         due
-          .filter(item =>
+          .filter((item) =>
             activeTab === 'patient' ? item.isSpouse === 0 : item.isSpouse === 1,
           )
-          .map(item => item.id + '-' + item.name + '-' + item.isSpouse),
+          .map((item) => item.id + '-' + item.name + '-' + item.isSpouse),
       )
     }, [bill.billTypeValues, activeTab])
 
     // Filter items based on active tab
-    const filteredDueItems = dueItems.filter(item =>
+    const filteredDueItems = dueItems.filter((item) =>
       activeTab === 'patient' ? item.isSpouse === 0 : item.isSpouse === 1,
     )
-    const filteredPaidItems = paidItems.filter(item =>
+    const filteredPaidItems = paidItems.filter((item) =>
       activeTab === 'patient' ? item.isSpouse === 0 : item.isSpouse === 1,
     )
-    const filteredOptOutItems = optOutItems.filter(item =>
+    const filteredOptOutItems = optOutItems.filter((item) =>
       activeTab === 'patient' ? item.isSpouse === 0 : item.isSpouse === 1,
     )
 
@@ -2725,7 +2767,7 @@ const BillTypePanel = React.memo(
         queryClient.invalidateQueries(['getLineBills', bill.appointmentId])
         toast.success('Successfully updated opt-out status', toastconfig)
       },
-      onError: error => {
+      onError: (error) => {
         toast.error(
           'Failed to update opt-out status: ' + error.message,
           toastconfig,
@@ -2735,12 +2777,12 @@ const BillTypePanel = React.memo(
 
     const handleOptOut = async () => {
       const selectedRefIds = filteredDueItems
-        .filter(item =>
+        .filter((item) =>
           selectedItems.includes(
             item.id + '-' + item.name + '-' + item.isSpouse,
           ),
         )
-        .map(item => item.refId)
+        .map((item) => item.refId)
 
       if (selectedRefIds.length === 0) return
 
@@ -2753,7 +2795,7 @@ const BillTypePanel = React.memo(
       }
     }
 
-    const handleUndoOptOut = async refId => {
+    const handleUndoOptOut = async (refId) => {
       if (window.confirm('Are you sure you want to undo the opt-out status?')) {
         optOutMutation.mutate({ ids: [refId], isOptOut: 0 })
       }
@@ -2761,7 +2803,7 @@ const BillTypePanel = React.memo(
 
     // Calculate totals ONLY for selected due items
     const dueBillTotal = filteredDueItems
-      .filter(item =>
+      .filter((item) =>
         selectedItems.includes(item.id + '-' + item.name + '-' + item.isSpouse),
       )
       .reduce((sum, item) => sum + Number(item.amount || 0), 0)
@@ -2774,10 +2816,10 @@ const BillTypePanel = React.memo(
     }, [dueBillTotal, selectedCoupon])
 
     // Handle checkbox changes
-    const handleCheckboxChange = itemId => {
-      setSelectedItems(prev =>
+    const handleCheckboxChange = (itemId) => {
+      setSelectedItems((prev) =>
         prev.includes(itemId)
-          ? prev.filter(id => id !== itemId)
+          ? prev.filter((id) => id !== itemId)
           : [...prev, itemId],
       )
     }
@@ -2789,7 +2831,7 @@ const BillTypePanel = React.memo(
       } else {
         setSelectedItems(
           filteredDueItems.map(
-            item => item.id + '-' + item.name + '-' + item.isSpouse,
+            (item) => item.id + '-' + item.name + '-' + item.isSpouse,
           ),
         )
       }
@@ -2860,7 +2902,7 @@ const BillTypePanel = React.memo(
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {filteredDueItems.map(value => (
+                  {filteredDueItems.map((value) => (
                     <TableRow key={value.id}>
                       {bill.billType?.id !== 3 && (
                         <TableCell padding="checkbox">
@@ -2906,14 +2948,14 @@ const BillTypePanel = React.memo(
 
                 <Autocomplete
                   options={coupons}
-                  getOptionLabel={option =>
+                  getOptionLabel={(option) =>
                     `${option.couponCode} (${option.discountPercentage}% off)`
                   }
                   value={selectedCoupon}
                   onChange={(event, newValue) => {
                     setSelectedCoupon(newValue)
                   }}
-                  renderInput={params => (
+                  renderInput={(params) => (
                     <TextField
                       {...params}
                       label="Apply Coupon"
@@ -2950,10 +2992,10 @@ const BillTypePanel = React.memo(
                         name={bill?.billType?.name}
                         className="capitalize"
                         disabled={selectedItems.length === 0}
-                        onClick={e =>
+                        onClick={(e) =>
                           handlePaymentMethodOnline(e, {
                             ...bill,
-                            billTypeValues: filteredDueItems.filter(item =>
+                            billTypeValues: filteredDueItems.filter((item) =>
                               selectedItems.includes(
                                 item.id + '-' + item.name + '-' + item.isSpouse,
                               ),
@@ -2972,12 +3014,12 @@ const BillTypePanel = React.memo(
                         className="capitalize"
                         name={bill?.billType?.name}
                         disabled={selectedItems.length === 0}
-                        onClick={e =>
+                        onClick={(e) =>
                           handlePaymentMethodOffline(
                             e,
                             {
                               ...bill,
-                              billTypeValues: filteredDueItems.filter(item =>
+                              billTypeValues: filteredDueItems.filter((item) =>
                                 selectedItems.includes(
                                   item.id +
                                     '-' +
@@ -3002,12 +3044,12 @@ const BillTypePanel = React.memo(
                         className="capitalize"
                         name={bill?.billType?.name}
                         disabled={selectedItems.length === 0}
-                        onClick={e =>
+                        onClick={(e) =>
                           handlePaymentMethodOffline(
                             e,
                             {
                               ...bill,
-                              billTypeValues: filteredDueItems.filter(item =>
+                              billTypeValues: filteredDueItems.filter((item) =>
                                 selectedItems.includes(
                                   item.id +
                                     '-' +
@@ -3088,7 +3130,7 @@ const BillTypePanel = React.memo(
             <Button
               size="small"
               name={bill?.billType?.name}
-              onClick={e =>
+              onClick={(e) =>
                 handlePrintInvoice(e, {
                   ...bill,
                   billTypeValues: filteredPaidItems,
@@ -3118,7 +3160,7 @@ const BillTypePanel = React.memo(
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {filteredPaidItems.map(value => (
+                  {filteredPaidItems.map((value) => (
                     <TableRow key={value.id}>
                       <TableCell>{value.name}</TableCell>
                       {bill.billType?.id == 3 ? (
@@ -3162,7 +3204,7 @@ const BillTypePanel = React.memo(
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {filteredOptOutItems.map(value => (
+                  {filteredOptOutItems.map((value) => (
                     <TableRow key={value.id}>
                       <TableCell>{value.name}</TableCell>
                       <TableCell>

@@ -720,9 +720,9 @@ function PatientTrackerReports() {
 
   // Summary Automated tab filters
   const [automatedSummaryFromDate, setAutomatedSummaryFromDate] = useState(
-    dayjs().subtract(30, 'day'),
+    dayjs(), // Set to current date
   )
-  const [automatedSummaryToDate, setAutomatedSummaryToDate] = useState(dayjs())
+  const [automatedSummaryToDate, setAutomatedSummaryToDate] = useState(dayjs()) // Set to current date
   const [automatedSummaryBranch, setAutomatedSummaryBranch] = useState('ALL')
   const [automatedSummaryReferral, setAutomatedSummaryReferral] = useState('')
 
@@ -732,9 +732,9 @@ function PatientTrackerReports() {
 
   // Summary Graph tab filters (default referral filter set to 'Friends')
   const [graphSummaryFromDate, setGraphSummaryFromDate] = useState(
-    dayjs().subtract(30, 'day'),
+    dayjs(), // Set to current date
   )
-  const [graphSummaryToDate, setGraphSummaryToDate] = useState(dayjs())
+  const [graphSummaryToDate, setGraphSummaryToDate] = useState(dayjs()) // Set to current date
   const [graphSummaryBranch, setGraphSummaryBranch] = useState('ALL')
   const [graphSummaryReferral, setGraphSummaryReferral] = useState('Friends')
 
