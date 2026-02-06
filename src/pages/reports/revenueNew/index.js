@@ -32,7 +32,7 @@ function SalesNew() {
   const today = dayjs().toDate()
   const [fromDate, setFromDate] = useState(today)
   const [toDate, setToDate] = useState(today)
-  const [branchId, setBranchId] = useState('')
+  const [branchId, setBranchId] = useState('ALL')
   const [paymentMode, setPaymentMode] = useState('ALL')
   const [service, setService] = useState('ALL')
   const [activeView, setActiveView] = useState('sales') // 'sales' or 'refunds'
@@ -41,7 +41,7 @@ function SalesNew() {
   // Applied filters (used to trigger API)
   const [appliedFromDate, setAppliedFromDate] = useState(today)
   const [appliedToDate, setAppliedToDate] = useState(today)
-  const [appliedBranchId, setAppliedBranchId] = useState('')
+  const [appliedBranchId, setAppliedBranchId] = useState('ALL')
   const [appliedPaymentMode, setAppliedPaymentMode] = useState('ALL')
 
   // Access control: Check if user has Revenue New access
@@ -56,18 +56,13 @@ function SalesNew() {
     }
   }, [userDetails?.email, router])
 
-  // Set initial branch to HNK and handle branch data loading
+  // Set initial branch to ALL
   useEffect(() => {
     if (dropdowns?.branches?.length > 0) {
-      // Find HNK branch or use first branch as fallback
-      const hnkBranch = dropdowns.branches.find(
-        (branch) => branch.name === 'HNK' || branch.name === 'hnk',
-      )
-      const defaultBranch = hnkBranch?.id || dropdowns.branches[0].id
-      setBranchId(defaultBranch)
-      setAppliedBranchId(defaultBranch) // Set applied branch ID immediately
+      // Default to ALL for branch selection
+      setBranchId('ALL')
+      setAppliedBranchId('ALL') // Set applied branch ID immediately
       setAppliedPaymentMode('ALL')
-      console.log('Setting default branch:', defaultBranch)
     }
   }, [dropdowns])
 

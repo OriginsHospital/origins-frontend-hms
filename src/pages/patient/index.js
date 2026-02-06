@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { getAllPatients } from '@/constants/apis'
+import { getAllPatients, getPackageData } from '@/constants/apis'
 import { useSelector, useDispatch } from 'react-redux'
 import {
   DataGrid,
@@ -78,6 +78,137 @@ const PermissionedViewButton = withPermission(ViewButton, false, 'patient', [
   ACCESS_TYPES.READ,
 ])
 
+// Component to show patient name with red dot indicator for pending payment
+const PatientNameWithIndicator = ({ patient, userToken }) => {
+  // Fetch package data for patients with active visits
+  const { data: packageData, isLoading: isLoadingPackage } = useQuery({
+    queryKey: ['packageData', patient.activeVisitId],
+    queryFn: async () => {
+      if (!patient.activeVisitId || !userToken) {
+        return null
+      }
+      try {
+        const response = await getPackageData(userToken, patient.activeVisitId)
+        if (response.status === 200 && response.data) {
+          return response.data
+        }
+        return null
+      } catch (error) {
+        console.error('Error fetching package data:', error)
+        return null
+      }
+    },
+    enabled: !!patient.activeVisitId && !!userToken,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    retry: 1,
+  })
+
+  // Calculate pending amount
+  const calculatePendingAmount = () => {
+    if (!packageData) {
+      return null
+    }
+
+    const packageAmount = parseFloat(packageData.marketingPackage || 0)
+
+    // If no package amount, no payment due
+    if (packageAmount <= 0) {
+      return null
+    }
+
+    // Calculate total paid amount from all milestone payments
+    // Only count amounts where the corresponding date is set (indicating payment was made)
+    let totalPaid = 0
+
+    // Registration payment
+    if (packageData.registrationDate && packageData.registrationAmount) {
+      totalPaid += parseFloat(packageData.registrationAmount || 0)
+    }
+
+    // Day 1 payment
+    if (packageData.day1Date && packageData.day1Amount) {
+      totalPaid += parseFloat(packageData.day1Amount || 0)
+    }
+
+    // Pick Up payment
+    if (packageData.pickUpDate && packageData.pickUpAmount) {
+      totalPaid += parseFloat(packageData.pickUpAmount || 0)
+    }
+
+    // Hysteroscopy payment
+    if (packageData.hysteroscopyDate && packageData.hysteroscopyAmount) {
+      totalPaid += parseFloat(packageData.hysteroscopyAmount || 0)
+    }
+
+    // Day 5 Freezing payment
+    if (packageData.day5FreezingDate && packageData.day5FreezingAmount) {
+      totalPaid += parseFloat(packageData.day5FreezingAmount || 0)
+    }
+
+    // FET payment
+    if (packageData.fetDate && packageData.fetAmount) {
+      totalPaid += parseFloat(packageData.fetAmount || 0)
+    }
+
+    // ERA payment
+    if (packageData.eraDate && packageData.eraAmount) {
+      totalPaid += parseFloat(packageData.eraAmount || 0)
+    }
+
+    // UPT Positive payment
+    if (packageData.uptPositiveDate && packageData.uptPositiveAmount) {
+      totalPaid += parseFloat(packageData.uptPositiveAmount || 0)
+    }
+
+    const pendingAmount = packageAmount - totalPaid
+
+    // Only show if there's a package and pending amount > 0
+    // Also check if package is not fully paid (totalPaid < packageAmount)
+    if (packageAmount > 0 && pendingAmount > 0 && totalPaid < packageAmount) {
+      return {
+        packageAmount: packageAmount.toFixed(2),
+        paidAmount: totalPaid.toFixed(2),
+        pendingAmount: pendingAmount.toFixed(2),
+      }
+    }
+
+    return null
+  }
+
+  const paymentInfo = calculatePendingAmount()
+  const hasPaymentDue = paymentInfo !== null
+
+  return (
+    <div className="flex items-center gap-2">
+      <Avatar
+        src={patient.photoPath}
+        alt={patient.Name}
+        sx={{ width: 40, height: 40 }}
+      />
+      <span className="flex items-center gap-1">
+        {patient.Name}
+        {/* Red dot indicator for pending payment - inline after name */}
+        {!isLoadingPackage && hasPaymentDue && (
+          <span
+            style={{
+              width: '10px',
+              height: '10px',
+              borderRadius: '50%',
+              backgroundColor: '#ff0000',
+              border: '2px solid white',
+              boxShadow: '0 0 0 1px rgba(0,0,0,0.1)',
+              display: 'inline-block',
+              flexShrink: 0,
+              marginLeft: '4px',
+            }}
+            title={`Payment Due: ₹${paymentInfo.pendingAmount}`}
+          />
+        )}
+      </span>
+    </div>
+  )
+}
+
 function PatientRegistration() {
   const userDetails = useSelector((store) => store.user)
   const dispatch = useDispatch()
@@ -139,14 +270,10 @@ function PatientRegistration() {
       headerName: 'Name',
       width: 250,
       renderCell: (params) => (
-        <div className="flex items-center gap-2">
-          <Avatar
-            src={params.row.photoPath}
-            alt={params.row.Name}
-            sx={{ width: 40, height: 40 }}
-          />
-          <span>{params.row.Name}</span>
-        </div>
+        <PatientNameWithIndicator
+          patient={params.row}
+          userToken={userDetails?.accessToken}
+        />
       ),
     },
     {

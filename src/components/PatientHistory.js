@@ -220,7 +220,7 @@ const PaymentHistoryTab = ({ data }) => {
   const user = useSelector((store) => store.user)
   const queryClient = useQueryClient()
   const [page, setPage] = useState(0)
-  const [rowsPerPage, setRowsPerPage] = useState(5)
+  const [rowsPerPage, setRowsPerPage] = useState(50)
   const [filters, setFilters] = useState({
     type: 'all',
     paymentMode: 'all',
