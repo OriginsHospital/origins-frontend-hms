@@ -23,12 +23,17 @@ import {
   Tabs,
   Tab,
   Box,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Checkbox,
+  Chip,
+  Alert,
 } from '@mui/material'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
 import { useDispatch, useSelector } from 'react-redux'
 import { showLoader, hideLoader } from '@/redux/loaderSlice'
-import { Bounce } from 'react-toastify'
 import Breadcrumb from '@/components/Breadcrumb'
 import { toastconfig } from '@/utils/toastconfig'
 import dayjs from 'dayjs'
@@ -80,17 +85,16 @@ function SaleReturnPage() {
       if (orderIdValue) {
         setOrderId(orderIdValue)
         setId(orderIdValue)
+      } else {
+        // Only clear if orderId is explicitly removed from URL
+        setOrderId('')
+        setId('')
+        setSaleDetails(null)
+        setFlattenedPurchaseDetails([])
+        setNonPharmacyDetails(null)
       }
     }
-    // Cleanup function
-    return () => {
-      setOrderId('')
-      setId('')
-      setSaleDetails(null)
-      setFlattenedPurchaseDetails([])
-      setNonPharmacyDetails(null)
-    }
-  }, [router.isReady, router.query])
+  }, [router.isReady, router.query.tab, router.query.orderId])
 
   const getSaleReturnInfo = async () => {
     if (!orderId) {
@@ -124,51 +128,187 @@ function SaleReturnPage() {
     enabled: !!id && activeTab === 0,
     queryFn: async () => {
       const responsejson = await SaleReturnInfo(user?.accessToken, id)
+      console.log('Full API Response:', responsejson)
+
       if (responsejson.status == 200) {
+        // Handle case where orderInformation might be null or empty
         if (!responsejson.data?.orderInformation) {
+          console.error('No orderInformation in response:', responsejson.data)
           setSaleDetails(null)
           setFlattenedPurchaseDetails([])
-          throw new Error('No data found for this order ID')
+          throw new Error(
+            'No order information found for this order ID. The order may not exist or may not be in PAID status.',
+          )
         }
-        console.log(responsejson.data)
-        setSaleDetails(responsejson.data.orderInformation)
 
-        // Flatten the nested structure for the original PurchaseDetails component
+        console.log('Sale Return Data:', responsejson.data)
+        console.log('Order Information:', responsejson.data.orderInformation)
+
+        // Check if orderInformation is an object or array
+        const orderInfo = responsejson.data.orderInformation
+        let orderInfoData = null
+
+        if (Array.isArray(orderInfo) && orderInfo.length > 0) {
+          orderInfoData = orderInfo[0]
+          setSaleDetails(orderInfo[0])
+        } else if (orderInfo && typeof orderInfo === 'object') {
+          orderInfoData = orderInfo
+          setSaleDetails(orderInfo)
+        } else {
+          console.error('Invalid orderInformation structure:', orderInfo)
+          setSaleDetails(null)
+          setFlattenedPurchaseDetails([])
+          throw new Error('Invalid order information structure')
+        }
+
+        // Map the purchased items structure to match invoice format
+        // Each item should be one row with aggregated purchase details
         const flattened = []
-        responsejson.data.orderInformation.purchasedItems.forEach((item) => {
-          item.purchaseDetails.forEach((detail) => {
+
+        // Check if purchasedItems exists and is an array
+        if (!orderInfoData?.purchasedItems) {
+          console.warn('No purchasedItems in orderInfoData:', orderInfoData)
+          console.warn(
+            'Full orderInfoData structure:',
+            JSON.stringify(orderInfoData, null, 2),
+          )
+          // If purchasedItems is null/undefined, try to handle it gracefully
+          setFlattenedPurchaseDetails([])
+          // Still set saleDetails so patient info shows
+          // This might happen if the SQL query failed to parse orderDetails JSON
+          toast.warning(
+            'Order found but purchase items could not be retrieved. The order details may need to be verified in the database.',
+            toastconfig,
+          )
+          return responsejson.data
+        }
+
+        if (Array.isArray(orderInfoData.purchasedItems)) {
+          console.log('Purchased Items Array:', orderInfoData.purchasedItems)
+          console.log(
+            'Purchased Items Count:',
+            orderInfoData.purchasedItems.length,
+          )
+
+          if (orderInfoData.purchasedItems.length === 0) {
+            console.warn(
+              'purchasedItems array is empty - this might indicate a data parsing issue',
+            )
+            console.warn(
+              'Order exists but no items were parsed from orderDetails JSON',
+            )
+            setFlattenedPurchaseDetails([])
+            toast.warning(
+              'Order found but no purchase items were retrieved. This may indicate the order details structure needs to be verified.',
+              toastconfig,
+            )
+            return responsejson.data
+          }
+
+          orderInfoData.purchasedItems.forEach((item) => {
+            // Calculate rate per unit (matching invoice structure)
+            const purchaseQty = item.purchaseQuantity || 0
+            const totalCost = item.totalCost || 0
+            const ratePerUnit = purchaseQty > 0 ? totalCost / purchaseQty : 0
+
+            // Aggregate purchase details if available
+            let aggregatedDetails = {
+              grnIds: [],
+              batchNos: [],
+              expiryDates: [],
+              mrpPerTablet: 0,
+              usedQuantity: 0,
+            }
+
+            if (
+              item.purchaseDetails &&
+              Array.isArray(item.purchaseDetails) &&
+              item.purchaseDetails.length > 0
+            ) {
+              // Aggregate all purchase details for this item
+              item.purchaseDetails.forEach((detail) => {
+                if (detail.grnId) aggregatedDetails.grnIds.push(detail.grnId)
+                if (detail.batchNo)
+                  aggregatedDetails.batchNos.push(detail.batchNo)
+                if (detail.expiryDate)
+                  aggregatedDetails.expiryDates.push(detail.expiryDate)
+                if (detail.mrpPerTablet) {
+                  aggregatedDetails.mrpPerTablet = detail.mrpPerTablet // Use first mrpPerTablet
+                }
+                if (detail.usedQuantity) {
+                  aggregatedDetails.usedQuantity += detail.usedQuantity || 0
+                }
+              })
+            }
+
+            // Create one row per item (matching invoice structure)
             flattened.push({
-              itemName: item.itemName,
+              itemName: item.itemName || 'N/A',
               refId: item.refId,
-              itemId: item.refId, // Using refId as itemId for now, adjust if needed
-              grnId: detail.grnId,
-              grnNo: detail.grnId, // For compatibility with original component
-              purchaseQuantity: item.purchaseQuantity,
-              mrpPerTablet: detail.mrpPerTablet,
-              returnQuantity: item.returnQuantity,
-              batchNo: detail.batchNo,
-              expiryDate: detail.expiryDate,
-              usedQuantity: detail.usedQuantity,
-              totalCost: item.totalCost,
+              itemId: item.itemId || item.refId,
+              // Use first grnId if available, otherwise null
+              grnId: aggregatedDetails.grnIds[0] || null,
+              grnNo: aggregatedDetails.grnIds[0] || 'N/A',
+              // Purchase quantity from invoice
+              purchaseQuantity: purchaseQty,
+              // Rate per unit (matching invoice "Rate" column)
+              mrpPerTablet: aggregatedDetails.mrpPerTablet || ratePerUnit,
+              ratePerUnit: ratePerUnit, // Calculated rate
+              // Return quantity (already returned)
+              returnQuantity: item.returnQuantity || 0,
+              // Batch numbers (comma-separated if multiple)
+              batchNo:
+                aggregatedDetails.batchNos.length > 0
+                  ? aggregatedDetails.batchNos.join(', ')
+                  : 'N/A',
+              // Expiry dates (comma-separated if multiple)
+              expiryDate:
+                aggregatedDetails.expiryDates.length > 0
+                  ? aggregatedDetails.expiryDates[0] // Use first expiry date
+                  : null,
+              // Used quantity (aggregated)
+              usedQuantity: aggregatedDetails.usedQuantity || 0,
+              // Total cost (matching invoice)
+              totalCost: totalCost,
+              // Store all purchase details for reference
+              allPurchaseDetails: item.purchaseDetails || [],
             })
           })
-        })
-        setFlattenedPurchaseDetails(flattened)
+
+          console.log('Mapped Purchase Details (Invoice Format):', flattened)
+          setFlattenedPurchaseDetails(flattened)
+
+          if (flattened.length === 0) {
+            console.warn('No items mapped from purchasedItems array')
+          }
+        } else {
+          console.error(
+            'purchasedItems is not an array:',
+            typeof orderInfoData.purchasedItems,
+            orderInfoData.purchasedItems,
+          )
+          setFlattenedPurchaseDetails([])
+        }
 
         return responsejson.data
       } else {
+        // Handle non-200 status codes
+        const errorMessage =
+          responsejson.message ||
+          responsejson.error ||
+          'Error occurred while fetching medicine details for pharmacy'
+        console.error('API Error Response:', responsejson)
         setSaleDetails(null)
         setFlattenedPurchaseDetails([])
-        throw new Error(
-          'Error occurred while fetching medicine details for pharmacy',
-        )
+        throw new Error(errorMessage)
       }
     },
     onError: (err) => {
-      toast.error(
-        'Failed to fetch sale return data: ' + err.message,
-        toastconfig,
-      )
+      console.error('Query Error:', err)
+      const errorMessage = err.message || 'Failed to fetch sale return data'
+      toast.error(errorMessage, toastconfig)
+      setSaleDetails(null)
+      setFlattenedPurchaseDetails([])
     },
   })
 
@@ -395,35 +535,74 @@ const PurchaseDetails = ({ details, headerDetails, type, orderId }) => {
 
   // State to track return quantities by refId and grnId
   const [returnQuantities, setReturnQuantities] = useState({})
+  const [refundMethod, setRefundMethod] = useState('CASH') // Default refund method
+  const [selectedItems, setSelectedItems] = useState({}) // Track selected items for refund
   const dispatch = useDispatch()
+  const queryClient = useQueryClient()
   const user = useSelector((store) => store.user)
-  const getReturnValue = (refId, grnId) => {
-    const key = `${refId}-${grnId}`
-    return returnQuantities[key] || ''
+  // Updated to work with new invoice-mapped structure (one row per item)
+  const getReturnValue = (refId) => {
+    return returnQuantities[refId] || ''
   }
 
-  const handleReturnValues = (value, refId, grnId) => {
-    const key = `${refId}-${grnId}`
+  const handleReturnValues = (value, refId) => {
     setReturnQuantities((prev) => ({
       ...prev,
-      [key]: value,
+      [refId]: value,
+    }))
+    // Auto-select item when return quantity is entered
+    if (value && parseFloat(value) > 0) {
+      setSelectedItems((prev) => ({
+        ...prev,
+        [refId]: true,
+      }))
+    } else {
+      setSelectedItems((prev) => {
+        const newState = { ...prev }
+        delete newState[refId]
+        return newState
+      })
+    }
+  }
+
+  const handleItemSelect = (refId) => {
+    setSelectedItems((prev) => ({
+      ...prev,
+      [refId]: !prev[refId],
     }))
   }
+
   const { mutate, isPending } = useMutation({
     mutationFn: async (payload) => {
-      console.log(payload)
+      console.log('Return payload:', payload)
       const res = await ReturnItems(user.accessToken, payload)
       if (res.status === 200) {
-        toast.success('Returned successfully', toastconfig)
+        toast.success('Items returned successfully', toastconfig)
+        // Invalidate queries to refresh data
+        queryClient.invalidateQueries({
+          queryKey: ['fetchSalesReturnInfoData', orderId, 0],
+        })
+        // Reset return quantities after successful return
+        setReturnQuantities({})
       } else {
-        toast.error(res, toastconfig)
+        toast.error(
+          res.message || res.error || 'Failed to return items',
+          toastconfig,
+        )
+        throw new Error(res.message || res.error || 'Failed to return items')
       }
+      return res
     },
     onMutate: (payload) => {
+      dispatch(showLoader())
       toast.info('Processing return...', toastconfig)
     },
     onError: (error) => {
-      toast.error('Error: ' + error.message, toastconfig)
+      toast.error(
+        'Error: ' + (error.message || 'Failed to return items'),
+        toastconfig,
+      )
+      dispatch(hideLoader())
     },
     onSettled: () => {
       dispatch(hideLoader())
@@ -441,14 +620,12 @@ const PurchaseDetails = ({ details, headerDetails, type, orderId }) => {
     let totAmount = 0
     let atleastOneObjFound = false
 
-    // Group return quantities by refId
+    // Group return quantities by refId (matching invoice structure - one row per item)
     const returnDetailsByRefId = {}
 
     details.forEach((item) => {
       const refId = item.refId
-      const grnId = item.grnId
-      const key = `${refId}-${grnId}`
-      const returnQty = parseInt(returnQuantities[key] || 0)
+      const returnQty = parseFloat(returnQuantities[refId] || 0)
 
       if (returnQty > 0) {
         if (returnQty < 0) {
@@ -456,41 +633,82 @@ const PurchaseDetails = ({ details, headerDetails, type, orderId }) => {
         } else if (returnQty > item.purchaseQuantity) {
           error = 1
         } else {
-          totAmount = totAmount + item.mrpPerTablet * returnQty
+          // Use ratePerUnit if available, otherwise use mrpPerTablet
+          const rate = item.ratePerUnit || item.mrpPerTablet || 0
+          totAmount = totAmount + rate * returnQty
           atleastOneObjFound = true
 
           if (!returnDetailsByRefId[refId]) {
             returnDetailsByRefId[refId] = {
               refId: refId,
-              itemId: item.itemId || 0, // You might need to add itemId to your data
+              itemId: item.itemId || refId,
               returnInfo: [],
             }
           }
 
-          returnDetailsByRefId[refId].returnInfo.push({
-            grnId: grnId,
-            returnQuantity: returnQty,
-          })
+          // If item has multiple purchaseDetails (multiple GRNs), distribute return quantity
+          // For now, we'll use the first grnId or distribute proportionally
+          if (item.allPurchaseDetails && item.allPurchaseDetails.length > 0) {
+            // Distribute return quantity across purchase details
+            const totalPurchaseQty = item.purchaseQuantity
+            item.allPurchaseDetails.forEach((purchaseDetail) => {
+              const detailQty =
+                purchaseDetail.initialUsedQuantity ||
+                purchaseDetail.usedQuantity ||
+                0
+              const proportion =
+                totalPurchaseQty > 0 ? detailQty / totalPurchaseQty : 0
+              const returnQtyForDetail = Math.floor(returnQty * proportion)
+
+              if (returnQtyForDetail > 0 && purchaseDetail.grnId) {
+                returnDetailsByRefId[refId].returnInfo.push({
+                  grnId: purchaseDetail.grnId,
+                  returnQuantity: returnQtyForDetail,
+                })
+              }
+            })
+
+            // If no distribution was made, use the first grnId
+            if (
+              returnDetailsByRefId[refId].returnInfo.length === 0 &&
+              item.grnId
+            ) {
+              returnDetailsByRefId[refId].returnInfo.push({
+                grnId: item.grnId,
+                returnQuantity: returnQty,
+              })
+            }
+          } else if (item.grnId) {
+            // Single GRN case
+            returnDetailsByRefId[refId].returnInfo.push({
+              grnId: item.grnId,
+              returnQuantity: returnQty,
+            })
+          }
         }
       }
     })
 
     if (error == 1) {
-      toast.error('Please check return quantity', toastconfig)
+      toast.error(
+        'Return quantity cannot exceed purchase quantity',
+        toastconfig,
+      )
     } else if (error == 3) {
       toast.error(
         'Return quantity must be a valid non-negative number',
         toastconfig,
       )
     } else if (!atleastOneObjFound) {
-      toast.error('Please add atleast one return quantity', toastconfig)
+      toast.error('Please add at least one return quantity', toastconfig)
     } else {
       const payload = {
         orderId: returnValue?.orderId,
         patientId: returnValue?.patientId,
-        totalAmount: totAmount,
+        totalAmount: Math.round(totAmount * 100) / 100, // Round to 2 decimal places
         type: returnValue?.type || 'Consultation',
         returnDetails: Object.values(returnDetailsByRefId),
+        refundMethod: refundMethod, // Add refund method to payload
       }
 
       console.log('Return payload:', payload)
@@ -501,59 +719,196 @@ const PurchaseDetails = ({ details, headerDetails, type, orderId }) => {
     if (details) {
       // Reset return quantities when details change
       setReturnQuantities({})
+      setSelectedItems({})
     }
   }, [details])
-  if (!details || details.length === 0) return null
+
+  // Show message if no details, but still render the card structure
+  if (!details || details.length === 0) {
+    return (
+      <Card className="min-h-52">
+        <CardContent>
+          <Typography variant="h6" className="mb-3">
+            Purchase Details & Refund
+          </Typography>
+          <Alert severity="info" className="mt-4">
+            <Typography variant="body2">
+              No purchase items found for this order. Please verify the order ID
+              or check if items have already been returned.
+            </Typography>
+          </Alert>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  // Calculate total refund amount (using new structure - one row per item)
+  const totalRefundAmount = details.reduce((sum, item) => {
+    const refId = item.refId
+    const qty = parseFloat(returnQuantities[refId] || 0)
+    if (qty > 0) {
+      // Use ratePerUnit if available, otherwise use mrpPerTablet
+      const rate = item.ratePerUnit || item.mrpPerTablet || 0
+      return sum + rate * qty
+    }
+    return sum
+  }, 0)
+
+  const hasSelectedItems = Object.keys(returnQuantities).some(
+    (refId) => parseFloat(returnQuantities[refId] || 0) > 0,
+  )
+
   return (
     <Card className="min-h-52">
       <CardContent>
-        <Typography variant="h6" className="mb-3">
-          Purchase Details
-        </Typography>
+        <div className="flex justify-between items-center mb-4">
+          <Typography variant="h6">Purchase Details & Refund</Typography>
+          {hasSelectedItems && (
+            <Chip
+              label={`Total Refund: ₹${totalRefundAmount.toFixed(2)}`}
+              color="primary"
+              variant="outlined"
+            />
+          )}
+        </div>
+
+        {hasSelectedItems && (
+          <Alert severity="info" className="mb-4">
+            <Typography variant="body2">
+              {
+                Object.keys(returnQuantities).filter(
+                  (refId) => parseFloat(returnQuantities[refId] || 0) > 0,
+                ).length
+              }{' '}
+              item(s) selected for refund. Total amount: ₹
+              {totalRefundAmount.toFixed(2)}
+            </Typography>
+          </Alert>
+        )}
+
+        <div className="mb-4">
+          <FormControl fullWidth size="small">
+            <InputLabel>Refund Method</InputLabel>
+            <Select
+              value={refundMethod}
+              label="Refund Method"
+              onChange={(e) => setRefundMethod(e.target.value)}
+              disabled={isPending}
+            >
+              <MenuItem value="CASH">Cash</MenuItem>
+              <MenuItem value="CARD">Card</MenuItem>
+              <MenuItem value="BANK_TRANSFER">Bank Transfer</MenuItem>
+              <MenuItem value="WALLET">Wallet</MenuItem>
+              <MenuItem value="CREDIT_NOTE">Credit Note</MenuItem>
+            </Select>
+          </FormControl>
+        </div>
+
         <div>
           <TableContainer component={Paper}>
             <Table>
               <TableHead>
                 <TableRow>
+                  <TableCell padding="checkbox">Select</TableCell>
                   <TableCell>Item Name</TableCell>
                   <TableCell>GRN No</TableCell>
                   <TableCell>Quantity</TableCell>
                   <TableCell>MRP per tablet</TableCell>
                   <TableCell>Return Quantity</TableCell>
+                  <TableCell>Refund Amount</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {details?.map((item, index) => (
-                  <TableRow key={index}>
-                    <TableCell>{item.itemName}</TableCell>
-                    <TableCell>{item.grnNo}</TableCell>
-                    <TableCell>{item.purchaseQuantity}</TableCell>
-                    <TableCell>{item.mrpPerTablet}</TableCell>
-                    <TableCell>
-                      <TextField
-                        type="number"
-                        size="small"
-                        value={getReturnValue(item.refId, item.grnId)}
-                        onChange={(e) => {
-                          handleReturnValues(
-                            e.target.value,
-                            item.refId,
-                            item.grnId,
-                          )
-                        }}
-                      />
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {details?.map((item, index) => {
+                  const refId = item.refId
+                  const returnQty = parseFloat(returnQuantities[refId] || 0)
+                  // Use ratePerUnit if available, otherwise use mrpPerTablet
+                  const rate = item.ratePerUnit || item.mrpPerTablet || 0
+                  const refundAmount = returnQty * rate
+                  const isSelected = selectedItems[refId] || returnQty > 0
+
+                  return (
+                    <TableRow
+                      key={`${refId}-${index}`}
+                      selected={isSelected}
+                      sx={{
+                        backgroundColor: isSelected
+                          ? 'rgba(25, 118, 210, 0.08)'
+                          : 'inherit',
+                      }}
+                    >
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={isSelected}
+                          onChange={() => handleItemSelect(refId)}
+                          disabled={isPending}
+                        />
+                      </TableCell>
+                      <TableCell>{item.itemName || 'N/A'}</TableCell>
+                      <TableCell>{item.grnNo || item.grnId || 'N/A'}</TableCell>
+                      <TableCell>{item.purchaseQuantity || 0}</TableCell>
+                      <TableCell>₹{rate.toFixed(2)}</TableCell>
+                      <TableCell>
+                        <TextField
+                          type="number"
+                          size="small"
+                          value={getReturnValue(refId)}
+                          onChange={(e) => {
+                            const value = e.target.value
+                            // Only allow non-negative numbers
+                            if (
+                              value === '' ||
+                              (!isNaN(value) && parseFloat(value) >= 0)
+                            ) {
+                              handleReturnValues(value, refId)
+                            }
+                          }}
+                          inputProps={{
+                            min: 0,
+                            max: item.purchaseQuantity || 0,
+                          }}
+                          disabled={isPending}
+                          helperText={`Max: ${item.purchaseQuantity || 0}`}
+                          sx={{ width: '120px' }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Typography
+                          variant="body2"
+                          color={refundAmount > 0 ? 'primary' : 'textSecondary'}
+                          fontWeight={refundAmount > 0 ? 'bold' : 'normal'}
+                        >
+                          ₹{refundAmount.toFixed(2)}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
               </TableBody>
             </Table>
-            <div className="flex justify-end">
+            <div className="flex justify-between items-center p-4 border-t">
+              <div>
+                <Typography variant="body2" color="textSecondary">
+                  Selected Items:{' '}
+                  {
+                    Object.keys(returnQuantities).filter(
+                      (refId) => parseFloat(returnQuantities[refId] || 0) > 0,
+                    ).length
+                  }
+                </Typography>
+                <Typography variant="h6" color="primary">
+                  Total Refund: ₹{totalRefundAmount.toFixed(2)}
+                </Typography>
+              </div>
               <Button
-                variant="outlined"
+                variant="contained"
                 onClick={clickSaveAndCallApi}
-                className="capitalize"
+                className="capitalize text-white"
+                disabled={isPending || !hasSelectedItems}
+                size="large"
+                color="primary"
               >
-                Save
+                {isPending ? 'Processing Refund...' : 'Process Refund'}
               </Button>
             </div>
           </TableContainer>
@@ -565,6 +920,7 @@ const PurchaseDetails = ({ details, headerDetails, type, orderId }) => {
 
 const NonPharmacyPurchaseDetails = ({ details, headerDetails, orderId }) => {
   const [selectedItems, setSelectedItems] = useState({})
+  const [refundMethod, setRefundMethod] = useState('CASH') // Default refund method
   const dispatch = useDispatch()
   const queryClient = useQueryClient()
   const user = useSelector((store) => store.user)
@@ -584,6 +940,19 @@ const NonPharmacyPurchaseDetails = ({ details, headerDetails, orderId }) => {
     (selected) => selected,
   )
 
+  // Get selected item IDs
+  const selectedItemIds = Object.keys(selectedItems).filter(
+    (id) => selectedItems[id],
+  )
+
+  // Calculate total refund amount for selected items
+  const totalRefundAmount = availableItems.reduce((sum, item) => {
+    if (selectedItems[item.itemId]) {
+      return sum + (item.totalCost || item.price || 0)
+    }
+    return sum
+  }, 0)
+
   const { mutate: returnItemsMutation, isPending: isReturnItemsPending } =
     useMutation({
       mutationFn: async (payload) => {
@@ -593,9 +962,16 @@ const NonPharmacyPurchaseDetails = ({ details, headerDetails, orderId }) => {
           queryClient.invalidateQueries({
             queryKey: ['fetchPurchaseReturnInfoData', orderId, 1],
           })
+          // Reset selected items after successful return
+          setSelectedItems({})
         } else {
-          toast.error(res, toastconfig)
+          toast.error(
+            res.message || res.error || 'Failed to return items',
+            toastconfig,
+          )
+          throw new Error(res.message || res.error || 'Failed to return items')
         }
+        return res
       },
       onMutate: (payload) => {
         toast.info('Processing return...', toastconfig)
@@ -630,20 +1006,20 @@ const NonPharmacyPurchaseDetails = ({ details, headerDetails, orderId }) => {
 
     availableItems.forEach((item) => {
       if (selectedItems[item.itemId]) {
-        const returnQuantity =
-          returnQuantities[`${item.refId}-${item.grnId}`] || 0
-        if (returnQuantity > 0 && returnQuantity <= item.purchaseQuantity) {
-          totAmount += item.totalCost * (returnQuantity / item.purchaseQuantity)
-          returnDetails.push({
-            refId: item.refId,
-            itemId: item.itemId,
-            itemName: item.itemName,
-            itemType: item.productType,
-            itemCost: item.totalCost * (returnQuantity / item.purchaseQuantity),
-            quantity: parseInt(returnQuantity),
-            grnId: item.grnId,
-          })
-        }
+        // For non-pharmacy items, return the full item (quantity = 1)
+        // If the item has a quantity field, use it; otherwise default to 1
+        const returnQuantity = item.quantity || 1
+
+        totAmount += item.totalCost || item.price || 0
+        returnDetails.push({
+          refId: item.refId || item.itemId,
+          itemId: item.itemId,
+          itemName: item.itemName,
+          itemType: item.productType || item.itemType,
+          itemCost: item.totalCost || item.price || 0,
+          quantity: returnQuantity,
+          grnId: item.grnId || null,
+        })
       }
     })
 
@@ -656,6 +1032,7 @@ const NonPharmacyPurchaseDetails = ({ details, headerDetails, orderId }) => {
         totalAmount: totAmount,
         type: headerDetails?.purchaseType || 'Consultation',
         returnDetails: returnDetails,
+        refundMethod: refundMethod, // Add refund method to payload
       }
 
       console.log('Return payload:', payload)
@@ -677,15 +1054,50 @@ const NonPharmacyPurchaseDetails = ({ details, headerDetails, orderId }) => {
       {/* Available Items */}
       <Card>
         <CardContent>
-          <Typography variant="h6" className="mb-3">
-            Available Items
-          </Typography>
+          <div className="flex justify-between items-center mb-4">
+            <Typography variant="h6">Available Items for Refund</Typography>
+            {hasSelectedItems && (
+              <Chip
+                label={`Total Refund: ₹${totalRefundAmount.toFixed(2)}`}
+                color="primary"
+                variant="outlined"
+              />
+            )}
+          </div>
+
+          {hasSelectedItems && (
+            <Alert severity="info" className="mb-4">
+              <Typography variant="body2">
+                {selectedItemIds.length} item(s) selected for refund. Total
+                amount: ₹{totalRefundAmount.toFixed(2)}
+              </Typography>
+            </Alert>
+          )}
+
+          <div className="mb-4">
+            <FormControl fullWidth size="small">
+              <InputLabel>Refund Method</InputLabel>
+              <Select
+                value={refundMethod}
+                label="Refund Method"
+                onChange={(e) => setRefundMethod(e.target.value)}
+                disabled={isReturnItemsPending}
+              >
+                <MenuItem value="CASH">Cash</MenuItem>
+                <MenuItem value="CARD">Card</MenuItem>
+                <MenuItem value="BANK_TRANSFER">Bank Transfer</MenuItem>
+                <MenuItem value="WALLET">Wallet</MenuItem>
+                <MenuItem value="CREDIT_NOTE">Credit Note</MenuItem>
+              </Select>
+            </FormControl>
+          </div>
+
           <div>
             <TableContainer component={Paper}>
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>Select</TableCell>
+                    <TableCell padding="checkbox">Select</TableCell>
                     <TableCell>Item Name</TableCell>
                     <TableCell>Type</TableCell>
                     <TableCell>Price</TableCell>
@@ -693,39 +1105,67 @@ const NonPharmacyPurchaseDetails = ({ details, headerDetails, orderId }) => {
                 </TableHead>
                 <TableBody>
                   {availableItems.length > 0 ? (
-                    availableItems.map((item, index) => (
-                      <TableRow key={index}>
-                        <TableCell>
-                          <input
-                            type="checkbox"
-                            checked={selectedItems[item.itemId] || false}
-                            onChange={() => handleItemSelect(item.itemId)}
-                            className="w-4 h-4"
-                          />
-                        </TableCell>
-                        <TableCell>{item.itemName}</TableCell>
-                        <TableCell>{item.productType}</TableCell>
-                        <TableCell>{item.totalCost}</TableCell>
-                      </TableRow>
-                    ))
+                    availableItems.map((item, index) => {
+                      const isSelected = selectedItems[item.itemId] || false
+                      return (
+                        <TableRow
+                          key={item.itemId || index}
+                          selected={isSelected}
+                          sx={{
+                            backgroundColor: isSelected
+                              ? 'rgba(25, 118, 210, 0.08)'
+                              : 'inherit',
+                          }}
+                        >
+                          <TableCell padding="checkbox">
+                            <Checkbox
+                              checked={isSelected}
+                              onChange={() => handleItemSelect(item.itemId)}
+                              disabled={isReturnItemsPending}
+                            />
+                          </TableCell>
+                          <TableCell>{item.itemName || 'N/A'}</TableCell>
+                          <TableCell>
+                            {item.productType || item.itemType || 'N/A'}
+                          </TableCell>
+                          <TableCell>
+                            ₹{item.totalCost || item.price || 0}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })
                   ) : (
                     <TableRow>
                       <TableCell colSpan={4} className="text-center py-4">
-                        No items available for return
+                        <Typography variant="body2" color="textSecondary">
+                          No items available for return
+                        </Typography>
                       </TableCell>
                     </TableRow>
                   )}
                 </TableBody>
               </Table>
               {hasSelectedItems && (
-                <div className="flex justify-end p-4">
+                <div className="flex justify-between items-center p-4 border-t">
+                  <div>
+                    <Typography variant="body2" color="textSecondary">
+                      Selected Items: {selectedItemIds.length}
+                    </Typography>
+                    <Typography variant="h6" color="primary">
+                      Total Refund: ₹{totalRefundAmount.toFixed(2)}
+                    </Typography>
+                  </div>
                   <Button
-                    variant="outlined"
+                    variant="contained"
                     onClick={handleReturn}
                     disabled={isReturnItemsPending}
-                    className="capitalize"
+                    className="capitalize text-white"
+                    size="large"
+                    color="primary"
                   >
-                    Return Selected Items
+                    {isReturnItemsPending
+                      ? 'Processing Refund...'
+                      : 'Process Refund'}
                   </Button>
                 </div>
               )}
@@ -754,16 +1194,22 @@ const NonPharmacyPurchaseDetails = ({ details, headerDetails, orderId }) => {
                 <TableBody>
                   {returnedItems.length > 0 ? (
                     returnedItems.map((item, index) => (
-                      <TableRow key={index}>
-                        <TableCell>{item.itemName}</TableCell>
-                        <TableCell>{item.productType}</TableCell>
-                        <TableCell>{item.totalCost}</TableCell>
+                      <TableRow key={item.itemId || index}>
+                        <TableCell>{item.itemName || 'N/A'}</TableCell>
+                        <TableCell>
+                          {item.productType || item.itemType || 'N/A'}
+                        </TableCell>
+                        <TableCell>
+                          ₹{item.totalCost || item.price || 0}
+                        </TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
                       <TableCell colSpan={3} className="text-center py-4">
-                        No returned items
+                        <Typography variant="body2" color="textSecondary">
+                          No returned items
+                        </Typography>
                       </TableCell>
                     </TableRow>
                   )}

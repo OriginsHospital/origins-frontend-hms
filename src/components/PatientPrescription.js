@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useRef } from 'react'
+﻿import React, { useEffect, useMemo, useState, useRef } from 'react'
 import RenderPrescriptionPharmacy from './RenderPrescriptionPharmacy'
 import dynamic from 'next/dynamic'
 
@@ -21,6 +21,102 @@ import { Close } from '@mui/icons-material'
 import { getMultipleForQuatityCalculation } from '@/constants/utils'
 import dayjs from 'dayjs'
 
+// Medicine Kit Configurations
+const CLEO_SHOT_KIT = {
+  kitName: 'CLEO SHOT',
+  kitValue: 'CLEO_SHOT_KIT',
+  medicines: [
+    { name: 'MOCELL INJ 600MG', quantity: 3 },
+    { name: 'MUCONICS 2ML', quantity: 1 },
+    { name: 'DS VIT - C 1.5 INJ', quantity: 1 },
+    { name: 'Americano MVI INJ', quantity: 1 },
+    { name: 'Cynocan 12', quantity: 1 },
+    { name: 'MAXX - TRACE', quantity: 1 },
+    { name: 'NIPRO SYRINGE 5ML', quantity: 2 },
+    { name: 'IV CANNULA-22', quantity: 1 },
+    { name: 'NS 100 ML', quantity: 1 },
+  ],
+}
+
+const NAPO_SHOT_KIT = {
+  kitName: 'NAPO SHOT',
+  kitValue: 'NAPO_SHOT_KIT',
+  medicines: [
+    { name: 'MOCELL INJ 600MG', quantity: 3 },
+    { name: 'LEVO VEN', quantity: 1 },
+    { name: 'MUCONICS 2ML', quantity: 1 },
+    { name: 'DS VIT - C 1.5', quantity: 1 },
+    { name: 'Americano MVI INJ', quantity: 1 },
+    { name: 'Cynocan 12', quantity: 1 },
+    { name: 'MAXX TRACE', quantity: 1 },
+    { name: 'NIPRO SYRINGE 5ML', quantity: 2 },
+    { name: 'IV CANNULA-22', quantity: 1 },
+    { name: 'NS 100 ML', quantity: 1 },
+  ],
+}
+
+const HYFOSY_KIT = {
+  kitName: 'HYFOSY KIT',
+  kitValue: 'HYFOSY_KIT',
+  medicines: [
+    { name: 'FOLEY CATHETER 10', quantity: 1 },
+    { name: 'LOX-2% JELLY', quantity: 1 },
+    { name: 'NIPRO SYRINGE 10ML', quantity: 1 },
+    { name: 'NS 100ML', quantity: 1 },
+    { name: 'Surgicare 6.5 Glove', quantity: 1 },
+    { name: 'BUSCOGAST INJ', quantity: 1 },
+    { name: 'NIPRO SYRINGE 2.5ML', quantity: 2 },
+    { name: 'ZADY 500 MG', quantity: 5 },
+    { name: 'DROTIN-M TAB', quantity: 3 },
+  ],
+}
+
+const FLUSH_KIT = {
+  kitName: 'FLUSH KIT',
+  kitValue: 'FLUSH_KIT',
+  medicines: [
+    { name: 'EUTRIG-HP 2000 INJ', quantity: 1 },
+    { name: 'NIPRO SYRINGE 2.5ML', quantity: 2 },
+    { name: 'DISPOVAN NEEDLE 26', quantity: 1 },
+    { name: 'IUI CATHETER', quantity: 1 },
+    { name: 'NS 100ML', quantity: 1 },
+    { name: 'Clean Care Gloves', quantity: 1 },
+  ],
+}
+
+const FLUID_ASPIRATIONS_KIT = {
+  kitName: 'FLUID ASPIRATIONS KIT',
+  kitValue: 'FLUID_ASPIRATIONS_KIT',
+  medicines: [
+    { name: 'IUI CATHETER', quantity: 1 },
+    { name: 'NIPRO SYRINGE 2.5ML', quantity: 1 },
+    { name: 'NS 100ML', quantity: 1 },
+    { name: 'Clean Care Gloves', quantity: 1 },
+  ],
+}
+
+const BIOPSY_KIT = {
+  kitName: 'BIOPSY KIT',
+  kitValue: 'BIOPSY_KIT',
+  medicines: [
+    { name: 'ENDO-PSY CATHETER', quantity: 1 },
+    { name: 'NS 100ML', quantity: 1 },
+    { name: 'Clean Care Gloves', quantity: 1 },
+    { name: 'BUSCOGAST INJ', quantity: 1 },
+    { name: 'NIPRO SYRINGE 2.5ML', quantity: 1 },
+  ],
+}
+
+// Array of all available kits
+const ALL_MEDICINE_KITS = [
+  CLEO_SHOT_KIT,
+  NAPO_SHOT_KIT,
+  HYFOSY_KIT,
+  FLUSH_KIT,
+  FLUID_ASPIRATIONS_KIT,
+  BIOPSY_KIT,
+]
+
 const JoditEditor = dynamic(() => import('jodit-react'), {
   ssr: false,
 })
@@ -31,48 +127,46 @@ function PatientPrescription({
   appointmentId,
   activeVisitAppointments,
 }) {
-  const user = useSelector(store => store.user)
-  const { billTypes } = useSelector(store => store.dropdowns)
+  const user = useSelector((store) => store.user)
+  const { billTypes } = useSelector((store) => store.dropdowns)
   const [notesValue, setNotesValue] = useState()
   const [defaultLineBillValues, setDefaultLineBillValues] = useState(null)
   const [printTemplate, setPrintTemplate] = useState(null)
   const dispatch = useDispatch()
   const editor = useRef(null)
-  const modal = useSelector(store => store.modal)
+  const modal = useSelector((store) => store.modal)
   const queryClient = useQueryClient()
   const billTypesMap = useMemo(() => {
     const map = {}
-    billTypes.map(eachBillType => {
+    billTypes.map((eachBillType) => {
       map[eachBillType.id] = eachBillType.name
       map[eachBillType.name] = eachBillType.id
     })
     return map
   }, [billTypes])
 
-  const {
-    data: lineBillsAndNotesDataForCurrentAppointment,
-    isLoading,
-  } = useQuery({
-    queryKey: ['lineBillsAndNotesForCurrentAppointment', type, appointmentId],
-    queryFn: async () => {
-      const responsejson = await getLineBillsAndNotesForAppointment(
-        user.accessToken,
-        type,
-        appointmentId,
-      )
-      if (responsejson.status == 200) {
-        return responsejson.data
-      } else {
-        throw new Error(
-          'Error occurred while fetching Line Bills and Notes for Current Appointment',
+  const { data: lineBillsAndNotesDataForCurrentAppointment, isLoading } =
+    useQuery({
+      queryKey: ['lineBillsAndNotesForCurrentAppointment', type, appointmentId],
+      queryFn: async () => {
+        const responsejson = await getLineBillsAndNotesForAppointment(
+          user.accessToken,
+          type,
+          appointmentId,
         )
-      }
-    },
-    enabled: !!appointmentId && !!type && modal.key === 'addPrescription',
-  })
+        if (responsejson.status == 200) {
+          return responsejson.data
+        } else {
+          throw new Error(
+            'Error occurred while fetching Line Bills and Notes for Current Appointment',
+          )
+        }
+      },
+      enabled: !!appointmentId && !!type && modal.key === 'addPrescription',
+    })
 
   const { mutate, isPending } = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const res = await saveLineBillsAndNotes(user.accessToken, payload)
       if (res.status === 200) {
         dispatch(closeModal())
@@ -108,12 +202,12 @@ function PatientPrescription({
     if (defaultLineBillValues) {
       const SelectedTypeIdArray = Object.keys(defaultLineBillValues)
       if (SelectedTypeIdArray.length != 0) {
-        SelectedTypeIdArray?.map(data => {
+        SelectedTypeIdArray?.map((data) => {
           const SelectedTypeValuesArray = defaultLineBillValues?.[data]
           if (SelectedTypeValuesArray?.length != 0) {
             // Filter out paid items and remove status field from each item
             const billTypeValues = SelectedTypeValuesArray.filter(
-              item => item.status !== 'PAID',
+              (item) => item.status !== 'PAID',
             ).map(({ status, ...item }) => item) // Destructure to remove status
 
             if (billTypeValues.length > 0) {
@@ -128,43 +222,200 @@ function PatientPrescription({
     }
     return billTypeStruct
   }
-  const setSelectedValues = name => selectedOptions => {
+  const setSelectedValues = (name) => (selectedOptions) => {
     const billTypeId = billTypesMap[name]
 
     // Get current paid items
     const currentPaidItems =
       defaultLineBillValues?.[billTypeId]?.filter(
-        item => item.status === 'PAID',
+        (item) => item.status === 'PAID',
       ) ?? []
 
     let copyOfDefaultLineBillValues = { ...defaultLineBillValues }
     let billTypeValues = [...currentPaidItems] // Start with paid items
 
-    // Add selected unpaid items
-    selectedOptions?.forEach(element => {
-      // Skip if it's already in paid items
-      if (!currentPaidItems.some(paid => paid.id === element.value)) {
-        const BillTypeValuesArray = allBillTypeValues[name]
-        const BillTYpeValueObject = BillTypeValuesArray.find(values => {
-          return values.id === element.value
+    // Check if any medicine kit is selected (only for Pharmacy)
+    if (name === 'Pharmacy') {
+      // Helper function to process a medicine kit
+      const processKit = (kit, kitValue, kitName) => {
+        const BillTypeValuesArray = allBillTypeValues[name] || []
+        const existingAllItems = copyOfDefaultLineBillValues[billTypeId] || []
+
+        kit.medicines.forEach((kitMedicine) => {
+          // Find the medicine in the available pharmacy items
+          const medicineInPharmacy = BillTypeValuesArray.find(
+            (item) =>
+              item.name?.toUpperCase().trim() ===
+              kitMedicine.name.toUpperCase().trim(),
+          )
+
+          if (medicineInPharmacy) {
+            // Check if medicine already exists in the prescription (both paid and unpaid)
+            const existingMedicineIndex = existingAllItems.findIndex(
+              (item) => item.id === medicineInPharmacy.id,
+            )
+
+            if (existingMedicineIndex >= 0) {
+              // Medicine already exists - update quantity if it's unpaid
+              const existingMedicine = existingAllItems[existingMedicineIndex]
+
+              // Only update if it's not paid (can't modify paid items)
+              if (existingMedicine.status !== 'PAID') {
+                const existingBillTypeValuesIndex = billTypeValues.findIndex(
+                  (item) => item.id === medicineInPharmacy.id,
+                )
+
+                if (existingBillTypeValuesIndex >= 0) {
+                  // Update quantity by adding the kit quantity
+                  billTypeValues[
+                    existingBillTypeValuesIndex
+                  ].prescribedQuantity =
+                    (billTypeValues[existingBillTypeValuesIndex]
+                      .prescribedQuantity || 0) + kitMedicine.quantity
+                } else {
+                  // Medicine exists but not in current billTypeValues (shouldn't happen, but handle it)
+                  const infoObject = defaultLineBillValues['3']?.find(
+                    (values) => values.id === medicineInPharmacy.id,
+                  )
+
+                  billTypeValues.push({
+                    id: medicineInPharmacy.id,
+                    name: medicineInPharmacy.name,
+                    amount: parseInt(medicineInPharmacy.amount, 10),
+                    prescribedQuantity:
+                      (existingMedicine.prescribedQuantity || 0) +
+                      kitMedicine.quantity,
+                    prescriptionDetails:
+                      infoObject?.prescriptionDetails ??
+                      existingMedicine.prescriptionDetails ??
+                      '',
+                    prescriptionDays:
+                      infoObject?.prescriptionDays ??
+                      existingMedicine.prescriptionDays ??
+                      1,
+                    status: 'UNPAID',
+                  })
+                }
+              }
+              // If medicine is paid, skip it (can't modify paid items)
+            } else {
+              // Add new medicine with predefined quantity
+              const infoObject = defaultLineBillValues['3']?.find(
+                (values) => values.id === medicineInPharmacy.id,
+              )
+
+              billTypeValues.push({
+                id: medicineInPharmacy.id,
+                name: medicineInPharmacy.name,
+                amount: parseInt(medicineInPharmacy.amount, 10),
+                prescribedQuantity: kitMedicine.quantity,
+                prescriptionDetails: infoObject?.prescriptionDetails ?? '',
+                prescriptionDays: infoObject?.prescriptionDays ?? 1,
+                status: 'UNPAID',
+              })
+            }
+          }
         })
+      }
 
-        // console.log(name, BillTypeValuesArray, element)
-        if (name === 'Pharmacy') {
-          const infoObject = defaultLineBillValues['3']?.find(values => {
-            return values.id === BillTYpeValueObject.id
+      // Check for all kits in selected options
+      const selectedKits = []
+      ALL_MEDICINE_KITS.forEach((kit) => {
+        const kitSelected = selectedOptions?.find(
+          (option) =>
+            option.value === kit.kitValue ||
+            option.label?.toUpperCase() === kit.kitName.toUpperCase(),
+        )
+        if (kitSelected) {
+          selectedKits.push({
+            kit,
+            kitValue: kit.kitValue,
+            kitName: kit.kitName,
+          })
+        }
+      })
+
+      // Process all selected kits
+      selectedKits.forEach(({ kit, kitValue, kitName }) => {
+        processKit(kit, kitValue, kitName)
+      })
+
+      if (selectedKits.length > 0) {
+        // Remove all kit options from selected options (they're just triggers, not actual medicines)
+        const kitValues = ALL_MEDICINE_KITS.map((k) => k.kitValue)
+        const kitNames = ALL_MEDICINE_KITS.map((k) => k.kitName.toUpperCase())
+        const filteredOptions = selectedOptions.filter(
+          (option) =>
+            !kitValues.includes(option.value) &&
+            !kitNames.includes(option.label?.toUpperCase()),
+        )
+
+        // Continue with remaining selected items (non-kit items selected along with kits)
+        filteredOptions?.forEach((element) => {
+          if (!currentPaidItems.some((paid) => paid.id === element.value)) {
+            const BillTypeValuesArray = allBillTypeValues[name]
+            const BillTYpeValueObject = BillTypeValuesArray.find((values) => {
+              return values.id === element.value
+            })
+
+            // Check if medicine is already added (from kit or previous selection)
+            const alreadyAdded = billTypeValues.some(
+              (item) => item.id === element.value,
+            )
+
+            if (!alreadyAdded) {
+              const infoObject = defaultLineBillValues['3']?.find((values) => {
+                return values.id === BillTYpeValueObject.id
+              })
+
+              billTypeValues.push({
+                id: element.value,
+                name: element.label,
+                amount: parseInt(BillTYpeValueObject.amount, 10),
+                prescribedQuantity: infoObject?.prescribedQuantity ?? 1,
+                prescriptionDetails: infoObject?.prescriptionDetails ?? '',
+                prescriptionDays: infoObject?.prescriptionDays ?? 1,
+                status: 'UNPAID',
+              })
+            }
+          }
+        })
+      } else {
+        // Normal flow for non-kit selections
+        selectedOptions?.forEach((element) => {
+          // Skip if it's already in paid items
+          if (!currentPaidItems.some((paid) => paid.id === element.value)) {
+            const BillTypeValuesArray = allBillTypeValues[name]
+            const BillTYpeValueObject = BillTypeValuesArray.find((values) => {
+              return values.id === element.value
+            })
+
+            const infoObject = defaultLineBillValues['3']?.find((values) => {
+              return values.id === BillTYpeValueObject.id
+            })
+
+            billTypeValues.push({
+              id: element.value,
+              name: element.label,
+              amount: parseInt(BillTYpeValueObject.amount, 10),
+              prescribedQuantity: infoObject?.prescribedQuantity ?? 1,
+              prescriptionDetails: infoObject?.prescriptionDetails ?? '',
+              prescriptionDays: infoObject?.prescriptionDays ?? 1,
+              status: 'UNPAID',
+            })
+          }
+        })
+      }
+    } else {
+      // Non-Pharmacy bill types
+      selectedOptions?.forEach((element) => {
+        // Skip if it's already in paid items
+        if (!currentPaidItems.some((paid) => paid.id === element.value)) {
+          const BillTypeValuesArray = allBillTypeValues[name]
+          const BillTYpeValueObject = BillTypeValuesArray.find((values) => {
+            return values.id === element.value
           })
 
-          billTypeValues.push({
-            id: element.value,
-            name: element.label,
-            amount: parseInt(BillTYpeValueObject.amount, 10),
-            prescribedQuantity: infoObject?.prescribedQuantity ?? 1,
-            prescriptionDetails: infoObject?.prescriptionDetails ?? '',
-            prescriptionDays: infoObject?.prescriptionDays ?? 1,
-            status: 'UNPAID',
-          })
-        } else {
           billTypeValues.push({
             id: element.value,
             name: element.label,
@@ -172,20 +423,20 @@ function PatientPrescription({
             status: 'UNPAID',
           })
         }
-      }
-    })
+      })
+    }
 
     copyOfDefaultLineBillValues[billTypeId] = billTypeValues
     setDefaultLineBillValues(copyOfDefaultLineBillValues)
   }
   const handleDeleteClicked = (pharmacyId, id) => {
-    setDefaultLineBillValues(prevState => {
+    setDefaultLineBillValues((prevState) => {
       if (!prevState) return {}
       const copyOfLineBillValues = { ...prevState }
       if (copyOfLineBillValues?.[pharmacyId]) {
         copyOfLineBillValues[pharmacyId] = copyOfLineBillValues[
           pharmacyId
-        ].filter(lineBill => lineBill.id !== id)
+        ].filter((lineBill) => lineBill.id !== id)
       }
       return copyOfLineBillValues
     })
@@ -198,7 +449,7 @@ function PatientPrescription({
     )
     let tempLineBillValues = copyOfDefaultLineBillValues?.[
       billTypeIdPrescription
-    ]?.map(lineBillValues => {
+    ]?.map((lineBillValues) => {
       if (lineBillValues.id == prescriptionId) {
         lineBillValues.prescriptionDays = days
         lineBillValues.prescribedQuantity =
@@ -219,7 +470,7 @@ function PatientPrescription({
     )
     let tempLineBillValues = copyOfDefaultLineBillValues?.[
       billTypeIdPrescription
-    ]?.map(lineBillValues => {
+    ]?.map((lineBillValues) => {
       if (lineBillValues.id == prescriptionId) {
         lineBillValues.prescriptionDetails = medIntake
         lineBillValues.prescribedQuantity =
@@ -237,34 +488,37 @@ function PatientPrescription({
     let tempdefaultData = {}
     if (lineBillsAndNotesDataForCurrentAppointment) {
       const selectedData = ['lineBillsData', 'Notesdata']
-      lineBillsAndNotesDataForCurrentAppointment[selectedData[0]].map(data => {
-        const billTypeId = data['billType']?.id
-        const updatedArray = data?.billTypeValues
-          ?.map(
-            ({
-              id,
-              name,
-              amount,
-              prescribedQuantity,
-              prescriptionDetails,
-              prescriptionDays,
-              status,
-              isSpouse,
-            }) => ({
-              id,
-              name,
-              amount,
-              prescribedQuantity: billTypeId === 3 ? prescribedQuantity : 1,
-              prescriptionDetails: billTypeId === 3 ? prescriptionDetails : '',
-              prescriptionDays:
-                billTypeId === 3 && prescriptionDays ? prescriptionDays : 1,
-              status,
-              isSpouse,
-            }),
-          )
-          .filter(item => item.isSpouse === 0)
-        tempdefaultData[data.billType.id] = updatedArray
-      })
+      lineBillsAndNotesDataForCurrentAppointment[selectedData[0]].map(
+        (data) => {
+          const billTypeId = data['billType']?.id
+          const updatedArray = data?.billTypeValues
+            ?.map(
+              ({
+                id,
+                name,
+                amount,
+                prescribedQuantity,
+                prescriptionDetails,
+                prescriptionDays,
+                status,
+                isSpouse,
+              }) => ({
+                id,
+                name,
+                amount,
+                prescribedQuantity: billTypeId === 3 ? prescribedQuantity : 1,
+                prescriptionDetails:
+                  billTypeId === 3 ? prescriptionDetails : '',
+                prescriptionDays:
+                  billTypeId === 3 && prescriptionDays ? prescriptionDays : 1,
+                status,
+                isSpouse,
+              }),
+            )
+            .filter((item) => item.isSpouse === 0)
+          tempdefaultData[data.billType.id] = updatedArray
+        },
+      )
       const notesText =
         lineBillsAndNotesDataForCurrentAppointment.notesData?.notes
       setNotesValue(notesText ? notesText : '')
@@ -312,12 +566,12 @@ function PatientPrescription({
         // Process line bills
         let tempDefaultData = {}
         if (data.lineBillsData) {
-          data.lineBillsData.forEach(billTypeData => {
+          data.lineBillsData.forEach((billTypeData) => {
             if (billTypeData.billType && billTypeData.billTypeValues) {
               const billTypeId = billTypeData.billType.id
               const updatedArray = billTypeData.billTypeValues
-                .filter(item => !item.isSpouse) // Filter out spouse items
-                .map(item => ({
+                .filter((item) => !item.isSpouse) // Filter out spouse items
+                .map((item) => ({
                   id: item.id,
                   name: item.name,
                   amount: parseInt(item.amount, 10),
@@ -341,7 +595,7 @@ function PatientPrescription({
         console.log('Processed line bills:', tempDefaultData)
 
         // Update the state
-        setDefaultLineBillValues(prev => {
+        setDefaultLineBillValues((prev) => {
           const newState = { ...tempDefaultData }
           console.log('New state:', newState)
           return newState
@@ -396,14 +650,14 @@ function PatientPrescription({
             <div className="flex flex-col gap-2">
               <span className="font-semibold">Previous Prescriptions</span>
               <Select
-                options={activeVisitAppointments.map(appointment => ({
+                options={activeVisitAppointments.map((appointment) => ({
                   value: `${appointment.type}-${appointment.appointmentId}`,
                   label: `${dayjs(appointment.appointmentDate).format(
                     'DD-MM-YYYY',
                   )} | ${appointment.type} | ${appointment.doctorName}`,
                   appointment: appointment,
                 }))}
-                onChange={selected => {
+                onChange={(selected) => {
                   if (
                     selected &&
                     confirm('Are you sure you want to copy this prescription?')
@@ -430,19 +684,30 @@ function PatientPrescription({
 
           {/* Bill Types Section */}
           {allBillTypeValues ? (
-            billTypes.map(billType => {
+            billTypes.map((billType) => {
               const defaultValues =
-                defaultLineBillValues?.[billType.id]?.map(billData => ({
+                defaultLineBillValues?.[billType.id]?.map((billData) => ({
                   value: billData.id,
                   label: billData.name,
                   status: billData.status,
                 })) ?? []
 
-              const selectOptions =
-                allBillTypeValues?.[billType.name]?.map(data => ({
+              // Add medicine kits as special options for Pharmacy
+              let selectOptions =
+                allBillTypeValues?.[billType.name]?.map((data) => ({
                   value: data.id,
                   label: data.name,
                 })) ?? []
+
+              // Add all medicine kit options for Pharmacy
+              if (billType.name === 'Pharmacy') {
+                const kitOptions = ALL_MEDICINE_KITS.map((kit) => ({
+                  value: kit.kitValue,
+                  label: kit.kitName,
+                  isKit: true, // Flag to identify it's a kit
+                }))
+                selectOptions = [...kitOptions, ...selectOptions]
+              }
               return (
                 <React.Fragment key={`${billType.name}-multiselect`}>
                   <p className="font-semibold">{billType.name}</p>
@@ -450,7 +715,7 @@ function PatientPrescription({
                   {/* Paid Items Display */}
                   <div className="flex flex-wrap gap-2">
                     {defaultValues.map(
-                      item =>
+                      (item) =>
                         item.status === 'PAID' && (
                           <span
                             key={`paid-${item.value}`}
@@ -467,7 +732,9 @@ function PatientPrescription({
                   <Select
                     isMulti
                     name={billType.name}
-                    value={defaultValues.filter(item => item.status !== 'PAID')}
+                    value={defaultValues.filter(
+                      (item) => item.status !== 'PAID',
+                    )}
                     options={selectOptions}
                     onChange={setSelectedValues(billType.name)}
                     classNamePrefix={`select-${billType.name.toLowerCase()}`}
@@ -475,7 +742,7 @@ function PatientPrescription({
                   {billType.name === 'Pharmacy' && (
                     <div className="h-48 border flex flex-col items-center p-2 overflow-y-auto gap-2 bg-primary/10 rounded-lg">
                       {defaultLineBillValues?.['3']?.length > 0 ? (
-                        defaultLineBillValues['3'].map(prescription =>
+                        defaultLineBillValues['3'].map((prescription) =>
                           prescription.id && prescription.status !== 'PAID' ? (
                             <RenderPrescriptionPharmacy
                               key={`prescription-${prescription.id}`}
@@ -505,7 +772,7 @@ function PatientPrescription({
                   {billType.name === 'Pharmacy' && (
                     <div className=" border flex flex-col  p-2 overflow-y-auto gap-2 rounded-lg">
                       {defaultLineBillValues?.['3']?.length > 0 ? (
-                        defaultLineBillValues['3'].map(prescription =>
+                        defaultLineBillValues['3'].map((prescription) =>
                           prescription.id && prescription.status == 'PAID' ? (
                             <div
                               className="w-full border p-2 flex items-center justify-between rounded bg-gray-100"

@@ -725,6 +725,7 @@ function PatientTrackerReports() {
   const [automatedSummaryToDate, setAutomatedSummaryToDate] = useState(dayjs()) // Set to current date
   const [automatedSummaryBranch, setAutomatedSummaryBranch] = useState('ALL')
   const [automatedSummaryReferral, setAutomatedSummaryReferral] = useState('')
+  const [automatedSummarySearch, setAutomatedSummarySearch] = useState('')
 
   // Summary Graph data
   const [graphSummaryData, setGraphSummaryData] = useState([])
@@ -1667,110 +1668,301 @@ function PatientTrackerReports() {
             setAutomatedSummaryData(sortedData)
 
             // Fetch package data for each patient (via visits) - fetch in background
-            const packageDataMap = {}
+            const allPackageDataMap = {} // Accumulate data across all batches
 
             // Process patients in smaller batches to avoid blocking
-            const patientsToProcess = sortedData.slice(0, 100) // Increased limit
+            const patientsToProcess = sortedData.slice(0, 300) // Process more patients since we use activeVisitId directly
 
-            // Process in batches of 10 to avoid overwhelming the API
-            const batchSize = 10
+            // Process in batches of 15 to avoid overwhelming the API
+            const batchSize = 15
             for (let i = 0; i < patientsToProcess.length; i += batchSize) {
               const batch = patientsToProcess.slice(i, i + batchSize)
+              const batchPackageDataMap = {} // Package data for this batch only
 
               await Promise.all(
                 batch.map(async (patient) => {
-                  const patientId =
-                    patient.id || patient.patientId || patient.PatientId
+                  // Use patient.id (database ID) as primary key for consistency
+                  const patientId = patient.id
+                  const patientDisplayId =
+                    patient.patientId || patient.PatientId
+
+                  // Debug: Log patient ID structure (first patient only)
+                  if (!window._loggedPatientIdStructure && patientId) {
+                    window._loggedPatientIdStructure = true
+                    console.log('[Patient ID Structure]', {
+                      id: patientId,
+                      idType: typeof patientId,
+                      patientId: patientDisplayId,
+                      patientIdType: typeof patientDisplayId,
+                    })
+                  }
+
                   if (
                     !patientId ||
                     patientId === 'null' ||
-                    patientId === null
+                    patientId === null ||
+                    patientId === undefined
                   ) {
                     return
                   }
 
-                  try {
-                    // Get visits for this patient
+                  // First, try to use activeVisitId directly from patient data (most efficient)
+                  const activeVisitId =
+                    patient.activeVisitId ||
+                    patient.ActiveVisitId ||
+                    patient.activeVisit?.id
 
-                    const visitsResponse = await getVisitsByPatientId(
-                      userDetails.accessToken,
-                      patientId,
-                    )
-                    let visits = []
-                    if (visitsResponse && visitsResponse.status === 200) {
-                      if (Array.isArray(visitsResponse.data)) {
-                        visits = visitsResponse.data
-                      } else if (
-                        visitsResponse.data?.data &&
-                        Array.isArray(visitsResponse.data.data)
-                      ) {
-                        visits = visitsResponse.data.data
-                      }
-                    }
+                  let visitIdsToCheck = []
 
-                    // Get package data from the latest visit
-                    if (visits.length > 0) {
-                      const reversedVisits = [...visits].reverse()
-                      for (const visit of reversedVisits) {
-                        const visitId =
-                          visit.id || visit.visitId || visit.VisitId
-                        if (!visitId) continue
-
-                        try {
-                          const packageResponse = await getPackageData(
-                            userDetails.accessToken,
-                            visitId,
-                          )
-                          let pkgData = null
-                          if (
-                            packageResponse &&
-                            packageResponse.status === 200
-                          ) {
-                            pkgData = packageResponse.data || packageResponse
-                          } else if (packageResponse && packageResponse.data) {
-                            pkgData = packageResponse.data
-                          } else if (packageResponse) {
-                            pkgData = packageResponse
-                          }
-
-                          // Check if package data exists
-                          if (
-                            pkgData &&
-                            (pkgData.doctorSuggestedPackage ||
-                              pkgData.marketingPackage ||
-                              pkgData.doctorsPackage ||
-                              pkgData.doctorPackage ||
-                              pkgData.registrationAmount)
-                          ) {
-                            packageDataMap[patientId] = {
-                              doctorsPackage:
-                                pkgData.doctorSuggestedPackage ||
-                                pkgData.doctorsPackage ||
-                                pkgData.doctorPackage ||
-                                0,
-                              marketingPackage: pkgData.marketingPackage || 0,
-                              registrationAmount:
-                                pkgData.registrationAmount || 0,
-                            }
-                            break // Use the first package data found
-                          }
-                        } catch (err) {
-                          // Continue to next visit if package fetch fails
+                  if (
+                    activeVisitId &&
+                    activeVisitId !== 'null' &&
+                    activeVisitId !== null &&
+                    activeVisitId !== undefined
+                  ) {
+                    // Use active visit directly
+                    visitIdsToCheck = [activeVisitId]
+                  } else {
+                    // Fallback: fetch all visits and prioritize active ones
+                    try {
+                      const visitsResponse = await getVisitsByPatientId(
+                        userDetails.accessToken,
+                        patientId,
+                      )
+                      let visits = []
+                      if (visitsResponse && visitsResponse.status === 200) {
+                        if (Array.isArray(visitsResponse.data)) {
+                          visits = visitsResponse.data
+                        } else if (
+                          visitsResponse.data?.data &&
+                          Array.isArray(visitsResponse.data.data)
+                        ) {
+                          visits = visitsResponse.data.data
                         }
                       }
+
+                      if (visits.length > 0) {
+                        // Separate active and inactive visits
+                        const activeVisits = visits.filter(
+                          (v) =>
+                            v.isActive === 1 ||
+                            v.isActive === true ||
+                            v.isActive === '1',
+                        )
+                        const inactiveVisits = visits.filter(
+                          (v) =>
+                            !(
+                              v.isActive === 1 ||
+                              v.isActive === true ||
+                              v.isActive === '1'
+                            ),
+                        )
+
+                        // Sort inactive visits by date (newest first) as fallback
+                        const sortedInactiveVisits = [...inactiveVisits].sort(
+                          (a, b) => {
+                            const dateA = dayjs(
+                              a.createdAt ||
+                                a.CreatedAt ||
+                                a.visitDate ||
+                                a.date ||
+                                0,
+                            )
+                            const dateB = dayjs(
+                              b.createdAt ||
+                                b.CreatedAt ||
+                                b.visitDate ||
+                                b.date ||
+                                0,
+                            )
+                            return dateB.isAfter(dateA) ? 1 : -1
+                          },
+                        )
+
+                        // Build visit IDs list: active first, then inactive sorted by date
+                        visitIdsToCheck = [
+                          ...activeVisits
+                            .map((v) => v.id || v.visitId || v.VisitId)
+                            .filter(Boolean),
+                          ...sortedInactiveVisits
+                            .map((v) => v.id || v.visitId || v.VisitId)
+                            .filter(Boolean),
+                        ]
+                      }
+                    } catch (err) {
+                      console.error(
+                        `Error fetching visits for patient ${patientId}:`,
+                        err,
+                      )
+                      return
                     }
-                  } catch (err) {
-                    // Continue to next patient if visit fetch fails
+                  }
+
+                  // Try to fetch package data from visits
+                  for (const visitId of visitIdsToCheck) {
+                    if (
+                      !visitId ||
+                      visitId === 'null' ||
+                      visitId === null ||
+                      visitId === undefined
+                    )
+                      continue
+
+                    try {
+                      const packageResponse = await getPackageData(
+                        userDetails.accessToken,
+                        visitId,
+                      )
+
+                      // Handle different response structures
+                      let pkgData = null
+                      if (packageResponse) {
+                        if (
+                          packageResponse.status === 200 &&
+                          packageResponse.data
+                        ) {
+                          pkgData = packageResponse.data
+                        } else if (packageResponse.data) {
+                          pkgData = packageResponse.data
+                        } else if (packageResponse.status === 200) {
+                          // Response might be the data directly
+                          pkgData = packageResponse
+                        } else {
+                          pkgData = packageResponse
+                        }
+                      }
+
+                      // Check if package data exists and is a valid object
+                      if (
+                        pkgData &&
+                        typeof pkgData === 'object' &&
+                        !Array.isArray(pkgData) &&
+                        (pkgData.doctorSuggestedPackage !== undefined ||
+                          pkgData.marketingPackage !== undefined ||
+                          pkgData.registrationAmount !== undefined ||
+                          pkgData.doctorsPackage !== undefined ||
+                          pkgData.doctorPackage !== undefined)
+                      ) {
+                        // Extract package values - handle null, undefined, and 0 values
+                        const doctorSuggestedPkg =
+                          pkgData.doctorSuggestedPackage !== null &&
+                          pkgData.doctorSuggestedPackage !== undefined
+                            ? pkgData.doctorSuggestedPackage
+                            : pkgData.doctorsPackage !== null &&
+                                pkgData.doctorsPackage !== undefined
+                              ? pkgData.doctorsPackage
+                              : pkgData.doctorPackage !== null &&
+                                  pkgData.doctorPackage !== undefined
+                                ? pkgData.doctorPackage
+                                : 0
+
+                        const marketingPkg =
+                          pkgData.marketingPackage !== null &&
+                          pkgData.marketingPackage !== undefined
+                            ? pkgData.marketingPackage
+                            : 0
+
+                        const registrationAmt =
+                          pkgData.registrationAmount !== null &&
+                          pkgData.registrationAmount !== undefined
+                            ? pkgData.registrationAmount
+                            : 0
+
+                        // Parse and store package data (store even if 0, as it confirms package exists)
+                        const packageData = {
+                          doctorsPackage:
+                            doctorSuggestedPkg !== null &&
+                            doctorSuggestedPkg !== undefined &&
+                            !isNaN(parseFloat(doctorSuggestedPkg))
+                              ? parseFloat(doctorSuggestedPkg)
+                              : 0,
+                          marketingPackage:
+                            marketingPkg !== null &&
+                            marketingPkg !== undefined &&
+                            !isNaN(parseFloat(marketingPkg))
+                              ? parseFloat(marketingPkg)
+                              : 0,
+                          registrationAmount:
+                            registrationAmt !== null &&
+                            registrationAmt !== undefined &&
+                            !isNaN(parseFloat(registrationAmt))
+                              ? parseFloat(registrationAmt)
+                              : 0,
+                        }
+
+                        // Store with patient.id as primary key (in batch map)
+                        // Convert to string for consistent key matching (object keys are strings)
+                        const patientIdKey = String(patientId)
+                        batchPackageDataMap[patientIdKey] = packageData
+
+                        // Also store with number key for compatibility
+                        batchPackageDataMap[Number(patientId)] = packageData
+
+                        // Also store with patientDisplayId if different (for fallback lookup)
+                        if (
+                          patientDisplayId &&
+                          patientDisplayId !== patientId
+                        ) {
+                          batchPackageDataMap[String(patientDisplayId)] =
+                            packageData
+                          batchPackageDataMap[patientDisplayId] = packageData
+                        }
+
+                        // Debug log for successful package fetch (uncomment for debugging)
+                        // console.log(
+                        //   `[Package Fetch] Patient ID: ${patientId}, Visit ID: ${visitId}`,
+                        //   {
+                        //     doctorSuggestedPkg: packageData.doctorsPackage,
+                        //     marketingPkg: packageData.marketingPackage,
+                        //   },
+                        // )
+
+                        break // Use the first valid package data found
+                      }
+                    } catch (err) {
+                      // Continue to next visit if package fetch fails
+                      console.error(
+                        `Error fetching package for visit ${visitId}:`,
+                        err,
+                      )
+                    }
                   }
                 }),
               )
 
+              // Accumulate batch data into the main map
+              Object.assign(allPackageDataMap, batchPackageDataMap)
+
               // Update state after each batch to show progress (merge with existing data)
-              setPatientPackageData((prev) => ({ ...prev, ...packageDataMap }))
+              setPatientPackageData((prev) => {
+                const merged = { ...prev, ...batchPackageDataMap }
+                // Debug log (uncomment for debugging):
+                // console.log(
+                //   `[Package State] Batch ${Math.floor(i / batchSize) + 1}: Added ${Object.keys(batchPackageDataMap).length} patients`,
+                // )
+                return merged
+              })
             }
 
-            // Final update
-            setPatientPackageData(packageDataMap)
+            // Final update with all accumulated data
+            setPatientPackageData((prev) => {
+              const final = { ...prev, ...allPackageDataMap }
+              console.log(
+                `[Package Data Loaded] Total patients with package data: ${Object.keys(final).length}`,
+              )
+              // Debug: Show sample of stored keys and values
+              const sampleEntries = Object.entries(final).slice(0, 3)
+              console.log(
+                '[Package Data Sample]',
+                sampleEntries.map(([key, value]) => ({
+                  key,
+                  keyType: typeof key,
+                  doctorsPackage: value.doctorsPackage,
+                  marketingPackage: value.marketingPackage,
+                })),
+              )
+              return final
+            })
           } else {
             setAutomatedSummaryData([])
             setPatientPackageData({})
@@ -2389,19 +2581,24 @@ function PatientTrackerReports() {
         headerAlign: 'center',
         align: 'right',
         renderCell: (params) => {
+          // Show '-' only if value is null, undefined, or explicitly '-'
+          // Show 0 if value is 0 (package exists but value is 0)
           if (
-            params.value === '-' ||
             params.value === null ||
-            params.value === undefined
+            params.value === undefined ||
+            params.value === '-'
           )
             return '-'
           const numValue =
             typeof params.value === 'number'
               ? params.value
               : parseFloat(params.value)
-          return isNaN(numValue) || numValue === 0
+          // Show the number even if it's 0, as it indicates package exists
+          return isNaN(numValue)
             ? '-'
-            : numValue.toLocaleString('en-IN')
+            : numValue === 0
+              ? '0'
+              : numValue.toLocaleString('en-IN')
         },
       },
       {
@@ -2411,19 +2608,24 @@ function PatientTrackerReports() {
         headerAlign: 'center',
         align: 'right',
         renderCell: (params) => {
+          // Show '-' only if value is null, undefined, or explicitly '-'
+          // Show 0 if value is 0 (package exists but value is 0)
           if (
-            params.value === '-' ||
             params.value === null ||
-            params.value === undefined
+            params.value === undefined ||
+            params.value === '-'
           )
             return '-'
           const numValue =
             typeof params.value === 'number'
               ? params.value
               : parseFloat(params.value)
-          return isNaN(numValue) || numValue === 0
+          // Show the number even if it's 0, as it indicates package exists
+          return isNaN(numValue)
             ? '-'
-            : numValue.toLocaleString('en-IN')
+            : numValue === 0
+              ? '0'
+              : numValue.toLocaleString('en-IN')
         },
       },
       {
@@ -2747,6 +2949,69 @@ function PatientTrackerReports() {
       })
     }
 
+    // Filter by search query
+    if (automatedSummarySearch && automatedSummarySearch.trim()) {
+      const searchQuery = automatedSummarySearch.trim().toLowerCase()
+      filteredData = filteredData.filter((patient) => {
+        // Search in patientId
+        const patientId = (patient.patientId || patient.PatientId || '')
+          .toString()
+          .toLowerCase()
+        if (patientId.includes(searchQuery)) return true
+
+        // Search in patient name
+        const patientName = (
+          patient.patientName ||
+          patient.PatientName ||
+          patient.name ||
+          patient.Name ||
+          `${patient.firstName || ''} ${patient.lastName || ''}`.trim() ||
+          ''
+        )
+          .toString()
+          .toLowerCase()
+        if (patientName.includes(searchQuery)) return true
+
+        // Search in mobile number
+        const mobileNumber = (
+          patient.mobileNumber ||
+          patient.MobileNumber ||
+          patient.mobile ||
+          patient.Mobile ||
+          ''
+        )
+          .toString()
+          .toLowerCase()
+        if (mobileNumber.includes(searchQuery)) return true
+
+        // Search in referral name
+        const referralName = (
+          patient.referralName ||
+          patient.ReferralName ||
+          ''
+        )
+          .toString()
+          .toLowerCase()
+        if (referralName.includes(searchQuery)) return true
+
+        // Search in branch
+        const branch = (
+          patient.branch ||
+          patient.Branch ||
+          patient.branchName ||
+          patient.BranchName ||
+          patient.branchCode ||
+          patient.BranchCode ||
+          ''
+        )
+          .toString()
+          .toLowerCase()
+        if (branch.includes(searchQuery)) return true
+
+        return false
+      })
+    }
+
     // Sort by date ascending
     filteredData = [...filteredData].sort((a, b) => {
       const dateA = dayjs(
@@ -2908,8 +3173,19 @@ function PatientTrackerReports() {
         dayjs().format('YYYY-MM-DD')
 
       // Calculate registration amount first (needed for cycle status)
-      const patientId = patient.id || patient.patientId || patient.PatientId
-      const pkgData = patientId ? patientPackageData[patientId] : null
+      // Use patient.id (database ID) as primary key, with fallback to patientId
+      // Convert to string for consistent key matching (object keys are strings)
+      const patientDbId = patient.id ? String(patient.id) : null
+      const patientDisplayId = patient.patientId || patient.PatientId
+      const pkgData = patientDbId
+        ? patientPackageData[patientDbId] ||
+          patientPackageData[Number(patientDbId)] ||
+          (patientDisplayId
+            ? patientPackageData[String(patientDisplayId)] ||
+              patientPackageData[patientDisplayId] ||
+              null
+            : null)
+        : null
       let calculatedRegistrationAmount = 0
       if (pkgData && pkgData.registrationAmount) {
         const value = pkgData.registrationAmount
@@ -2949,52 +3225,144 @@ function PatientTrackerReports() {
         cycleStatus: cycleStatusValue,
         stageOfCycle: patient.stageOfCycle || patient.StageOfCycle || '-',
         doctorsPackage: (() => {
-          const patientId = patient.id || patient.patientId || patient.PatientId
-          // First try to get from fetched package data
-          const pkgData = patientId ? patientPackageData[patientId] : null
-          if (pkgData && pkgData.doctorsPackage) {
-            const value = pkgData.doctorsPackage
-            return value && value !== 0 ? parseFloat(value) : 0
+          // Use patient.id (database ID) as primary key, with fallback to patientId
+          const patientDbId = patient.id
+          const patientDisplayId = patient.patientId || patient.PatientId
+
+          if (!patientDbId) return 0
+
+          // Try multiple key formats for lookup
+          const possibleKeys = [
+            String(patientDbId), // "1685"
+            Number(patientDbId), // 1685
+            patientDbId, // Original format
+          ]
+
+          if (patientDisplayId && patientDisplayId !== patientDbId) {
+            possibleKeys.push(String(patientDisplayId), patientDisplayId)
           }
-          // Fallback to patient data fields
+
+          // First priority: Get from fetched package data (from Patient Package tab)
+          let pkgData = null
+          for (const key of possibleKeys) {
+            if (patientPackageData[key]) {
+              pkgData = patientPackageData[key]
+              break
+            }
+          }
+
+          // Debug: Log lookup attempts (first 3 patients only to avoid spam)
+          if (Object.keys(patientPackageData).length > 0) {
+            const debugKey = `debug_doc_${patientDbId}`
+            if (
+              !window[debugKey] &&
+              Object.keys(window).filter((k) => k.startsWith('debug_doc_'))
+                .length < 3
+            ) {
+              window[debugKey] = true
+              console.log(
+                `[Package Lookup - Doctors] Patient ID: ${patientDbId} (${patient.patientName || 'Unknown'})`,
+                {
+                  found: !!pkgData,
+                  triedKeys: possibleKeys,
+                  sampleKeys: Object.keys(patientPackageData).slice(0, 5),
+                  result: pkgData
+                    ? { doctorsPackage: pkgData.doctorsPackage }
+                    : 'NOT FOUND',
+                },
+              )
+            }
+          }
+
+          if (
+            pkgData &&
+            pkgData.doctorsPackage !== undefined &&
+            pkgData.doctorsPackage !== null
+          ) {
+            const value = parseFloat(pkgData.doctorsPackage)
+            return !isNaN(value) ? value : 0
+          }
+
+          // Fallback to patient data fields (if package data not available)
           const doctorsPkg =
             patient.doctorSuggestedPackage ||
             patient.doctorsPackage ||
             patient.DoctorSuggestedPackage ||
             patient.DoctorsPackage ||
             patient.package?.doctorSuggestedPackage ||
-            patient.package?.doctorsPackage ||
-            0
-          if (doctorsPkg && doctorsPkg !== '-' && doctorsPkg !== 0) {
-            return typeof doctorsPkg === 'number'
-              ? doctorsPkg
-              : typeof doctorsPkg === 'string' && !isNaN(parseFloat(doctorsPkg))
-                ? parseFloat(doctorsPkg)
-                : 0
+            patient.package?.doctorsPackage
+
+          if (
+            doctorsPkg !== undefined &&
+            doctorsPkg !== null &&
+            doctorsPkg !== '-'
+          ) {
+            const numValue =
+              typeof doctorsPkg === 'number'
+                ? doctorsPkg
+                : typeof doctorsPkg === 'string' &&
+                    !isNaN(parseFloat(doctorsPkg))
+                  ? parseFloat(doctorsPkg)
+                  : 0
+            return !isNaN(numValue) ? numValue : 0
           }
           return 0
         })(),
         marketingPackage: (() => {
-          const patientId = patient.id || patient.patientId || patient.PatientId
-          // First try to get from fetched package data
-          const pkgData = patientId ? patientPackageData[patientId] : null
-          if (pkgData && pkgData.marketingPackage) {
-            const value = pkgData.marketingPackage
-            return value && value !== 0 ? parseFloat(value) : 0
+          // Use patient.id (database ID) as primary key, with fallback to patientId
+          const patientDbId = patient.id
+          const patientDisplayId = patient.patientId || patient.PatientId
+
+          if (!patientDbId) return 0
+
+          // Try multiple key formats for lookup
+          const possibleKeys = [
+            String(patientDbId), // "1685"
+            Number(patientDbId), // 1685
+            patientDbId, // Original format
+          ]
+
+          if (patientDisplayId && patientDisplayId !== patientDbId) {
+            possibleKeys.push(String(patientDisplayId), patientDisplayId)
           }
-          // Fallback to patient data fields
+
+          // First priority: Get from fetched package data (from Patient Package tab)
+          let pkgData = null
+          for (const key of possibleKeys) {
+            if (patientPackageData[key]) {
+              pkgData = patientPackageData[key]
+              break
+            }
+          }
+
+          if (
+            pkgData &&
+            pkgData.marketingPackage !== undefined &&
+            pkgData.marketingPackage !== null
+          ) {
+            const value = parseFloat(pkgData.marketingPackage)
+            return !isNaN(value) ? value : 0
+          }
+
+          // Fallback to patient data fields (if package data not available)
           const marketingPkg =
             patient.marketingPackage ||
             patient.MarketingPackage ||
-            patient.package?.marketingPackage ||
-            0
-          if (marketingPkg && marketingPkg !== '-' && marketingPkg !== 0) {
-            return typeof marketingPkg === 'number'
-              ? marketingPkg
-              : typeof marketingPkg === 'string' &&
-                  !isNaN(parseFloat(marketingPkg))
-                ? parseFloat(marketingPkg)
-                : 0
+            patient.package?.marketingPackage
+
+          if (
+            marketingPkg !== undefined &&
+            marketingPkg !== null &&
+            marketingPkg !== '-'
+          ) {
+            const numValue =
+              typeof marketingPkg === 'number'
+                ? marketingPkg
+                : typeof marketingPkg === 'string' &&
+                    !isNaN(parseFloat(marketingPkg))
+                  ? parseFloat(marketingPkg)
+                  : 0
+            return !isNaN(numValue) ? numValue : 0
           }
           return 0
         })(),
@@ -3027,6 +3395,7 @@ function PatientTrackerReports() {
     automatedSummaryToDate,
     automatedSummaryBranch,
     automatedSummaryReferral,
+    automatedSummarySearch,
     patientPackageData,
   ])
 
@@ -4022,7 +4391,7 @@ function PatientTrackerReports() {
               sx={{
                 mb: 2,
                 display: 'flex',
-                gap: 2,
+                gap: 1.5,
                 alignItems: 'center',
                 flexWrap: 'wrap',
               }}
@@ -4036,7 +4405,7 @@ function PatientTrackerReports() {
                   slotProps={{
                     textField: {
                       size: 'small',
-                      sx: { width: 180 },
+                      sx: { width: 160 },
                     },
                   }}
                 />
@@ -4048,12 +4417,12 @@ function PatientTrackerReports() {
                   slotProps={{
                     textField: {
                       size: 'small',
-                      sx: { width: 180 },
+                      sx: { width: 160 },
                     },
                   }}
                 />
               </LocalizationProvider>
-              <FormControl sx={{ width: 150 }} size="small">
+              <FormControl sx={{ width: 130 }} size="small">
                 <InputLabel>Branch</InputLabel>
                 <Select
                   value={automatedSummaryBranch}
@@ -4067,7 +4436,7 @@ function PatientTrackerReports() {
                   ))}
                 </Select>
               </FormControl>
-              <FormControl sx={{ width: 200 }} size="small">
+              <FormControl sx={{ width: 180 }} size="small">
                 <InputLabel>Referral</InputLabel>
                 <Select
                   value={automatedSummaryReferral}
@@ -4081,6 +4450,33 @@ function PatientTrackerReports() {
                   ))}
                 </Select>
               </FormControl>
+              <TextField
+                size="small"
+                placeholder="Search by ID, Name, Mobile..."
+                value={automatedSummarySearch}
+                onChange={(e) => setAutomatedSummarySearch(e.target.value)}
+                InputProps={{
+                  startAdornment: (
+                    <SearchIcon
+                      sx={{ color: 'text.secondary', mr: 1, fontSize: 20 }}
+                    />
+                  ),
+                }}
+                sx={{
+                  width: 250,
+                  '& .MuiOutlinedInput-root': {
+                    '& fieldset': {
+                      borderColor: 'divider',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: 'primary.main',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: 'primary.main',
+                    },
+                  },
+                }}
+              />
             </Box>
 
             {/* Data Grid Table */}
