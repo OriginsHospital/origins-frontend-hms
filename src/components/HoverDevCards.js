@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import React, { useMemo } from 'react'
+import { useSelector } from 'react-redux'
 import { FiUser, FiUsers } from 'react-icons/fi'
 import { FaUserDoctor } from 'react-icons/fa6'
 import { GiMedicines } from 'react-icons/gi'
@@ -16,7 +17,38 @@ import { ACCESS_TYPES } from '@/constants/constants'
 import { withPermission } from './withPermission'
 import { FaTasks } from 'react-icons/fa'
 import { SlPeople } from 'react-icons/sl'
+
+// Helper function to check if user has access to see nav bar modules in dashboard
+const hasDashboardNavAccess = (userEmail) => {
+  if (!userEmail) return false
+  return userEmail.toLowerCase() === 'nikhilsuvva77@gmail.com'
+}
+
+// Get all navigation paths from SideNav (paths that appear in the sidebar)
+const getNavBarPaths = () => {
+  return [
+    '/appointments',
+    '/patient',
+    '/doctor',
+    '/pharmacy/medicinestages',
+    '/laboratory',
+    '/scan',
+    '/clinical',
+    '/admin',
+    '/reports',
+    '/indent',
+    '/ipmodule',
+    '/inbox',
+    '/ticketing',
+    '/embryology',
+  ]
+}
+
 const HoverDevCards = () => {
+  const user = useSelector((store) => store.user)
+  const userEmail = user?.email || user?.userDetails?.email || ''
+  const navBarPaths = getNavBarPaths()
+  const hasAccess = hasDashboardNavAccess(userEmail)
   const routes = useMemo(
     () => [
       {
@@ -227,10 +259,37 @@ const HoverDevCards = () => {
     ],
     [],
   )
+
+  // Filter routes: hide modules that are in navigation bar, except for authorized user
+  const filteredRoutes = useMemo(() => {
+    if (hasAccess) {
+      // Show all routes for authorized user
+      return routes
+    }
+    // For other users, filter out routes that match navigation bar paths
+    return routes.filter((route) => {
+      // Check if this route path matches any navigation bar path
+      const matchesNavPath = navBarPaths.some((navPath) => {
+        // Exact match
+        if (route.path === navPath) {
+          return true
+        }
+        // Check if route path starts with nav path followed by '/' (e.g., /clinical/otscheduler starts with /clinical/)
+        // This handles subroutes like /clinical/otscheduler matching /clinical
+        if (route.path.startsWith(navPath + '/')) {
+          return true
+        }
+        return false
+      })
+      // Hide if it matches a nav path
+      return !matchesNavPath
+    })
+  }, [routes, hasAccess, navBarPaths])
+
   return (
     <div className="p-4 pt-8">
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        {routes.map((each, i) => {
+        {filteredRoutes.map((each, i) => {
           const CardPermission = withPermission(
             Card,
             false,

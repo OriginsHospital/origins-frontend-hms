@@ -709,8 +709,24 @@ function PatientTrackerReports() {
   const userEmail = userDetails?.email || userDetails?.userDetails?.email || ''
   const userBranches = userDetails?.branchDetails || branches || []
 
+  // Check if user has access to Data and Summary tabs
+  const hasDataSummaryAccess =
+    userEmail.toLowerCase() === 'nikhilsuvva77@gmail.com'
+
   // Tab state
   const [activeTab, setActiveTab] = useState(0)
+
+  // Reset activeTab if user doesn't have access to Data/Summary tabs
+  useEffect(() => {
+    if (!hasDataSummaryAccess) {
+      // When tabs are hidden, Summary Automated is at index 0, Summary Graph is at index 1
+      // If activeTab is 2 or 3 (from when tabs were visible), reset to 0
+      // If activeTab is 0 or 1, keep it (they map to Summary Automated and Summary Graph)
+      if (activeTab === 2 || activeTab === 3) {
+        setActiveTab(0) // Switch to Summary Automated tab
+      }
+    }
+  }, [hasDataSummaryAccess, activeTab])
 
   // Summary Automated data
   const [automatedSummaryData, setAutomatedSummaryData] = useState([])
@@ -1638,7 +1654,8 @@ function PatientTrackerReports() {
   // Fetch all patients for Summary Automated tab
   useEffect(() => {
     const fetchAutomatedSummary = async () => {
-      if (activeTab === 2) {
+      const summaryAutomatedTabIndex = hasDataSummaryAccess ? 2 : 0
+      if (activeTab === summaryAutomatedTabIndex) {
         setIsLoadingAutomatedSummary(true)
         try {
           const response = await getAllPatients(userDetails.accessToken, '')
@@ -1976,12 +1993,13 @@ function PatientTrackerReports() {
       }
     }
     fetchAutomatedSummary()
-  }, [activeTab, userDetails.accessToken])
+  }, [activeTab, userDetails.accessToken, hasDataSummaryAccess])
 
   // Fetch all patients for Summary Graph tab
   useEffect(() => {
     const fetchGraphSummary = async () => {
-      if (activeTab === 3) {
+      const summaryGraphTabIndex = hasDataSummaryAccess ? 3 : 1
+      if (activeTab === summaryGraphTabIndex) {
         setIsLoadingGraphSummary(true)
         try {
           const response = await getAllPatients(userDetails.accessToken, '')
@@ -1999,7 +2017,7 @@ function PatientTrackerReports() {
       }
     }
     fetchGraphSummary()
-  }, [activeTab, userDetails.accessToken])
+  }, [activeTab, userDetails.accessToken, hasDataSummaryAccess])
 
   // Handle save
   const handleSave = () => {
@@ -3702,689 +3720,695 @@ function PatientTrackerReports() {
               },
             }}
           >
-            <Tab label="Data" />
-            <Tab label="Summary" />
+            {hasDataSummaryAccess && <Tab label="Data" />}
+            {hasDataSummaryAccess && <Tab label="Summary" />}
             <Tab label="Summary Automated" />
             <Tab label="Summary Graph" />
           </Tabs>
         </Box>
 
         {/* DATA TAB */}
-        <TabPanel value={activeTab} index={0}>
-          <CardContent sx={{ p: 1.5 }}>
-            {/* Search Bar Section */}
-            <Card
-              sx={{
-                mb: 2,
-                border: '1px solid #e0e0e0',
-                borderRadius: 1,
-                bgcolor: '#f8f9fa',
-              }}
-            >
-              <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-                <Box
-                  sx={{
-                    display: 'flex',
-                    gap: 2,
-                    alignItems: 'center',
-                    flexWrap: 'wrap',
-                  }}
-                >
-                  <Box sx={{ maxWidth: 400, width: '100%' }}>
-                    <PatientSearchAutocomplete
-                      onSearch={debouncedGetPatientSuggestions}
-                      onSelectPatient={handlePatientSelect}
-                      isLoading={isLoadingPatients || isSearching}
-                      suggestions={patientSuggestions || []}
-                    />
+        {hasDataSummaryAccess && (
+          <TabPanel value={activeTab} index={0}>
+            <CardContent sx={{ p: 1.5 }}>
+              {/* Search Bar Section */}
+              <Card
+                sx={{
+                  mb: 2,
+                  border: '1px solid #e0e0e0',
+                  borderRadius: 1,
+                  bgcolor: '#f8f9fa',
+                }}
+              >
+                <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      gap: 2,
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <Box sx={{ maxWidth: 400, width: '100%' }}>
+                      <PatientSearchAutocomplete
+                        onSearch={debouncedGetPatientSuggestions}
+                        onSelectPatient={handlePatientSelect}
+                        isLoading={isLoadingPatients || isSearching}
+                        suggestions={patientSuggestions || []}
+                      />
+                    </Box>
+                    {searchedPatient && (
+                      <Button
+                        variant="outlined"
+                        onClick={handleClearSearch}
+                        size="small"
+                        sx={{ ml: 'auto' }}
+                      >
+                        Clear
+                      </Button>
+                    )}
                   </Box>
                   {searchedPatient && (
-                    <Button
-                      variant="outlined"
-                      onClick={handleClearSearch}
-                      size="small"
-                      sx={{ ml: 'auto' }}
+                    <Box
+                      sx={{
+                        mt: 2,
+                        p: 1.5,
+                        bgcolor: 'success.light',
+                        borderRadius: 1,
+                      }}
                     >
-                      Clear
-                    </Button>
+                      <Typography
+                        variant="body2"
+                        color="success.dark"
+                        fontWeight={600}
+                      >
+                        ✓ Patient Found: {searchedPatient.patientName} (
+                        {searchedPatient.patientId})
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Data loaded from multiple sources (Patient, Embryology,
+                        Lab, etc.)
+                      </Typography>
+                    </Box>
                   )}
-                </Box>
-                {searchedPatient && (
-                  <Box
-                    sx={{
-                      mt: 2,
-                      p: 1.5,
-                      bgcolor: 'success.light',
-                      borderRadius: 1,
-                    }}
-                  >
-                    <Typography
-                      variant="body2"
-                      color="success.dark"
-                      fontWeight={600}
+                </CardContent>
+              </Card>
+
+              <Box component="div">
+                {/* Row 1: Patient Basic Details */}
+                <Card
+                  sx={{
+                    mb: 1,
+                    border: '1px solid #e0e0e0',
+                    borderRadius: 1,
+                  }}
+                >
+                  <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        mb: 1,
+                      }}
                     >
-                      ✓ Patient Found: {searchedPatient.patientName} (
-                      {searchedPatient.patientId})
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Data loaded from multiple sources (Patient, Embryology,
-                      Lab, etc.)
-                    </Typography>
-                  </Box>
-                )}
-              </CardContent>
-            </Card>
-
-            <Box component="div">
-              {/* Row 1: Patient Basic Details */}
-              <Card
-                sx={{
-                  mb: 1,
-                  border: '1px solid #e0e0e0',
-                  borderRadius: 1,
-                }}
-              >
-                <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      mb: 1,
-                    }}
-                  >
-                    <PersonIcon
-                      sx={{ mr: 0.5, color: '#06aee9', fontSize: 18 }}
-                    />
-                    <Typography variant="subtitle2" fontWeight={600}>
-                      Patient Basic
-                    </Typography>
-                  </Box>
-                  <Grid container spacing={1.5} alignItems="flex-end">
-                    <Grid item xs={12} sm={6} md={1.6}>
-                      <MemoizedDatePicker
-                        fieldName="date"
-                        label="Date"
-                        value={formData.date}
-                        onChange={dateHandlers.date}
-                        disabled={false}
-                        required={true}
-                        width="100%"
-                        hasAccess={accessFlags.row1}
+                      <PersonIcon
+                        sx={{ mr: 0.5, color: '#06aee9', fontSize: 18 }}
                       />
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={1.1}>
-                      <MemoizedSelectField
-                        fieldName="branch"
-                        label="Branch"
-                        value={formData.branch}
-                        onChange={fieldHandlers.branch}
-                        disabled={false}
-                        required={true}
-                        options={branchOptions}
-                        width="100%"
-                        hasAccess={accessFlags.row1}
-                      />
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={1.3}>
-                      <MemoizedTextField
-                        key="patientId-field"
-                        fieldName="patientId"
-                        label="Patient ID"
-                        value={formData.patientId}
-                        onBlur={fieldHandlers.patientId_blur}
-                        disabled={false}
-                        required={true}
-                        type="text"
-                        width="100%"
-                        hasAccess={accessFlags.row1}
-                      />
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={1.9}>
-                      <MemoizedTextField
-                        fieldName="patientName"
-                        label="Patient Name"
-                        value={formData.patientName}
-                        onBlur={fieldHandlers.patientName_blur}
-                        disabled={false}
-                        required={true}
-                        type="text"
-                        width="100%"
-                        hasAccess={accessFlags.row1}
-                      />
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={1.5}>
-                      <MemoizedTextField
-                        fieldName="mobileNumber"
-                        label="Mobile Number"
-                        value={formData.mobileNumber}
-                        onBlur={fieldHandlers.mobileNumber_blur}
-                        disabled={false}
-                        required={true}
-                        type="number"
-                        width="100%"
-                        hasAccess={accessFlags.row1}
-                      />
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={1.9}>
-                      <MemoizedSelectField
-                        fieldName="referralSource"
-                        label="Referral Source"
-                        value={formData.referralSource}
-                        onChange={fieldHandlers.referralSource}
-                        disabled={false}
-                        required={false}
-                        options={referralSourceOptions}
-                        width="100%"
-                        hasAccess={accessFlags.row1}
-                      />
-                    </Grid>
-                    <Grid item xs={12} sm={6} md={2.7}>
-                      <MemoizedTextField
-                        key="referralName"
-                        fieldName="referralName"
-                        label="Referral Name"
-                        value={formData.referralName}
-                        onBlur={fieldHandlers.referralName_blur}
-                        disabled={!formData.referralSource}
-                        required={false}
-                        type="text"
-                        width="70%"
-                        hasAccess={accessFlags.row1}
-                      />
-                    </Grid>
-                  </Grid>
-                </CardContent>
-              </Card>
-
-              {/* Row 2: Treatment Details */}
-              <Card
-                sx={{
-                  mb: 1,
-                  border: '1px solid #e0e0e0',
-                  borderRadius: 1,
-                }}
-              >
-                <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      mb: 1,
-                    }}
-                  >
-                    <HospitalIcon
-                      sx={{ mr: 0.5, color: '#06aee9', fontSize: 18 }}
-                    />
-                    <Typography variant="subtitle2" fontWeight={600}>
-                      Treatment
-                    </Typography>
-                  </Box>
-                  <Grid container spacing={1.5}>
-                    <Grid item xs={6} sm={3} md={3}>
-                      <MemoizedTextField
-                        fieldName="plan"
-                        label="Plan"
-                        value={formData.plan}
-                        onBlur={fieldHandlers.plan_blur}
-                        disabled={false}
-                        required={false}
-                        type="text"
-                        width="100%"
-                        hasAccess={accessFlags.row2}
-                      />
-                    </Grid>
-                    <Grid item xs={6} sm={3} md={3}>
-                      <MemoizedSelectField
-                        fieldName="treatmentType"
-                        label="Treatment Type"
-                        value={formData.treatmentType}
-                        onChange={fieldHandlers.treatmentType}
-                        disabled={false}
-                        required={true}
-                        options={treatmentTypeOptions}
-                        width="100%"
-                        hasAccess={accessFlags.row2}
-                      />
-                    </Grid>
-                    <Grid item xs={6} sm={3} md={3}>
-                      <MemoizedSelectField
-                        fieldName="cycleStatus"
-                        label="Cycle Status"
-                        value={formData.cycleStatus}
-                        onChange={fieldHandlers.cycleStatus}
-                        disabled={false}
-                        required={true}
-                        options={cycleStatusOptions}
-                        width="100%"
-                        hasAccess={accessFlags.row2}
-                      />
-                    </Grid>
-                    <Grid item xs={6} sm={3} md={3}>
-                      <MemoizedTextField
-                        fieldName="stageOfCycle"
-                        label="Stage of Cycle"
-                        value={formData.stageOfCycle}
-                        onBlur={fieldHandlers.stageOfCycle_blur}
-                        disabled={false}
-                        required={false}
-                        type="text"
-                        width="100%"
-                        hasAccess={accessFlags.row2}
-                      />
-                    </Grid>
-                  </Grid>
-                </CardContent>
-              </Card>
-
-              {/* Row 3: Package Details */}
-              <Card
-                sx={{
-                  mb: 1,
-                  border: '1px solid #e0e0e0',
-                  borderRadius: 1,
-                }}
-              >
-                <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      mb: 1,
-                    }}
-                  >
-                    <AccountBalanceIcon
-                      sx={{ mr: 0.5, color: '#06aee9', fontSize: 18 }}
-                    />
-                    <Typography variant="subtitle2" fontWeight={600}>
-                      Package
-                    </Typography>
-                  </Box>
-                  <Grid container spacing={1.5}>
-                    <Grid item xs={12} sm={6} md={4}>
-                      <MemoizedTextField
-                        fieldName="packageName"
-                        label="Package Name"
-                        value={formData.packageName}
-                        onBlur={fieldHandlers.packageName_blur}
-                        disabled={false}
-                        required={true}
-                        type="text"
-                        width="100%"
-                        hasAccess={accessFlags.row3}
-                      />
-                    </Grid>
-                  </Grid>
-                </CardContent>
-              </Card>
-
-              {/* Row 4: Financial Details */}
-              <Card
-                sx={{
-                  mb: 1,
-                  border: '1px solid #e0e0e0',
-                  borderRadius: 1,
-                }}
-              >
-                <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      mb: 1,
-                    }}
-                  >
-                    <AccountBalanceIcon
-                      sx={{ mr: 0.5, color: '#06aee9', fontSize: 18 }}
-                    />
-                    <Typography variant="subtitle2" fontWeight={600}>
-                      Financial
-                    </Typography>
-                  </Box>
-                  <Grid container spacing={1.5}>
-                    <Grid item xs={6} sm={3} md={3}>
-                      <MemoizedTextField
-                        fieldName="packageAmount"
-                        label="Package Amount"
-                        value={formData.packageAmount}
-                        onBlur={fieldHandlers.packageAmount_blur}
-                        disabled={false}
-                        required={false}
-                        type="number"
-                        width="100%"
-                        hasAccess={accessFlags.row4}
-                      />
-                    </Grid>
-                    <Grid item xs={6} sm={3} md={3}>
-                      <MemoizedTextField
-                        fieldName="registrationAmount"
-                        label="Registration Amount"
-                        value={formData.registrationAmount}
-                        onBlur={fieldHandlers.registrationAmount_blur}
-                        disabled={false}
-                        required={true}
-                        type="number"
-                        width="100%"
-                        hasAccess={accessFlags.row4}
-                      />
-                    </Grid>
-                    <Grid item xs={6} sm={3} md={3}>
-                      <MemoizedTextField
-                        fieldName="paidAmount"
-                        label="Paid Amount"
-                        value={formData.paidAmount}
-                        onBlur={fieldHandlers.paidAmount_blur}
-                        disabled={false}
-                        required={true}
-                        type="number"
-                        width="100%"
-                        hasAccess={accessFlags.row4}
-                      />
-                    </Grid>
-                    <Grid item xs={6} sm={3} md={3}>
-                      <Tooltip title="Auto-calculated field" arrow>
-                        <TextField
-                          fullWidth
-                          label="Pending Amount"
-                          value={pendingAmount.toFixed(2)}
-                          disabled
-                          size="small"
-                          variant="outlined"
-                          InputProps={{
-                            readOnly: true,
-                            sx: {
-                              bgcolor: '#f5f5f5',
-                            },
-                          }}
+                      <Typography variant="subtitle2" fontWeight={600}>
+                        Patient Basic
+                      </Typography>
+                    </Box>
+                    <Grid container spacing={1.5} alignItems="flex-end">
+                      <Grid item xs={12} sm={6} md={1.6}>
+                        <MemoizedDatePicker
+                          fieldName="date"
+                          label="Date"
+                          value={formData.date}
+                          onChange={dateHandlers.date}
+                          disabled={false}
+                          required={true}
+                          width="100%"
+                          hasAccess={accessFlags.row1}
                         />
-                      </Tooltip>
-                    </Grid>
-                  </Grid>
-                </CardContent>
-              </Card>
-
-              {/* Row 5: Embryology Details */}
-              <Card
-                sx={{
-                  mb: 1,
-                  border: '1px solid #e0e0e0',
-                  borderRadius: 1,
-                }}
-              >
-                <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      mb: 1,
-                    }}
-                  >
-                    <ScienceIcon
-                      sx={{ mr: 0.5, color: '#06aee9', fontSize: 18 }}
-                    />
-                    <Typography variant="subtitle2" fontWeight={600}>
-                      Embryology
-                    </Typography>
-                  </Box>
-                  <Grid container spacing={1.5}>
-                    <Grid item xs={6} sm={4} md={2.4}>
-                      <MemoizedTextField
-                        fieldName="numberOfEmbryos"
-                        label="No. of Embryos"
-                        value={formData.numberOfEmbryos}
-                        onBlur={fieldHandlers.numberOfEmbryos_blur}
-                        disabled={false}
-                        required={true}
-                        type="number"
-                        width="100%"
-                        hasAccess={accessFlags.row5}
-                      />
-                    </Grid>
-                    <Grid item xs={6} sm={4} md={2.4}>
-                      <MemoizedTextField
-                        fieldName="numberOfEmbryosUsed"
-                        label="No. of Embryos Used"
-                        value={formData.numberOfEmbryosUsed}
-                        onBlur={fieldHandlers.numberOfEmbryosUsed_blur}
-                        disabled={false}
-                        required={true}
-                        type="number"
-                        width="100%"
-                        hasAccess={accessFlags.row5}
-                      />
-                    </Grid>
-                    <Grid item xs={6} sm={4} md={2.4}>
-                      <Tooltip title="Auto-calculated field" arrow>
-                        <TextField
-                          fullWidth
-                          label="No. of Embryos Remaining"
-                          value={embryosRemaining}
-                          disabled
-                          size="small"
-                          variant="outlined"
-                          InputProps={{
-                            readOnly: true,
-                            sx: {
-                              bgcolor: '#f5f5f5',
-                            },
-                          }}
+                      </Grid>
+                      <Grid item xs={12} sm={6} md={1.1}>
+                        <MemoizedSelectField
+                          fieldName="branch"
+                          label="Branch"
+                          value={formData.branch}
+                          onChange={fieldHandlers.branch}
+                          disabled={false}
+                          required={true}
+                          options={branchOptions}
+                          width="100%"
+                          hasAccess={accessFlags.row1}
                         />
-                      </Tooltip>
-                    </Grid>
-                    <Grid item xs={6} sm={4} md={2.4}>
-                      <MemoizedDatePicker
-                        fieldName="lastRenewalDate"
-                        label="Last Renewal Date"
-                        value={formData.lastRenewalDate}
-                        onChange={dateHandlers.lastRenewalDate}
-                        disabled={false}
-                        required={false}
-                        width="100%"
-                        hasAccess={accessFlags.row5}
-                      />
-                    </Grid>
-                    <Grid item xs={6} sm={4} md={2.4}>
-                      <MemoizedTextField
-                        fieldName="numberOfEmbryosDiscarded"
-                        label="No. of Embryos Discarded"
-                        value={formData.numberOfEmbryosDiscarded}
-                        onBlur={fieldHandlers.numberOfEmbryosDiscarded_blur}
-                        disabled={false}
-                        required={false}
-                        type="number"
-                        width="100%"
-                        hasAccess={accessFlags.row5}
-                      />
-                    </Grid>
-                  </Grid>
-                </CardContent>
-              </Card>
-
-              {/* Row 6: UPT Result */}
-              <Card
-                sx={{
-                  mb: 1,
-                  border: '1px solid #e0e0e0',
-                  borderRadius: 1,
-                }}
-              >
-                <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
-                  <Box
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      mb: 1,
-                    }}
-                  >
-                    <PregnantWomanIcon
-                      sx={{ mr: 0.5, color: '#06aee9', fontSize: 18 }}
-                    />
-                    <Typography variant="subtitle2" fontWeight={600}>
-                      UPT Result
-                    </Typography>
-                  </Box>
-                  <Grid container spacing={1.5}>
-                    <Grid item xs={6} sm={4} md={3}>
-                      <MemoizedSelectField
-                        fieldName="uptResult"
-                        label="UPT Result"
-                        value={formData.uptResult}
-                        onChange={fieldHandlers.uptResult}
-                        disabled={false}
-                        required={true}
-                        options={uptResultOptions}
-                        width="100%"
-                        hasAccess={accessFlags.row6}
-                      />
-                    </Grid>
-                    {formData.uptResult === 'Others' && (
-                      <Grid item xs={6} sm={4} md={3}>
+                      </Grid>
+                      <Grid item xs={12} sm={6} md={1.3}>
                         <MemoizedTextField
-                          fieldName="uptManualEntry"
-                          label="UPT Manual Entry Field"
-                          value={formData.uptManualEntry}
-                          onBlur={fieldHandlers.uptManualEntry_blur}
+                          key="patientId-field"
+                          fieldName="patientId"
+                          label="Patient ID"
+                          value={formData.patientId}
+                          onBlur={fieldHandlers.patientId_blur}
+                          disabled={false}
+                          required={true}
+                          type="text"
+                          width="100%"
+                          hasAccess={accessFlags.row1}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6} md={1.9}>
+                        <MemoizedTextField
+                          fieldName="patientName"
+                          label="Patient Name"
+                          value={formData.patientName}
+                          onBlur={fieldHandlers.patientName_blur}
+                          disabled={false}
+                          required={true}
+                          type="text"
+                          width="100%"
+                          hasAccess={accessFlags.row1}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6} md={1.5}>
+                        <MemoizedTextField
+                          fieldName="mobileNumber"
+                          label="Mobile Number"
+                          value={formData.mobileNumber}
+                          onBlur={fieldHandlers.mobileNumber_blur}
+                          disabled={false}
+                          required={true}
+                          type="number"
+                          width="100%"
+                          hasAccess={accessFlags.row1}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6} md={1.9}>
+                        <MemoizedSelectField
+                          fieldName="referralSource"
+                          label="Referral Source"
+                          value={formData.referralSource}
+                          onChange={fieldHandlers.referralSource}
+                          disabled={false}
+                          required={false}
+                          options={referralSourceOptions}
+                          width="100%"
+                          hasAccess={accessFlags.row1}
+                        />
+                      </Grid>
+                      <Grid item xs={12} sm={6} md={2.7}>
+                        <MemoizedTextField
+                          key="referralName"
+                          fieldName="referralName"
+                          label="Referral Name"
+                          value={formData.referralName}
+                          onBlur={fieldHandlers.referralName_blur}
+                          disabled={!formData.referralSource}
+                          required={false}
+                          type="text"
+                          width="70%"
+                          hasAccess={accessFlags.row1}
+                        />
+                      </Grid>
+                    </Grid>
+                  </CardContent>
+                </Card>
+
+                {/* Row 2: Treatment Details */}
+                <Card
+                  sx={{
+                    mb: 1,
+                    border: '1px solid #e0e0e0',
+                    borderRadius: 1,
+                  }}
+                >
+                  <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        mb: 1,
+                      }}
+                    >
+                      <HospitalIcon
+                        sx={{ mr: 0.5, color: '#06aee9', fontSize: 18 }}
+                      />
+                      <Typography variant="subtitle2" fontWeight={600}>
+                        Treatment
+                      </Typography>
+                    </Box>
+                    <Grid container spacing={1.5}>
+                      <Grid item xs={6} sm={3} md={3}>
+                        <MemoizedTextField
+                          fieldName="plan"
+                          label="Plan"
+                          value={formData.plan}
+                          onBlur={fieldHandlers.plan_blur}
                           disabled={false}
                           required={false}
                           type="text"
                           width="100%"
-                          hasAccess={accessFlags.row6}
+                          hasAccess={accessFlags.row2}
                         />
                       </Grid>
-                    )}
-                  </Grid>
-                </CardContent>
-              </Card>
+                      <Grid item xs={6} sm={3} md={3}>
+                        <MemoizedSelectField
+                          fieldName="treatmentType"
+                          label="Treatment Type"
+                          value={formData.treatmentType}
+                          onChange={fieldHandlers.treatmentType}
+                          disabled={false}
+                          required={true}
+                          options={treatmentTypeOptions}
+                          width="100%"
+                          hasAccess={accessFlags.row2}
+                        />
+                      </Grid>
+                      <Grid item xs={6} sm={3} md={3}>
+                        <MemoizedSelectField
+                          fieldName="cycleStatus"
+                          label="Cycle Status"
+                          value={formData.cycleStatus}
+                          onChange={fieldHandlers.cycleStatus}
+                          disabled={false}
+                          required={true}
+                          options={cycleStatusOptions}
+                          width="100%"
+                          hasAccess={accessFlags.row2}
+                        />
+                      </Grid>
+                      <Grid item xs={6} sm={3} md={3}>
+                        <MemoizedTextField
+                          fieldName="stageOfCycle"
+                          label="Stage of Cycle"
+                          value={formData.stageOfCycle}
+                          onBlur={fieldHandlers.stageOfCycle_blur}
+                          disabled={false}
+                          required={false}
+                          type="text"
+                          width="100%"
+                          hasAccess={accessFlags.row2}
+                        />
+                      </Grid>
+                    </Grid>
+                  </CardContent>
+                </Card>
 
-              {/* Save Button */}
-              <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}>
-                <Button
-                  variant="contained"
-                  startIcon={<SaveIcon />}
-                  onClick={handleSave}
-                  size="small"
+                {/* Row 3: Package Details */}
+                <Card
                   sx={{
-                    bgcolor: '#06aee9',
-                    '&:hover': { bgcolor: '#0599d1' },
-                    px: 2,
-                    py: 0.75,
-                  }}
-                >
-                  Save Data
-                </Button>
-              </Box>
-            </Box>
-          </CardContent>
-        </TabPanel>
-
-        {/* SUMMARY TAB */}
-        <TabPanel value={activeTab} index={1}>
-          <CardContent sx={{ p: 1.5 }}>
-            {/* Filters Section */}
-            <Box
-              sx={{
-                mb: 2,
-                display: 'flex',
-                gap: 2,
-                alignItems: 'center',
-                flexWrap: 'wrap',
-              }}
-            >
-              <LocalizationProvider dateAdapter={AdapterDayjs}>
-                <DatePicker
-                  label="From Date"
-                  value={summaryFromDate}
-                  onChange={setSummaryFromDate}
-                  format="DD/MM/YYYY"
-                  slotProps={{
-                    textField: {
-                      size: 'small',
-                      sx: { width: 180 },
-                    },
-                  }}
-                />
-                <DatePicker
-                  label="To Date"
-                  value={summaryToDate}
-                  onChange={setSummaryToDate}
-                  format="DD/MM/YYYY"
-                  slotProps={{
-                    textField: {
-                      size: 'small',
-                      sx: { width: 180 },
-                    },
-                  }}
-                />
-              </LocalizationProvider>
-              <Autocomplete
-                sx={{ width: 200 }}
-                size="small"
-                options={userBranches || []}
-                getOptionLabel={(option) =>
-                  option?.branchCode || option?.name || ''
-                }
-                value={
-                  userBranches.find((b) => b.id === summaryBranchId) || null
-                }
-                onChange={(_, value) => setSummaryBranchId(value?.id || null)}
-                renderInput={(params) => (
-                  <TextField {...params} label="Branch" />
-                )}
-              />
-            </Box>
-
-            {/* Data Grid Table */}
-            <Box sx={{ height: 'calc(100vh - 350px)', width: '100%' }}>
-              {summaryTableRows.length === 0 ? (
-                <Box
-                  sx={{
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    bgcolor: '#f5f5f5',
+                    mb: 1,
+                    border: '1px solid #e0e0e0',
                     borderRadius: 1,
                   }}
                 >
-                  <Typography
-                    variant="h6"
-                    color="text.secondary"
-                    sx={{ mb: 1 }}
-                  >
-                    No patient tracker data found
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {formData.patientId
-                      ? 'The entered data does not match the current filters. Try adjusting the date range or branch filter.'
-                      : 'Enter patient tracker data in the Data tab and save it to view in the Summary tab.'}
-                  </Typography>
-                </Box>
-              ) : (
-                <DataGrid
-                  rows={summaryTableRows}
-                  columns={summaryColumns}
-                  getRowId={(row) => row.id || `${row.patientId}-${row.date}`}
-                  loading={false}
-                  disableRowSelectionOnClick
-                  pageSizeOptions={[10, 25, 50, 100]}
-                  initialState={{
-                    pagination: {
-                      paginationModel: { pageSize: 25 },
-                    },
-                  }}
+                  <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        mb: 1,
+                      }}
+                    >
+                      <AccountBalanceIcon
+                        sx={{ mr: 0.5, color: '#06aee9', fontSize: 18 }}
+                      />
+                      <Typography variant="subtitle2" fontWeight={600}>
+                        Package
+                      </Typography>
+                    </Box>
+                    <Grid container spacing={1.5}>
+                      <Grid item xs={12} sm={6} md={4}>
+                        <MemoizedTextField
+                          fieldName="packageName"
+                          label="Package Name"
+                          value={formData.packageName}
+                          onBlur={fieldHandlers.packageName_blur}
+                          disabled={false}
+                          required={true}
+                          type="text"
+                          width="100%"
+                          hasAccess={accessFlags.row3}
+                        />
+                      </Grid>
+                    </Grid>
+                  </CardContent>
+                </Card>
+
+                {/* Row 4: Financial Details */}
+                <Card
                   sx={{
-                    '& .MuiDataGrid-row:hover': {
-                      backgroundColor: '#f5f5f5',
-                    },
+                    mb: 1,
+                    border: '1px solid #e0e0e0',
+                    borderRadius: 1,
                   }}
+                >
+                  <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        mb: 1,
+                      }}
+                    >
+                      <AccountBalanceIcon
+                        sx={{ mr: 0.5, color: '#06aee9', fontSize: 18 }}
+                      />
+                      <Typography variant="subtitle2" fontWeight={600}>
+                        Financial
+                      </Typography>
+                    </Box>
+                    <Grid container spacing={1.5}>
+                      <Grid item xs={6} sm={3} md={3}>
+                        <MemoizedTextField
+                          fieldName="packageAmount"
+                          label="Package Amount"
+                          value={formData.packageAmount}
+                          onBlur={fieldHandlers.packageAmount_blur}
+                          disabled={false}
+                          required={false}
+                          type="number"
+                          width="100%"
+                          hasAccess={accessFlags.row4}
+                        />
+                      </Grid>
+                      <Grid item xs={6} sm={3} md={3}>
+                        <MemoizedTextField
+                          fieldName="registrationAmount"
+                          label="Registration Amount"
+                          value={formData.registrationAmount}
+                          onBlur={fieldHandlers.registrationAmount_blur}
+                          disabled={false}
+                          required={true}
+                          type="number"
+                          width="100%"
+                          hasAccess={accessFlags.row4}
+                        />
+                      </Grid>
+                      <Grid item xs={6} sm={3} md={3}>
+                        <MemoizedTextField
+                          fieldName="paidAmount"
+                          label="Paid Amount"
+                          value={formData.paidAmount}
+                          onBlur={fieldHandlers.paidAmount_blur}
+                          disabled={false}
+                          required={true}
+                          type="number"
+                          width="100%"
+                          hasAccess={accessFlags.row4}
+                        />
+                      </Grid>
+                      <Grid item xs={6} sm={3} md={3}>
+                        <Tooltip title="Auto-calculated field" arrow>
+                          <TextField
+                            fullWidth
+                            label="Pending Amount"
+                            value={pendingAmount.toFixed(2)}
+                            disabled
+                            size="small"
+                            variant="outlined"
+                            InputProps={{
+                              readOnly: true,
+                              sx: {
+                                bgcolor: '#f5f5f5',
+                              },
+                            }}
+                          />
+                        </Tooltip>
+                      </Grid>
+                    </Grid>
+                  </CardContent>
+                </Card>
+
+                {/* Row 5: Embryology Details */}
+                <Card
+                  sx={{
+                    mb: 1,
+                    border: '1px solid #e0e0e0',
+                    borderRadius: 1,
+                  }}
+                >
+                  <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        mb: 1,
+                      }}
+                    >
+                      <ScienceIcon
+                        sx={{ mr: 0.5, color: '#06aee9', fontSize: 18 }}
+                      />
+                      <Typography variant="subtitle2" fontWeight={600}>
+                        Embryology
+                      </Typography>
+                    </Box>
+                    <Grid container spacing={1.5}>
+                      <Grid item xs={6} sm={4} md={2.4}>
+                        <MemoizedTextField
+                          fieldName="numberOfEmbryos"
+                          label="No. of Embryos"
+                          value={formData.numberOfEmbryos}
+                          onBlur={fieldHandlers.numberOfEmbryos_blur}
+                          disabled={false}
+                          required={true}
+                          type="number"
+                          width="100%"
+                          hasAccess={accessFlags.row5}
+                        />
+                      </Grid>
+                      <Grid item xs={6} sm={4} md={2.4}>
+                        <MemoizedTextField
+                          fieldName="numberOfEmbryosUsed"
+                          label="No. of Embryos Used"
+                          value={formData.numberOfEmbryosUsed}
+                          onBlur={fieldHandlers.numberOfEmbryosUsed_blur}
+                          disabled={false}
+                          required={true}
+                          type="number"
+                          width="100%"
+                          hasAccess={accessFlags.row5}
+                        />
+                      </Grid>
+                      <Grid item xs={6} sm={4} md={2.4}>
+                        <Tooltip title="Auto-calculated field" arrow>
+                          <TextField
+                            fullWidth
+                            label="No. of Embryos Remaining"
+                            value={embryosRemaining}
+                            disabled
+                            size="small"
+                            variant="outlined"
+                            InputProps={{
+                              readOnly: true,
+                              sx: {
+                                bgcolor: '#f5f5f5',
+                              },
+                            }}
+                          />
+                        </Tooltip>
+                      </Grid>
+                      <Grid item xs={6} sm={4} md={2.4}>
+                        <MemoizedDatePicker
+                          fieldName="lastRenewalDate"
+                          label="Last Renewal Date"
+                          value={formData.lastRenewalDate}
+                          onChange={dateHandlers.lastRenewalDate}
+                          disabled={false}
+                          required={false}
+                          width="100%"
+                          hasAccess={accessFlags.row5}
+                        />
+                      </Grid>
+                      <Grid item xs={6} sm={4} md={2.4}>
+                        <MemoizedTextField
+                          fieldName="numberOfEmbryosDiscarded"
+                          label="No. of Embryos Discarded"
+                          value={formData.numberOfEmbryosDiscarded}
+                          onBlur={fieldHandlers.numberOfEmbryosDiscarded_blur}
+                          disabled={false}
+                          required={false}
+                          type="number"
+                          width="100%"
+                          hasAccess={accessFlags.row5}
+                        />
+                      </Grid>
+                    </Grid>
+                  </CardContent>
+                </Card>
+
+                {/* Row 6: UPT Result */}
+                <Card
+                  sx={{
+                    mb: 1,
+                    border: '1px solid #e0e0e0',
+                    borderRadius: 1,
+                  }}
+                >
+                  <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        mb: 1,
+                      }}
+                    >
+                      <PregnantWomanIcon
+                        sx={{ mr: 0.5, color: '#06aee9', fontSize: 18 }}
+                      />
+                      <Typography variant="subtitle2" fontWeight={600}>
+                        UPT Result
+                      </Typography>
+                    </Box>
+                    <Grid container spacing={1.5}>
+                      <Grid item xs={6} sm={4} md={3}>
+                        <MemoizedSelectField
+                          fieldName="uptResult"
+                          label="UPT Result"
+                          value={formData.uptResult}
+                          onChange={fieldHandlers.uptResult}
+                          disabled={false}
+                          required={true}
+                          options={uptResultOptions}
+                          width="100%"
+                          hasAccess={accessFlags.row6}
+                        />
+                      </Grid>
+                      {formData.uptResult === 'Others' && (
+                        <Grid item xs={6} sm={4} md={3}>
+                          <MemoizedTextField
+                            fieldName="uptManualEntry"
+                            label="UPT Manual Entry Field"
+                            value={formData.uptManualEntry}
+                            onBlur={fieldHandlers.uptManualEntry_blur}
+                            disabled={false}
+                            required={false}
+                            type="text"
+                            width="100%"
+                            hasAccess={accessFlags.row6}
+                          />
+                        </Grid>
+                      )}
+                    </Grid>
+                  </CardContent>
+                </Card>
+
+                {/* Save Button */}
+                <Box
+                  sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1 }}
+                >
+                  <Button
+                    variant="contained"
+                    startIcon={<SaveIcon />}
+                    onClick={handleSave}
+                    size="small"
+                    sx={{
+                      bgcolor: '#06aee9',
+                      '&:hover': { bgcolor: '#0599d1' },
+                      px: 2,
+                      py: 0.75,
+                    }}
+                  >
+                    Save Data
+                  </Button>
+                </Box>
+              </Box>
+            </CardContent>
+          </TabPanel>
+        )}
+
+        {/* SUMMARY TAB */}
+        {hasDataSummaryAccess && (
+          <TabPanel value={activeTab} index={1}>
+            <CardContent sx={{ p: 1.5 }}>
+              {/* Filters Section */}
+              <Box
+                sx={{
+                  mb: 2,
+                  display: 'flex',
+                  gap: 2,
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                }}
+              >
+                <LocalizationProvider dateAdapter={AdapterDayjs}>
+                  <DatePicker
+                    label="From Date"
+                    value={summaryFromDate}
+                    onChange={setSummaryFromDate}
+                    format="DD/MM/YYYY"
+                    slotProps={{
+                      textField: {
+                        size: 'small',
+                        sx: { width: 180 },
+                      },
+                    }}
+                  />
+                  <DatePicker
+                    label="To Date"
+                    value={summaryToDate}
+                    onChange={setSummaryToDate}
+                    format="DD/MM/YYYY"
+                    slotProps={{
+                      textField: {
+                        size: 'small',
+                        sx: { width: 180 },
+                      },
+                    }}
+                  />
+                </LocalizationProvider>
+                <Autocomplete
+                  sx={{ width: 200 }}
+                  size="small"
+                  options={userBranches || []}
+                  getOptionLabel={(option) =>
+                    option?.branchCode || option?.name || ''
+                  }
+                  value={
+                    userBranches.find((b) => b.id === summaryBranchId) || null
+                  }
+                  onChange={(_, value) => setSummaryBranchId(value?.id || null)}
+                  renderInput={(params) => (
+                    <TextField {...params} label="Branch" />
+                  )}
                 />
-              )}
-            </Box>
-          </CardContent>
-        </TabPanel>
+              </Box>
+
+              {/* Data Grid Table */}
+              <Box sx={{ height: 'calc(100vh - 350px)', width: '100%' }}>
+                {summaryTableRows.length === 0 ? (
+                  <Box
+                    sx={{
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      bgcolor: '#f5f5f5',
+                      borderRadius: 1,
+                    }}
+                  >
+                    <Typography
+                      variant="h6"
+                      color="text.secondary"
+                      sx={{ mb: 1 }}
+                    >
+                      No patient tracker data found
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {formData.patientId
+                        ? 'The entered data does not match the current filters. Try adjusting the date range or branch filter.'
+                        : 'Enter patient tracker data in the Data tab and save it to view in the Summary tab.'}
+                    </Typography>
+                  </Box>
+                ) : (
+                  <DataGrid
+                    rows={summaryTableRows}
+                    columns={summaryColumns}
+                    getRowId={(row) => row.id || `${row.patientId}-${row.date}`}
+                    loading={false}
+                    disableRowSelectionOnClick
+                    pageSizeOptions={[10, 25, 50, 100]}
+                    initialState={{
+                      pagination: {
+                        paginationModel: { pageSize: 25 },
+                      },
+                    }}
+                    sx={{
+                      '& .MuiDataGrid-row:hover': {
+                        backgroundColor: '#f5f5f5',
+                      },
+                    }}
+                  />
+                )}
+              </Box>
+            </CardContent>
+          </TabPanel>
+        )}
 
         {/* SUMMARY AUTOMATED TAB */}
-        <TabPanel value={activeTab} index={2}>
+        <TabPanel value={activeTab} index={hasDataSummaryAccess ? 2 : 0}>
           <CardContent sx={{ p: 1.5 }}>
             {/* Filters Section */}
             <Box
@@ -4554,7 +4578,7 @@ function PatientTrackerReports() {
         </TabPanel>
 
         {/* SUMMARY GRAPH TAB */}
-        <TabPanel value={activeTab} index={3}>
+        <TabPanel value={activeTab} index={hasDataSummaryAccess ? 3 : 1}>
           <CardContent sx={{ p: 1.5 }}>
             {/* Filters Section */}
             <Box

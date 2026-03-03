@@ -131,6 +131,7 @@ const subNav = [
     relatedModule: 'reportsModule',
     icon: FiUser,
     requiresRevenueAccess: false,
+    requiresNewPatientTrackerAccess: true, // Requires specific user access
   },
   {
     path: '/reports/patientTracker',
@@ -140,6 +141,12 @@ const subNav = [
     requiresRevenueAccess: false,
   },
 ]
+
+// Helper function to check if user has access to New Patient Tracker
+const hasNewPatientTrackerAccess = (userEmail) => {
+  if (!userEmail) return false
+  return userEmail.toLowerCase() === 'nikhilsuvva77@gmail.com'
+}
 
 function Reports() {
   const user = useSelector((store) => store.user)
@@ -158,6 +165,10 @@ function Reports() {
       // If this nav item requires revenue new access, check if user has access
       if (nav.requiresRevenueNewAccess) {
         return hasRevenueNewAccess(user?.email)
+      }
+      // If this nav item requires New Patient Tracker access, check if user has access
+      if (nav.requiresNewPatientTrackerAccess) {
+        return hasNewPatientTrackerAccess(user?.email)
       }
       // Otherwise, show all other menu items
       return true

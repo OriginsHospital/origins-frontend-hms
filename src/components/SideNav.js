@@ -37,6 +37,12 @@ import { TbTicket, TbInbox } from 'react-icons/tb'
 import Image from 'next/image'
 import originslogo from '../../public/origins-new-logo.png'
 import { GrSchedule } from 'react-icons/gr'
+// Helper function to check if user has access to New Patient Tracker
+const hasNewPatientTrackerAccess = (userEmail) => {
+  if (!userEmail) return false
+  return userEmail.toLowerCase() === 'nikhilsuvva77@gmail.com'
+}
+
 function NavItem({
   expanded,
   clickedNavItem,
@@ -51,6 +57,19 @@ function NavItem({
   const router = useRouter()
   const buttonRef = useRef('')
   const user = useSelector((store) => store.user)
+  const userEmail = user?.email || user?.userDetails?.email || ''
+
+  // Filter subRoutes to hide New Patient Tracker and Patient Management if user doesn't have access
+  const filteredSubRoutes =
+    subRoutes?.filter((route) => {
+      if (route.path === '/reports/newPatientTracker') {
+        return hasNewPatientTrackerAccess(userEmail)
+      }
+      if (route.path === '/patient/management') {
+        return hasNewPatientTrackerAccess(userEmail)
+      }
+      return true
+    }) || []
 
   const [anchorEl, setAnchorEl] = useState(null)
   function handleClick() {
@@ -75,7 +94,7 @@ function NavItem({
 
   return (
     <>
-      {subRoutes?.length > 0 ? (
+      {filteredSubRoutes?.length > 0 ? (
         <>
           <div className="relative flex items-center">
             {path ? (
@@ -159,7 +178,7 @@ function NavItem({
               horizontal: 'left',
             }}
           >
-            {subRoutes.map((eachSubRouteObj, i) => {
+            {filteredSubRoutes.map((eachSubRouteObj, i) => {
               // const userModule = user?.moduleList?.find(
               //   eachModuleObj => eachModuleObj.enum == eachSubRouteObj.relatedModule,
               // )
@@ -331,6 +350,11 @@ function SideNav(props) {
   const [expanded, setExpanded] = useState(false)
   const [clickedNavItem, setClickedNavItem] = useState('')
   const router = useRouter()
+
+  // Get user email for access control
+  const userEmail = user?.email || user?.userDetails?.email || ''
+  const hasTeamsAccess = userEmail.toLowerCase() === 'nikhilsuvva77@gmail.com'
+  const hasInboxAccess = userEmail.toLowerCase() === 'nikhilsuvva77@gmail.com'
   // const iconsColor = '#06aee9'
 
   // Fetch ticket count (assigned to user)
@@ -378,8 +402,8 @@ function SideNav(props) {
   const ticketsCount = ticketsData?.total || 0
   const tasksCount = tasksData?.total || 0
   const totalCount = ticketsCount + tasksCount
-  const routes = useMemo(
-    () => [
+  const routes = useMemo(() => {
+    const allRoutes = [
       {
         path: '/home',
         name: 'Dashboard',
@@ -649,9 +673,18 @@ function SideNav(props) {
         Iconn: TbBuildingCommunity,
         subRoutes: [],
       },
-    ],
-    [],
-  )
+    ]
+
+    // Filter out Teams and Inbox routes if user doesn't have access
+    let filteredRoutes = allRoutes
+    if (!hasTeamsAccess) {
+      filteredRoutes = filteredRoutes.filter((route) => route.path !== '/teams')
+    }
+    if (!hasInboxAccess) {
+      filteredRoutes = filteredRoutes.filter((route) => route.path !== '/inbox')
+    }
+    return filteredRoutes
+  }, [hasTeamsAccess, hasInboxAccess])
 
   useEffect(() => {
     setClickedNavItem('')
