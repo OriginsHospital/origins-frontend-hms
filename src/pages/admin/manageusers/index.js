@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { ToastContainer, toast, Bounce } from 'react-toastify'
+import 'react-toastify/dist/ReactToastify.css'
 
 import { getUsersList } from '@/constants/apis'
 import { getModules } from '@/constants/apis'
@@ -7,6 +9,7 @@ import { getRoleDetails } from '@/constants/apis'
 import { getUserDetails } from '@/constants/apis'
 import { validateUser } from '@/constants/apis'
 import { getRoles } from '@/constants/apis'
+import { deleteUser } from '@/constants/apis'
 import { useSelector } from 'react-redux'
 import IconButton from '@mui/material/IconButton'
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown'
@@ -32,7 +35,7 @@ const toastconfig = {
 }
 
 const Manageusers = () => {
-  const userDetails = useSelector(store => store.user)
+  const userDetails = useSelector((store) => store.user)
   const [isvalidusers, setIsValidUsers] = useState('0')
   const [open, setOpen] = useState(null)
   const [selectRoleid, setSelectRole] = useState()
@@ -57,6 +60,26 @@ const Manageusers = () => {
       })
     },
   })
+
+  const deleteUserMutate = useMutation({
+    mutationFn: async (userId) => {
+      const res = await deleteUser(userDetails?.accessToken, userId)
+      if (res.status !== 200) {
+        throw new Error(res.message || 'Failed to delete user')
+      }
+      return res
+    },
+    onSuccess: (data) => {
+      QueryClient.invalidateQueries({
+        queryKey: ['usersList'],
+      })
+      toast.success(data?.data || 'User deleted successfully', toastconfig)
+    },
+    onError: (error) => {
+      toast.error(error?.message || 'Failed to delete user', toastconfig)
+      console.error('Delete user error:', error)
+    },
+  })
   const roles = useQuery({
     queryKey: ['roles'],
     queryFn: () => getRoles(),
@@ -73,6 +96,12 @@ const Manageusers = () => {
     queryFn: () => getUserDetails(open),
     enabled: !!open,
   })
+
+  // Check if current user has delete access
+  const userEmail = userDetails?.email || userDetails?.userDetails?.email || ''
+  const hasDeleteAccess = userEmail.toLowerCase() === 'nikhilsuvva77@gmail.com'
+  const showDeleteColumn = isvalidusers === '1' && hasDeleteAccess
+
   return (
     <div>
       {/* <span className={`p-3 hover:cursor-pointer ${!isvalidusers ? 'bg-[#1D3C6E] rounded-md text-white' : ''}`} onClick={() => setIsValidUsers(0)}>Non Verified users</span>
@@ -101,6 +130,9 @@ const Manageusers = () => {
                   <StyledTableCell align="left">User Name</StyledTableCell>
                   <StyledTableCell align="left">Role</StyledTableCell>
                   <StyledTableCell align="left">Branch</StyledTableCell>
+                  {showDeleteColumn && (
+                    <StyledTableCell align="left">Action</StyledTableCell>
+                  )}
                 </TableRow>
               </TableHead>
               <TableBody className="  ">
@@ -130,6 +162,9 @@ const Manageusers = () => {
                       UserDetails={UserDetails}
                       selectRoleid={selectRoleid}
                       setSelectRole={setSelectRole}
+                      deleteUserMutate={deleteUserMutate}
+                      userDetails={userDetails}
+                      showDeleteColumn={showDeleteColumn}
                     />
                   ))}
               </TableBody>
@@ -156,6 +191,9 @@ function CustomRow({
   UserDetails,
   selectRoleid,
   setSelectRole,
+  deleteUserMutate,
+  userDetails,
+  showDeleteColumn,
 }) {
   // console.log(row)
 
@@ -176,7 +214,7 @@ function CustomRow({
             aria-label="expand row"
             size="small"
             // name={row.id}
-            onClick={e => {
+            onClick={(e) => {
               if (row.id == open) {
                 setOpen(null)
                 setPermissions([])
@@ -207,11 +245,36 @@ function CustomRow({
             </span>
           ))}
         </StyledTableCell>
+        {showDeleteColumn && (
+          <StyledTableCell align="left">
+            <Button
+              variant="contained"
+              color="error"
+              size="small"
+              onClick={() => {
+                if (
+                  window.confirm(
+                    `Are you sure you want to delete user "${row.fullName}" (${row.email})?`,
+                  )
+                ) {
+                  deleteUserMutate.mutate(row.id)
+                }
+              }}
+              disabled={deleteUserMutate?.isPending}
+              sx={{ minWidth: '80px' }}
+            >
+              {deleteUserMutate?.isPending ? 'Deleting...' : 'Delete'}
+            </Button>
+          </StyledTableCell>
+        )}
       </StyledTableRow>
       {
         // isvalidusers ?
         <TableRow>
-          <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={6}>
+          <TableCell
+            style={{ paddingBottom: 0, paddingTop: 0 }}
+            colSpan={showDeleteColumn ? 8 : 7}
+          >
             <Collapse in={open == row.id} timeout="auto">
               <Box sx={{ margin: 1 }}>
                 <TabPanel value="0">
@@ -254,7 +317,6 @@ import TableHead from '@mui/material/TableHead'
 import TableRow from '@mui/material/TableRow'
 import Paper from '@mui/material/Paper'
 import Collapse from '@mui/material/Collapse'
-import { ToastContainer, toast, Bounce } from 'react-toastify'
 
 const StyledTableCell = styled(TableCell)(({ theme }) => ({
   [`&.${tableCellClasses.head}`]: {
@@ -334,13 +396,14 @@ const InvalidSubRow = ({
   const permissionsSetter = () => {
     let modList = roleDetails?.data?.data?.moduleList || []
     console.log('modList', modList)
-    let perm = modList?.map(mod =>
-      modList[modList?.findIndex(obj => obj.id == mod.id)]?.accessType
+    let perm = modList?.map((mod) =>
+      modList[modList?.findIndex((obj) => obj.id == mod.id)]?.accessType
         ? {
             id: mod.id,
             name: mod.name,
             accessType:
-              modList[modList?.findIndex(obj => obj.id == mod.id)]?.accessType,
+              modList[modList?.findIndex((obj) => obj.id == mod.id)]
+                ?.accessType,
           }
         : {
             id: mod.id,
@@ -370,7 +433,7 @@ const InvalidSubRow = ({
     ])
   }
 
-  const handleValidate = async row => {
+  const handleValidate = async (row) => {
     const mut = await validateMutate.mutate({ row, Permissions })
     toast.success('Successfully validated', toastconfig)
     console.log('returned from muteed', mut)
@@ -383,10 +446,10 @@ const InvalidSubRow = ({
             <select
               name="roles"
               value={selectRoleid}
-              onChange={e => setSelectRole(+e.target.value)}
+              onChange={(e) => setSelectRole(+e.target.value)}
             >
               {roles.data?.status == 200 &&
-                roles.data?.data?.map(eachRole => (
+                roles.data?.data?.map((eachRole) => (
                   <option value={eachRole.id} key={eachRole.id}>
                     {eachRole.name}
                   </option>
@@ -439,10 +502,10 @@ const InvalidSubRow = ({
                   // value={Permissions[index]?.accessType}
                   checked={
                     Permissions[
-                      Permissions?.findIndex(obj => obj.id == eachModule.id)
+                      Permissions?.findIndex((obj) => obj.id == eachModule.id)
                     ]?.accessType == 'N'
                   }
-                  onChange={e => handlePermissionsChange(e, index)}
+                  onChange={(e) => handlePermissionsChange(e, index)}
                   // defaultChecked={(e) => checkAccess(e, eachModule.id)}
                   name={`${eachModule?.name}`}
                   inputProps={{ 'aria-label': 'controlled' }}
@@ -454,11 +517,11 @@ const InvalidSubRow = ({
                   // value={Permissions[Permissions?.findIndex(obj => obj.id == eachModule.id)]?.accessType}
                   checked={
                     Permissions[
-                      Permissions?.findIndex(obj => obj.id == eachModule.id)
+                      Permissions?.findIndex((obj) => obj.id == eachModule.id)
                     ]?.accessType == 'R'
                   }
                   name={`${eachModule?.name}`}
-                  onChange={e => handlePermissionsChange(e, index)}
+                  onChange={(e) => handlePermissionsChange(e, index)}
                   inputProps={{ 'aria-label': 'controlled' }}
                 />
               </TableCell>
@@ -468,11 +531,11 @@ const InvalidSubRow = ({
                   // value={Permissions[Permissions?.findIndex(obj => obj.id == eachModule.id)]?.accessType}
                   checked={
                     Permissions[
-                      Permissions?.findIndex(obj => obj.id == eachModule.id)
+                      Permissions?.findIndex((obj) => obj.id == eachModule.id)
                     ]?.accessType == 'W'
                   }
                   name={`${eachModule?.name}`}
-                  onChange={e => handlePermissionsChange(e, index)}
+                  onChange={(e) => handlePermissionsChange(e, index)}
                   inputProps={{ 'aria-label': 'controlled' }}
                 />
               </TableCell>

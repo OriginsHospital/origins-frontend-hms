@@ -10,6 +10,7 @@ import {
   downloadPDF,
   updateAdvancePaymentHistory,
   deleteAdvancePaymentHistory,
+  deleteAdvancePaymentEntry,
 } from '@/constants/apis'
 import React, { useState, useEffect, useMemo } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -123,9 +124,11 @@ function AdvancePayments({ formData }) {
   const [expandedPaymentIndex, setExpandedPaymentIndex] = useState(null)
   const [newlyAddedPayment, setNewlyAddedPayment] = useState(null)
   const [menuAnchor, setMenuAnchor] = useState(null)
+  const [cardMenuPayment, setCardMenuPayment] = useState(null) // when menu opened from card header
   const [selectedPaymentHistory, setSelectedPaymentHistory] = useState(null)
   const [editPaymentHistory, setEditPaymentHistory] = useState(null)
   const [deleteConfirm, setDeleteConfirm] = useState(null)
+  const [deleteEntryConfirm, setDeleteEntryConfirm] = useState(null) // for deleting whole advance payment entry (pending)
   const [editFormData, setEditFormData] = useState({
     paidOrderAmount: '',
     discountAmount: '',
@@ -141,29 +144,47 @@ function AdvancePayments({ formData }) {
   const isAdmin =
     userDetails.roleDetails?.id === 1 || userDetails.roleDetails?.id === 7
 
-  // Handle menu open
+  // Edit/delete advance payment history only for this user (check email and userName)
+  const userEmail = userDetails?.email || userDetails?.userDetails?.email || ''
+  const userName =
+    userDetails?.userName || userDetails?.userDetails?.userName || ''
+  const allowedEmail = 'nikhilsuvva77@gmail.com'
+  const canEditDeleteAdvancePayment =
+    userEmail.toLowerCase() === allowedEmail ||
+    userName.toLowerCase() === allowedEmail
+
+  // Handle menu open (from payment history row)
   const handleMenuOpen = (event, paymentHistory) => {
     event.stopPropagation() // Prevent accordion from expanding
     setMenuAnchor(event.currentTarget)
+    setCardMenuPayment(null)
     setSelectedPaymentHistory(paymentHistory)
+  }
+
+  // Handle menu open from card header (show Edit/Delete for each payment history entry, or message if none)
+  const handleCardMenuOpen = (event, payment) => {
+    event.stopPropagation()
+    setMenuAnchor(event.currentTarget)
+    setCardMenuPayment(payment)
+    setSelectedPaymentHistory(null)
   }
 
   // Handle menu close
   const handleMenuClose = () => {
     setMenuAnchor(null)
+    setCardMenuPayment(null)
     setSelectedPaymentHistory(null)
   }
 
-  // Handle edit click
-  const handleEditClick = () => {
-    if (selectedPaymentHistory) {
-      setEditPaymentHistory(selectedPaymentHistory)
+  // Handle edit click (history optional when called from card menu)
+  const handleEditClick = (historyEntry) => {
+    const entry = historyEntry ?? selectedPaymentHistory
+    if (entry) {
+      setEditPaymentHistory(entry)
       // The query returns paidOrderAmountBeforeDiscount as 'paidOrderAmount' in the JSON
       // So we need to calculate the actual paid amount (after discount) for editing
-      const paidAmountBeforeDiscount = parseFloat(
-        selectedPaymentHistory.paidOrderAmount || 0,
-      )
-      const discount = parseFloat(selectedPaymentHistory.discountAmount || 0)
+      const paidAmountBeforeDiscount = parseFloat(entry.paidOrderAmount || 0)
+      const discount = parseFloat(entry.discountAmount || 0)
       const paidAmountAfterDiscount = paidAmountBeforeDiscount - discount
 
       setEditFormData({
@@ -171,21 +192,22 @@ function AdvancePayments({ formData }) {
           paidAmountAfterDiscount > 0
             ? paidAmountAfterDiscount.toString()
             : paidAmountBeforeDiscount.toString(),
-        discountAmount: selectedPaymentHistory.discountAmount || '',
-        paymentMode: selectedPaymentHistory.paymentMode || '',
-        orderDate: selectedPaymentHistory.paymentDate
-          ? dayjs(selectedPaymentHistory.paymentDate).format('YYYY-MM-DD')
+        discountAmount: entry.discountAmount || '',
+        paymentMode: entry.paymentMode || '',
+        orderDate: entry.paymentDate
+          ? dayjs(entry.paymentDate).format('YYYY-MM-DD')
           : '',
-        couponCode: selectedPaymentHistory.couponCode || '',
+        couponCode: entry.couponCode || '',
       })
     }
     handleMenuClose()
   }
 
-  // Handle delete click
-  const handleDeleteClick = () => {
-    if (selectedPaymentHistory) {
-      setDeleteConfirm(selectedPaymentHistory)
+  // Handle delete click (historyEntry optional when called from card menu)
+  const handleDeleteClick = (historyEntry) => {
+    const entry = historyEntry ?? selectedPaymentHistory
+    if (entry) {
+      setDeleteConfirm(entry)
     }
     handleMenuClose()
   }
@@ -271,6 +293,39 @@ function AdvancePayments({ formData }) {
     },
   })
 
+  // Delete entire advance payment entry (pending or any) – removes entry and all its details
+  const deleteAdvancePaymentEntryMutation = useMutation({
+    mutationFn: async (refId) => {
+      return await deleteAdvancePaymentEntry(userDetails.accessToken, refId)
+    },
+    onSuccess: async (response) => {
+      toast.success(
+        response?.message || 'Advance payment entry deleted successfully',
+        toastconfig,
+      )
+      setDeleteEntryConfirm(null)
+      queryClient.invalidateQueries({
+        queryKey: ['otherPaymentsStatus', formData.id],
+      })
+      setTimeout(async () => {
+        try {
+          await refetchPayments()
+        } catch (error) {
+          console.error('Error refetching payments after delete entry:', error)
+        }
+      }, 400)
+    },
+    onError: (error) => {
+      console.error('Error deleting advance payment entry:', error)
+      toast.error(
+        error?.response?.data?.message ||
+          error?.message ||
+          'Failed to delete advance payment entry',
+        toastconfig,
+      )
+    },
+  })
+
   // Handle edit form submit
   const handleEditSubmit = () => {
     if (!editPaymentHistory) return
@@ -291,10 +346,17 @@ function AdvancePayments({ formData }) {
     })
   }
 
-  // Handle delete confirm
+  // Handle delete confirm (payment history entry)
   const handleDeleteConfirm = () => {
     if (deleteConfirm) {
       deletePaymentHistoryMutation.mutate(deleteConfirm.id)
+    }
+  }
+
+  // Handle delete advance payment entry confirm (whole line)
+  const handleDeleteEntryConfirm = () => {
+    if (deleteEntryConfirm?.refId != null) {
+      deleteAdvancePaymentEntryMutation.mutate(deleteEntryConfirm.refId)
     }
   }
 
@@ -730,7 +792,17 @@ function AdvancePayments({ formData }) {
                       </Typography>
                     </div>
                   </div>
-                  <div className="flex items-center">
+                  <div className="flex items-center gap-1">
+                    {canEditDeleteAdvancePayment && (
+                      <IconButton
+                        size="small"
+                        onClick={(e) => handleCardMenuOpen(e, payment)}
+                        sx={{ mr: 0.5 }}
+                        aria-label="Edit or delete payment history"
+                      >
+                        <MoreVert fontSize="small" />
+                      </IconButton>
+                    )}
                     <Typography
                       variant="subtitle2"
                       className={`px-2 py-1 rounded-full text-sm ${
@@ -928,7 +1000,7 @@ function AdvancePayments({ formData }) {
                                           size="small"
                                         />
                                       )}
-                                      {isAdmin && (
+                                      {canEditDeleteAdvancePayment && (
                                         <IconButton
                                           size="small"
                                           onClick={(e) =>
@@ -1242,7 +1314,7 @@ function AdvancePayments({ formData }) {
         )}
       </Modal>
 
-      {/* 3-dot Menu */}
+      {/* 3-dot Menu (card header: list per entry; row: single Edit/Delete) */}
       <Menu
         anchorEl={menuAnchor}
         open={Boolean(menuAnchor)}
@@ -1254,18 +1326,62 @@ function AdvancePayments({ formData }) {
           },
         }}
       >
-        <MenuItem onClick={handleEditClick}>
-          <ListItemIcon>
-            <Edit fontSize="small" sx={{ color: 'primary.main' }} />
-          </ListItemIcon>
-          <ListItemText>Edit</ListItemText>
-        </MenuItem>
-        <MenuItem onClick={handleDeleteClick}>
-          <ListItemIcon>
-            <Delete fontSize="small" sx={{ color: 'error.main' }} />
-          </ListItemIcon>
-          <ListItemText>Delete</ListItemText>
-        </MenuItem>
+        {cardMenuPayment ? (
+          cardMenuPayment.paymentHistory?.length > 0 ? (
+            cardMenuPayment.paymentHistory?.map((history, idx) => (
+              <React.Fragment key={history.id ?? idx}>
+                <MenuItem onClick={() => handleEditClick(history)}>
+                  <ListItemIcon>
+                    <Edit fontSize="small" sx={{ color: 'primary.main' }} />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary="Edit"
+                    secondary={`${history.paymentMode} - ${dayjs(history.paymentDate).format('DD/MM/YYYY')}`}
+                  />
+                </MenuItem>
+                <MenuItem onClick={() => handleDeleteClick(history)}>
+                  <ListItemIcon>
+                    <Delete fontSize="small" sx={{ color: 'error.main' }} />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary="Delete"
+                    secondary={`${history.paymentMode} - ${dayjs(history.paymentDate).format('DD/MM/YYYY')}`}
+                  />
+                </MenuItem>
+              </React.Fragment>
+            ))
+          ) : (
+            <MenuItem
+              onClick={() => {
+                setDeleteEntryConfirm(cardMenuPayment)
+                handleMenuClose()
+              }}
+            >
+              <ListItemIcon>
+                <Delete fontSize="small" sx={{ color: 'error.main' }} />
+              </ListItemIcon>
+              <ListItemText
+                primary="Delete advance payment"
+                secondary="Remove this entry and its details"
+              />
+            </MenuItem>
+          )
+        ) : (
+          <>
+            <MenuItem onClick={() => handleEditClick()}>
+              <ListItemIcon>
+                <Edit fontSize="small" sx={{ color: 'primary.main' }} />
+              </ListItemIcon>
+              <ListItemText>Edit</ListItemText>
+            </MenuItem>
+            <MenuItem onClick={() => handleDeleteClick()}>
+              <ListItemIcon>
+                <Delete fontSize="small" sx={{ color: 'error.main' }} />
+              </ListItemIcon>
+              <ListItemText>Delete</ListItemText>
+            </MenuItem>
+          </>
+        )}
       </Menu>
 
       {/* Edit Payment History Dialog */}
@@ -1448,6 +1564,49 @@ function AdvancePayments({ formData }) {
             disabled={deletePaymentHistoryMutation.isPending}
           >
             {deletePaymentHistoryMutation.isPending ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Advance Payment Entry Confirmation (whole line – e.g. pending) */}
+      <Dialog
+        open={!!deleteEntryConfirm}
+        onClose={() => setDeleteEntryConfirm(null)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Delete advance payment</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            Are you sure you want to delete this advance payment entry? This
+            will remove the entry and all details (amount, description, and any
+            payment history). This action cannot be undone.
+          </Typography>
+          {deleteEntryConfirm && (
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body2">
+                <strong>Description:</strong> {deleteEntryConfirm.paymentReason}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Total amount:</strong> ₹
+                {parseFloat(deleteEntryConfirm.totalAmount || 0).toLocaleString(
+                  'en-IN',
+                )}
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteEntryConfirm(null)}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={handleDeleteEntryConfirm}
+            disabled={deleteAdvancePaymentEntryMutation.isPending}
+          >
+            {deleteAdvancePaymentEntryMutation.isPending
+              ? 'Deleting...'
+              : 'Delete'}
           </Button>
         </DialogActions>
       </Dialog>

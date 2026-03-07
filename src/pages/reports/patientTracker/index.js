@@ -1687,8 +1687,8 @@ function PatientTrackerReports() {
             // Fetch package data for each patient (via visits) - fetch in background
             const allPackageDataMap = {} // Accumulate data across all batches
 
-            // Process patients in smaller batches to avoid blocking
-            const patientsToProcess = sortedData.slice(0, 300) // Process more patients since we use activeVisitId directly
+            // Process all patients for package data (Summary Automated financial columns)
+            const patientsToProcess = sortedData
 
             // Process in batches of 15 to avoid overwhelming the API
             const batchSize = 15
@@ -1850,40 +1850,43 @@ function PatientTrackerReports() {
                       }
 
                       // Check if package data exists and is a valid object
+                      // Support both camelCase and snake_case from backend (Doctor Suggested Package, Marketing Package from Package tab)
+                      const docPkg =
+                        pkgData.doctorSuggestedPackage ??
+                        pkgData.doctor_suggested_package ??
+                        pkgData.doctorsPackage ??
+                        pkgData.doctorPackage
+                      const mktPkg =
+                        pkgData.marketingPackage ?? pkgData.marketing_package
+                      const regAmt =
+                        pkgData.registrationAmount ??
+                        pkgData.registration_amount
+                      const hasPackageFields =
+                        docPkg !== undefined ||
+                        mktPkg !== undefined ||
+                        regAmt !== undefined
+
                       if (
                         pkgData &&
                         typeof pkgData === 'object' &&
                         !Array.isArray(pkgData) &&
-                        (pkgData.doctorSuggestedPackage !== undefined ||
-                          pkgData.marketingPackage !== undefined ||
-                          pkgData.registrationAmount !== undefined ||
-                          pkgData.doctorsPackage !== undefined ||
-                          pkgData.doctorPackage !== undefined)
+                        hasPackageFields
                       ) {
                         // Extract package values - handle null, undefined, and 0 values
                         const doctorSuggestedPkg =
-                          pkgData.doctorSuggestedPackage !== null &&
-                          pkgData.doctorSuggestedPackage !== undefined
-                            ? pkgData.doctorSuggestedPackage
-                            : pkgData.doctorsPackage !== null &&
-                                pkgData.doctorsPackage !== undefined
-                              ? pkgData.doctorsPackage
-                              : pkgData.doctorPackage !== null &&
-                                  pkgData.doctorPackage !== undefined
-                                ? pkgData.doctorPackage
-                                : 0
+                          docPkg !== null && docPkg !== undefined ? docPkg : 0
 
                         const marketingPkg =
-                          pkgData.marketingPackage !== null &&
-                          pkgData.marketingPackage !== undefined
-                            ? pkgData.marketingPackage
-                            : 0
+                          mktPkg !== null && mktPkg !== undefined ? mktPkg : 0
 
                         const registrationAmt =
-                          pkgData.registrationAmount !== null &&
-                          pkgData.registrationAmount !== undefined
-                            ? pkgData.registrationAmount
-                            : 0
+                          regAmt !== null && regAmt !== undefined ? regAmt : 0
+
+                        // Paid/pending from backend (getPackageService now returns these)
+                        const paid =
+                          pkgData.paidAmount ?? pkgData.paid_amount ?? 0
+                        const pending =
+                          pkgData.pendingAmount ?? pkgData.pending_amount ?? 0
 
                         // Parse and store package data (store even if 0, as it confirms package exists)
                         const packageData = {
@@ -1904,6 +1907,18 @@ function PatientTrackerReports() {
                             registrationAmt !== undefined &&
                             !isNaN(parseFloat(registrationAmt))
                               ? parseFloat(registrationAmt)
+                              : 0,
+                          paidAmount:
+                            paid !== null &&
+                            paid !== undefined &&
+                            !isNaN(parseFloat(paid))
+                              ? parseFloat(paid)
+                              : 0,
+                          pendingAmount:
+                            pending !== null &&
+                            pending !== undefined &&
+                            !isNaN(parseFloat(pending))
+                              ? parseFloat(pending)
                               : 0,
                         }
 
@@ -3385,8 +3400,38 @@ function PatientTrackerReports() {
           return 0
         })(),
         registrationAmount: calculatedRegistrationAmount,
-        paidAmount: patient.paidAmount || patient.PaidAmount || 0,
-        pendingAmount: patient.pendingAmount || patient.PendingAmount || 0,
+        paidAmount: (() => {
+          if (
+            pkgData &&
+            pkgData.paidAmount !== undefined &&
+            pkgData.paidAmount !== null
+          )
+            return typeof pkgData.paidAmount === 'number'
+              ? pkgData.paidAmount
+              : parseFloat(pkgData.paidAmount) || 0
+          return patient.paidAmount ?? patient.PaidAmount ?? 0
+        })(),
+        pendingAmount: (() => {
+          if (
+            pkgData &&
+            pkgData.pendingAmount !== undefined &&
+            pkgData.pendingAmount !== null
+          )
+            return typeof pkgData.pendingAmount === 'number'
+              ? pkgData.pendingAmount
+              : parseFloat(pkgData.pendingAmount) || 0
+          if (
+            pkgData &&
+            pkgData.marketingPackage != null &&
+            pkgData.paidAmount != null
+          )
+            return Math.max(
+              0,
+              (parseFloat(pkgData.marketingPackage) || 0) -
+                (parseFloat(pkgData.paidAmount) || 0),
+            )
+          return patient.pendingAmount ?? patient.PendingAmount ?? 0
+        })(),
         icsiD1: patient.icsiD1 || patient.ICSI_D1 || patient.icsi_D1 || '-',
         opu: patient.opu || patient.OPU || '-',
         fetD1: patient.fetD1 || patient.FET_D1 || patient.fet_D1 || '-',

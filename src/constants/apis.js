@@ -200,6 +200,30 @@ export const getUserDetails = async (userid) => {
   return data
 }
 
+export const deleteUser = async (token, userId) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  myHeaders.append('Access-Control-Allow-Credential', 'true')
+
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.DELETE_USER}/${userId}`,
+    {
+      method: 'DELETE',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  const data = await response.json()
+
+  if (!response.ok || data.status !== 200) {
+    throw new Error(data.message || 'Failed to delete user')
+  }
+
+  return data
+}
+
 export const validateUser = async (row, Permissions) => {
   console.log('validating', Permissions)
   const myHeaders = new Headers()
@@ -5043,6 +5067,22 @@ export const deleteAdvancePaymentHistory = async (token, paymentHistoryId) => {
   myHeaders.append('Content-Type', 'application/json')
   const response = await fetch(
     `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.DELETE_ADVANCE_PAYMENT_HISTORY}/${paymentHistoryId}`,
+    {
+      method: 'DELETE',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const deleteAdvancePaymentEntry = async (token, refId) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.DELETE_ADVANCE_PAYMENT_ENTRY}/${refId}`,
     {
       method: 'DELETE',
       headers: myHeaders,

@@ -16,6 +16,7 @@ export const API_ROUTES = {
   GET_VALID_USERS: '/users/getValidUsersList',
   GET_USER_DETAILS: '/users/getUserDetails',
   VALIDATE_USER: '/users/updateUserDetails',
+  DELETE_USER: '/users/deleteUser',
   GET_ROLES: '/roles/getRoles',
   GET_ROLE_DETAIL: '/roles/getRoleDetails',
   GET_BRANCHES: '/branches/getBranches',
@@ -450,6 +451,7 @@ export const API_ROUTES = {
   SEND_OTHER_PAYMENTS_TRANSACTION: '/otherPayments/sendTransactionId',
   UPDATE_ADVANCE_PAYMENT_HISTORY: '/otherPayments/updatePaymentHistory',
   DELETE_ADVANCE_PAYMENT_HISTORY: '/otherPayments/deletePaymentHistory',
+  DELETE_ADVANCE_PAYMENT_ENTRY: '/otherPayments/deleteAdvancePayment',
   UPLOAD_EMBRYOLOGY_IMAGE: '/embryology/uploadEmbryologyImage',
   DELETE_EMBRYOLOGY_IMAGE: '/embryology/deleteEmbryologyImage',
 
