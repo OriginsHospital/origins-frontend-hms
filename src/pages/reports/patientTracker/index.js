@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { useSelector } from 'react-redux'
 import {
   Box,
   Card,
@@ -47,8 +46,10 @@ import dayjs from 'dayjs'
 import { toast } from 'react-toastify'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { hideLoader, showLoader } from '@/redux/loaderSlice'
-import { useDispatch } from 'react-redux'
+import { useDispatch, useSelector } from 'react-redux'
+import { openModal, closeModal } from '@/redux/modalSlice'
 import Breadcrumb from '@/components/Breadcrumb'
+import PatientHistory from '@/components/PatientHistory'
 import {
   getPatientByAadharOrMobile,
   getPatientBasicDetails,
@@ -741,7 +742,29 @@ function PatientTrackerReports() {
   const [automatedSummaryToDate, setAutomatedSummaryToDate] = useState(dayjs()) // Set to current date
   const [automatedSummaryBranch, setAutomatedSummaryBranch] = useState('ALL')
   const [automatedSummaryReferral, setAutomatedSummaryReferral] = useState('')
+  const [automatedSummaryTreatmentType, setAutomatedSummaryTreatmentType] =
+    useState('')
   const [automatedSummarySearch, setAutomatedSummarySearch] = useState('')
+
+  // Patient History popup (Summary Automated - click on patient name)
+  const [patientForHistory, setPatientForHistory] = useState(null)
+  const modalState = useSelector((store) => store.modal)
+
+  // Clear patient-for-history when modal is closed so we unmount PatientHistory
+  useEffect(() => {
+    if (!modalState?.key && patientForHistory) {
+      setPatientForHistory(null)
+    }
+  }, [modalState?.key, patientForHistory])
+
+  const handleOpenPatientHistory = useCallback(
+    (row) => {
+      if (!row?.patientId || row.patientId === '-') return
+      setPatientForHistory({ patientId: row.patientId })
+      dispatch(openModal(row.patientId + 'History'))
+    },
+    [dispatch],
+  )
 
   // Summary Graph data
   const [graphSummaryData, setGraphSummaryData] = useState([])
@@ -2557,6 +2580,41 @@ function PatientTrackerReports() {
         width: 180,
         headerAlign: 'center',
         align: 'left',
+        renderCell: (params) => {
+          const name = params.value || '-'
+          const patientId = params.row?.patientId
+          const canOpenHistory =
+            patientId && patientId !== '-' && handleOpenPatientHistory
+          return (
+            <Typography
+              component={canOpenHistory ? 'button' : 'span'}
+              variant="body2"
+              onClick={
+                canOpenHistory
+                  ? (e) => {
+                      e.stopPropagation()
+                      handleOpenPatientHistory(params.row)
+                    }
+                  : undefined
+              }
+              sx={{
+                ...(canOpenHistory && {
+                  color: 'primary.main',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  textTransform: 'none',
+                  '&:hover': { textDecoration: 'underline' },
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  font: 'inherit',
+                }),
+              }}
+            >
+              {name}
+            </Typography>
+          )
+        },
       },
       {
         field: 'mobileNumber',
@@ -2774,7 +2832,7 @@ function PatientTrackerReports() {
         align: 'center',
       },
     ],
-    [],
+    [handleOpenPatientHistory],
   )
 
   // Branch options for Summary Automated tab
@@ -2811,6 +2869,38 @@ function PatientTrackerReports() {
     ],
     [],
   )
+
+  // Treatment type options for Summary Automated tab (match backend treatmentTypes)
+  const automatedSummaryTreatmentTypeOptions = useMemo(() => {
+    const allOption = { value: '', label: 'All' }
+    const fromDropdown = dropdowns?.treatmentTypes
+    if (Array.isArray(fromDropdown) && fromDropdown.length > 0) {
+      const options = fromDropdown
+        .map((item) => {
+          const name =
+            typeof item === 'object'
+              ? (item?.name ?? item?.label ?? '')
+              : String(item)
+          return { value: name, label: name }
+        })
+        .filter((o) => o.value)
+      return [allOption, ...options]
+    }
+    // Fallback: use treatment type names from system (OI + TI, IUI Self, ICSI, etc.)
+    const fallback = [
+      'OI + TI',
+      'IUI Self',
+      'IUI Donor',
+      'ICSI',
+      'ICSI Self Oocyte + Donor Sperm',
+      'ICSI Donor Oocyte + Self Sperm',
+      'ICSI Donor Oocyte + Donor Sperm',
+    ]
+    return [
+      allOption,
+      ...fallback.map((name) => ({ value: name, label: name })),
+    ]
+  }, [dropdowns?.treatmentTypes])
 
   // Transform and filter data for Summary Automated tab - Map from patients table
   const automatedSummaryRows = useMemo(() => {
@@ -2978,6 +3068,21 @@ function PatientTrackerReports() {
           ''
         return (
           referralSource.toString().trim() === automatedSummaryReferral.trim()
+        )
+      })
+    }
+
+    // Filter by treatment type
+    if (automatedSummaryTreatmentType) {
+      const selectedType = automatedSummaryTreatmentType.trim()
+      filteredData = filteredData.filter((patient) => {
+        const treatmentType =
+          (patient.treatmentType || patient.TreatmentType || '')
+            .toString()
+            .trim() || '-'
+        return (
+          treatmentType === selectedType ||
+          treatmentType.startsWith(selectedType)
         )
       })
     }
@@ -3458,6 +3563,7 @@ function PatientTrackerReports() {
     automatedSummaryToDate,
     automatedSummaryBranch,
     automatedSummaryReferral,
+    automatedSummaryTreatmentType,
     automatedSummarySearch,
     patientPackageData,
   ])
@@ -4519,6 +4625,33 @@ function PatientTrackerReports() {
                   ))}
                 </Select>
               </FormControl>
+              <FormControl sx={{ minWidth: 180 }} size="small">
+                <InputLabel id="patient-tracker-treatment-type-label" shrink>
+                  Treatment Type
+                </InputLabel>
+                <Select
+                  labelId="patient-tracker-treatment-type-label"
+                  value={automatedSummaryTreatmentType}
+                  onChange={(e) =>
+                    setAutomatedSummaryTreatmentType(e.target.value)
+                  }
+                  label="Treatment Type"
+                  displayEmpty
+                  renderValue={(v) => {
+                    if (v === '') return 'All'
+                    const opt = automatedSummaryTreatmentTypeOptions.find(
+                      (o) => o.value === v,
+                    )
+                    return opt?.label ?? v
+                  }}
+                >
+                  {automatedSummaryTreatmentTypeOptions.map((option) => (
+                    <MenuItem key={option.value || 'all'} value={option.value}>
+                      {option.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
               <TextField
                 size="small"
                 placeholder="Search by ID, Name, Mobile..."
@@ -4968,6 +5101,17 @@ function PatientTrackerReports() {
           </CardContent>
         </TabPanel>
       </Card>
+
+      {/* Patient History pop-up (opened when clicking patient name in Summary Automated) */}
+      {patientForHistory && (
+        <PatientHistory
+          patient={patientForHistory}
+          onClose={() => {
+            setPatientForHistory(null)
+            dispatch(closeModal())
+          }}
+        />
+      )}
     </Box>
   )
 }
