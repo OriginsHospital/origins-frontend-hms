@@ -49,7 +49,7 @@ function PackageComponent({
   const [discountAmount, setDiscountAmount] = useState(0)
   const dispatch = useDispatch()
   const queryClient = useQueryClient()
-  const user = useSelector(state => state.user)
+  const user = useSelector((state) => state.user)
   useEffect(() => {
     if (packageData && Object.keys(packageData).length > 0) {
       setNewPackageData(packageData)
@@ -63,12 +63,12 @@ function PackageComponent({
   const handleInputChange = (field, value) => {
     // console.log(field, dayjs(value).format('YYYY-MM-DD'), newPackageData);
     if (field.includes('Date')) {
-      setNewPackageData(prev => ({
+      setNewPackageData((prev) => ({
         ...prev,
         [field]: value ? dayjs(value).format('YYYY-MM-DD') : null,
       }))
     } else {
-      setNewPackageData(prev => ({ ...prev, [field]: value }))
+      setNewPackageData((prev) => ({ ...prev, [field]: value }))
     }
   }
 
@@ -157,6 +157,22 @@ function PackageComponent({
     } else if (!newPackageData.registrationDate) {
       toast.error('Select Registration Date.', toastconfig)
       return
+    } else if (
+      !newPackageData.registrationAmount ||
+      newPackageData.registrationAmount <= 0
+    ) {
+      // If there's nothing to pay (registration is 0), just save package details.
+      // Payment endpoint validates schema strictly; avoid sending a 0-amount payment.
+      const savePayload = { ...newPackageData }
+      delete savePayload.paidAmount
+      delete savePayload.pendingAmount
+      delete savePayload.packageDetails
+      if (!!newPackageData?.id) {
+        editPackageMutate?.mutate(savePayload)
+      } else {
+        createPackageMutate?.mutate(savePayload)
+      }
+      return
     } else {
       console.log(
         'Saving package data:',
@@ -179,7 +195,7 @@ function PackageComponent({
     // setIsEditing(false);
     // }
   }
-  const handlePayAndSave = visitId => {
+  const handlePayAndSave = (visitId) => {
     console.log('handlePayAndSave', visitId)
     dispatch(openModal('package' + visitId))
   }
@@ -189,9 +205,11 @@ function PackageComponent({
   //   }
   //   return 'Create New Package'
   // }
-  const handlePay = modeOfPayment => {
+  const handlePay = (modeOfPayment) => {
     let {
       doctorSuggestedPackage,
+      paidAmount,
+      pendingAmount,
       id,
       createdAt,
       updatedAt,
@@ -208,6 +226,14 @@ function PackageComponent({
       ...rest
     } = newPackageData
     console.log('rest', rest)
+    const regAmount = Number(rest.registrationAmount || 0)
+    if (!regAmount || regAmount <= 0) {
+      toast.error(
+        'Registration Amount is 0. Please enter amount to pay.',
+        toastconfig,
+      )
+      return
+    }
     if (modeOfPayment === 'Online') {
       handlePaymentMethodOnline({
         // visitId: selectedVisit?.id,
@@ -285,7 +311,7 @@ function PackageComponent({
       }
     }
   }
-  const handlePaymentMethodOffline = async payload => {
+  const handlePaymentMethodOffline = async (payload) => {
     try {
       const data = await getOrderIdTreatment(user.accessToken, payload)
       if (data.status == 200) {
@@ -298,7 +324,7 @@ function PackageComponent({
     }
     // setIsLoading(false)
   }
-  const handlePaymentMethodOnline = async payload => {
+  const handlePaymentMethodOnline = async (payload) => {
     console.log('payload', payload)
 
     try {
@@ -314,7 +340,7 @@ function PackageComponent({
         description: 'Test Transaction',
         order_id: data.data.orderId, //{ data.orderId}
         'theme.color': '#FF6C22',
-        handler: async response => {
+        handler: async (response) => {
           console.log(response)
           const order_details = {
             orderId: response.razorpay_order_id,
@@ -341,13 +367,13 @@ function PackageComponent({
       const paymentObject = new window.Razorpay(options)
       paymentObject.open()
 
-      paymentObject.on('payment.failed', function(response) {
+      paymentObject.on('payment.failed', function (response) {
         console.log(response.error.code)
         console.log(response.error.description)
         console.log(response.error.source)
       })
 
-      paymentObject.on('payment.success', function(response) {
+      paymentObject.on('payment.success', function (response) {
         //queryClient.invalidateQueries(['pharmacyModuleInfoByDate'])
         console.log('on success ', response)
       })
@@ -447,7 +473,7 @@ function PackageComponent({
                         required
                         type="number"
                         className="w-[250px]"
-                        onChange={e =>
+                        onChange={(e) =>
                           setDiscountAmount(Number(e.target.value))
                         }
                       />
@@ -491,7 +517,7 @@ function PackageComponent({
                   label="Marketing Package Amount"
                   value={`${newPackageData.marketingPackage || ''}`}
                   type="number"
-                  onChange={e =>
+                  onChange={(e) =>
                     handleInputChange(
                       'marketingPackage',
                       Number(e.target.value),
@@ -560,8 +586,8 @@ function PackageComponent({
                           : null
                       }
                       format="DD/MM/YYYY"
-                      onChange={value => handleInputChange(date, value)}
-                      renderInput={params => (
+                      onChange={(value) => handleInputChange(date, value)}
+                      renderInput={(params) => (
                         <TextField {...params} fullWidth />
                       )}
                       readOnly={date !== 'registrationDate' || !isEditing}
@@ -573,7 +599,7 @@ function PackageComponent({
                       label={`${label} Amount`}
                       value={`${newPackageData[amount]}`}
                       type="number"
-                      onChange={e =>
+                      onChange={(e) =>
                         handleInputChange(amount, Number(e.target.value))
                       }
                       InputProps={{ readOnly: !isEditing }}
@@ -602,7 +628,7 @@ function PackageComponent({
               variant="outlined"
               color="primary"
               onClick={() => handlePay('Online')}
-              disabled={true}
+              disabled={Number(newPackageData.registrationAmount || 0) <= 0}
             >
               Pay Online
             </Button>
@@ -610,6 +636,7 @@ function PackageComponent({
               variant="outlined"
               color="primary"
               onClick={() => handlePay('UPI')}
+              disabled={Number(newPackageData.registrationAmount || 0) <= 0}
             >
               Pay UPI
             </Button>
@@ -617,6 +644,7 @@ function PackageComponent({
               variant="outlined"
               color="primary"
               onClick={() => handlePay('Cash')}
+              disabled={Number(newPackageData.registrationAmount || 0) <= 0}
             >
               Pay Cash
             </Button>
