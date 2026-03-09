@@ -1,6 +1,7 @@
 import Breadcrumb from '@/components/Breadcrumb'
 import { getAllPatients } from '@/constants/apis'
 import { toastconfig } from '@/utils/toastconfig'
+import { exportAsCSV } from '@/utils/reportExport'
 import { DataGrid } from '@mui/x-data-grid'
 import { useQuery } from '@tanstack/react-query'
 import dayjs from 'dayjs'
@@ -14,7 +15,10 @@ import {
   Select,
   CircularProgress,
   Button,
+  Box,
 } from '@mui/material'
+import { DatePicker } from '@mui/x-date-pickers/DatePicker'
+import DownloadIcon from '@mui/icons-material/Download'
 import { useRouter } from 'next/router'
 
 function NewPatientTracker() {
@@ -44,6 +48,8 @@ function NewPatientTracker() {
   }, [userDetails, branches])
 
   const [selectedBranch, setSelectedBranch] = useState('')
+  const [fromDate, setFromDate] = useState(null)
+  const [toDate, setToDate] = useState(null)
 
   // Update selected branch when default branch is available
   useEffect(() => {
@@ -151,8 +157,27 @@ function NewPatientTracker() {
       })
     }
 
+    // Filter by date range (from / to) when set
+    let filteredByDate = filteredByBranch
+    if (fromDate || toDate) {
+      const from = fromDate ? dayjs(fromDate).startOf('day') : null
+      const to = toDate ? dayjs(toDate).endOf('day') : null
+      filteredByDate = filteredByBranch.filter((patient) => {
+        const regDate =
+          patient.registrationDate ||
+          patient.registeredDate ||
+          patient.createdAt ||
+          patient.dateOfBirth
+        if (!regDate) return false
+        const d = dayjs(regDate)
+        if (from && d.isBefore(from)) return false
+        if (to && d.isAfter(to)) return false
+        return true
+      })
+    }
+
     // Transform data to match table structure
-    return filteredByBranch.map((patient) => {
+    return filteredByDate.map((patient) => {
       // Get branch name - try to match with dropdown branches first
       let branchName = 'N/A'
       if (patient.branchId && activeBranches.length > 0) {
@@ -247,7 +272,14 @@ function NewPatientTracker() {
         aadhaarNo: patient.aadhaarNo || patient.aadhaar || '',
       }
     })
-  }, [allPatientsResponse, selectedBranch, activeBranches, getBranchValue])
+  }, [
+    allPatientsResponse,
+    selectedBranch,
+    activeBranches,
+    getBranchValue,
+    fromDate,
+    toDate,
+  ])
 
   const isLoading = isLoadingPatients
   const isError = isErrorPatients
@@ -262,6 +294,39 @@ function NewPatientTracker() {
       pathname: '/patient/register',
       query: { search: aadhaarNo || patientId },
     })
+  }
+
+  const handleExport = () => {
+    if (!trackerData.length) {
+      toast.warning('No data to export', toastconfig)
+      return
+    }
+    // Pre-format dates for CSV: use DD.MM.YYYY so Excel doesn't treat hyphens as subtraction (which causes ########)
+    const exportData = trackerData.map((row) => ({
+      ...row,
+      registeredDate: row.registeredDate
+        ? dayjs(row.registeredDate).format('DD.MM.YYYY')
+        : 'N/A',
+      lastAppointmentDate: row.lastAppointmentDate
+        ? dayjs(row.lastAppointmentDate).format('DD.MM.YYYY')
+        : 'No Appointments',
+    }))
+    // Export columns without valueGetter so getCellValue uses the pre-formatted row fields
+    const exportColumns = columns.map((col) => {
+      if (
+        col.field === 'registeredDate' ||
+        col.field === 'lastAppointmentDate'
+      ) {
+        const { valueGetter, ...rest } = col
+        return rest
+      }
+      return col
+    })
+    exportAsCSV(exportData, exportColumns, {
+      reportName: 'New_Patient_Tracker',
+      branchName: selectedBranch || undefined,
+    })
+    toast.success('Export started', toastconfig)
   }
 
   const columns = [
@@ -329,6 +394,11 @@ function NewPatientTracker() {
       minWidth: 130,
       align: 'left',
       headerAlign: 'left',
+      valueGetter: (params) => {
+        const row = params?.row
+        if (!row?.registeredDate) return 'N/A'
+        return dayjs(row.registeredDate).format('DD-MM-YYYY')
+      },
       renderCell: (params) => {
         if (!params.row.registeredDate) return 'N/A'
         return (
@@ -343,6 +413,11 @@ function NewPatientTracker() {
       minWidth: 160,
       align: 'left',
       headerAlign: 'left',
+      valueGetter: (params) => {
+        const row = params?.row
+        if (!row?.lastAppointmentDate) return 'No Appointments'
+        return dayjs(row.lastAppointmentDate).format('DD-MM-YYYY')
+      },
       renderCell: (params) => {
         if (!params.row.lastAppointmentDate) {
           return <div>No Appointments</div>
@@ -388,25 +463,68 @@ function NewPatientTracker() {
         <Breadcrumb />
       </div>
       <div className="mb-4">
-        <FormControl size="small" className="bg-white" sx={{ minWidth: 200 }}>
-          <InputLabel>Branch</InputLabel>
-          <Select
-            label="Branch"
-            value={selectedBranch || ''}
-            onChange={handleBranchChange}
+        <Box
+          sx={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: 2,
+          }}
+        >
+          <FormControl size="small" className="bg-white" sx={{ minWidth: 200 }}>
+            <InputLabel>Branch</InputLabel>
+            <Select
+              label="Branch"
+              value={selectedBranch || ''}
+              onChange={handleBranchChange}
+            >
+              {activeBranches.map((branch) => {
+                const branchValue = getBranchValue(branch)
+                const branchLabel =
+                  branch.branchCode || branch.name || `Branch ${branch.id}`
+                return (
+                  <MenuItem key={branch.id} value={branchValue}>
+                    {branchLabel}
+                  </MenuItem>
+                )
+              })}
+            </Select>
+          </FormControl>
+          <DatePicker
+            label="From Date"
+            value={fromDate}
+            onChange={(value) => setFromDate(value)}
+            format="DD/MM/YYYY"
+            slotProps={{
+              textField: {
+                size: 'small',
+                sx: { bgcolor: 'white', minWidth: 160 },
+              },
+            }}
+          />
+          <DatePicker
+            label="To Date"
+            value={toDate}
+            onChange={(value) => setToDate(value)}
+            format="DD/MM/YYYY"
+            slotProps={{
+              textField: {
+                size: 'small',
+                sx: { bgcolor: 'white', minWidth: 160 },
+              },
+            }}
+          />
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<DownloadIcon />}
+            onClick={handleExport}
+            disabled={!trackerData.length}
+            size="medium"
           >
-            {activeBranches.map((branch) => {
-              const branchValue = getBranchValue(branch)
-              const branchLabel =
-                branch.branchCode || branch.name || `Branch ${branch.id}`
-              return (
-                <MenuItem key={branch.id} value={branchValue}>
-                  {branchLabel}
-                </MenuItem>
-              )
-            })}
-          </Select>
-        </FormControl>
+            Export Data
+          </Button>
+        </Box>
       </div>
       <div>
         {isLoading ? (
