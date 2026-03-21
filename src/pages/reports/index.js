@@ -10,6 +10,7 @@ import { useSelector } from 'react-redux'
 import { IoAlertSharp } from 'react-icons/io5'
 import { Announcement } from '@mui/icons-material'
 import { hasRevenueAccess, hasRevenueNewAccess } from '@/utils/revenueAccess'
+import { hasVendorManufacturerReportAccess } from '@/utils/vendorManufacturerReportAccess'
 
 const subNav = [
   {
@@ -75,6 +76,14 @@ const subNav = [
     relatedModule: 'grnStock',
     icon: TbFileAnalytics,
     requiresRevenueAccess: false,
+  },
+  {
+    path: '/reports/vendorManufacturer',
+    title: 'Vendor / Manufacturer',
+    relatedModule: 'reportsModule',
+    icon: TbFileAnalytics,
+    requiresRevenueAccess: false,
+    requiresVendorManufacturerAccess: true,
   },
   {
     path: '/reports/alerts',
@@ -169,6 +178,9 @@ function Reports() {
       // If this nav item requires New Patient Tracker access, check if user has access
       if (nav.requiresNewPatientTrackerAccess) {
         return hasNewPatientTrackerAccess(user?.email)
+      }
+      if (nav.requiresVendorManufacturerAccess) {
+        return hasVendorManufacturerReportAccess(user?.email)
       }
       // Otherwise, show all other menu items
       return true

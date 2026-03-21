@@ -1,6 +1,6 @@
 export const stockReportfilterData = (data, filters) => {
   if (!data) return []
-  return data.filter(row => {
+  return data.filter((row) => {
     return Object.entries(filters).every(([field, filter]) => {
       if (!filter || !filter.value) return true
 
@@ -40,7 +40,7 @@ export const stockReportfilterData = (data, filters) => {
 
 export const prescribedReportFilterData = (data, filters) => {
   if (!data) return []
-  return data.filter(row => {
+  return data.filter((row) => {
     return Object.entries(filters).every(([field, filter]) => {
       if (!filter || !filter.value) return true
 
@@ -65,7 +65,7 @@ export const prescribedReportFilterData = (data, filters) => {
 
 export const grnVendorReportFilterData = (data, filters) => {
   if (!data) return []
-  return data.filter(row => {
+  return data.filter((row) => {
     return Object.entries(filters).every(([field, filter]) => {
       if (!filter || !filter.value) return true
 
@@ -125,10 +125,32 @@ export const grnVendorReportFilterData = (data, filters) => {
   })
 }
 
+export const vendorManufacturerDeptReportFilterData = (data, filters) => {
+  if (!data) return []
+  return data.filter((row) => {
+    return Object.entries(filters).every(([field, filter]) => {
+      if (!filter || !filter.value) return true
+
+      const value = row?.[field]
+      const str = value == null ? '' : String(value).toLowerCase()
+      const query = String(filter.value).toLowerCase()
+
+      switch (filter.prefix) {
+        case 'LIKE':
+          return str.includes(query)
+        case 'NOT LIKE':
+          return !str.includes(query)
+        default:
+          return true
+      }
+    })
+  })
+}
+
 export const patientFilterData = (data, filters) => {
   if (!data) return []
   console.log('patientFilterData', data, filters)
-  return data.filter(row => {
+  return data.filter((row) => {
     return Object.entries(filters).every(([field, filterValue]) => {
       // If no filter value is set or filter is null, include the row
       if (!filterValue || filterValue === null) return true

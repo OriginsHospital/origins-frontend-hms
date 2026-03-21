@@ -175,6 +175,8 @@ export const API_ROUTES = {
   GRN_SALES_REPORT: '/reports/grnSalesReport',
   GRN_STOCK_REPORT: '/reports/stockReport',
   NOSHOW_REPORT: '/reports/noShowReport',
+  VENDOR_MANUFACTURER_DEPT_REPORT:
+    '/reports/vendorManufacturerDepartmentReport',
 
   GET_OT_LIST: '/op/getOtList',
   ADD_NEW_OT: '/op/saveOTDetails',

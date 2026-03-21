@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState, useRef } from 'react'
+import React, { useEffect, useMemo, useState, useRef } from 'react'
 import RenderPrescriptionPharmacy from './RenderPrescriptionPharmacy'
 import dynamic from 'next/dynamic'
 
@@ -77,10 +77,11 @@ const FLUSH_KIT = {
   medicines: [
     { name: 'EUTRIG-HP 2000 INJ', quantity: 1 },
     { name: 'NIPRO SYRINGE 2.5ML', quantity: 2 },
+    { name: 'NIPRO SYRINGE 5ML', quantity: 1 },
     { name: 'DISPOVAN NEEDLE 26', quantity: 1 },
     { name: 'IUI CATHETER', quantity: 1 },
     { name: 'NS 100ML', quantity: 1 },
-    { name: 'Clean Care Gloves', quantity: 1 },
+    { name: 'Cleen Care Gloves', quantity: 1 },
   ],
 }
 

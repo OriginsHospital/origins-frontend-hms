@@ -1893,6 +1893,47 @@ export const getGrnVendorPaymentsReport = async (token) => {
   return response.json()
 }
 
+export const getVendorManufacturerDepartmentReport = async (
+  token,
+  {
+    fromDate,
+    toDate,
+    departmentId,
+    vendorId,
+    manufacturerId,
+    searchQuery,
+    includeReturned,
+  } = {},
+) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+
+  const params = new URLSearchParams()
+  if (fromDate) params.set('fromDate', fromDate)
+  if (toDate) params.set('toDate', toDate)
+  if (departmentId) params.set('departmentId', departmentId)
+  if (vendorId) params.set('vendorId', vendorId)
+  if (manufacturerId) params.set('manufacturerId', manufacturerId)
+  if (searchQuery) params.set('searchQuery', searchQuery)
+  if (includeReturned != null) params.set('includeReturned', includeReturned)
+
+  const queryString = params.toString()
+
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.VENDOR_MANUFACTURER_DEPT_REPORT}${
+      queryString ? `?${queryString}` : ''
+    }`,
+    {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
 export const download_lab_reports = async (token, payload) => {
   //POST CALL
   const myHeaders = new Headers()
