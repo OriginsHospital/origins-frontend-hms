@@ -2091,6 +2091,53 @@ export const SalesReportDashboard = async (
 
   return data
 }
+
+export const updateRevenueNewEntry = async (
+  token,
+  source,
+  paymentMasterId,
+  paymentData,
+) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.REVENUE_NEW_ENTRY}/${source}/${paymentMasterId}`,
+    {
+      method: 'PUT',
+      headers: myHeaders,
+      body: JSON.stringify(paymentData),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  const data = await response.json()
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to update revenue entry')
+  }
+  return data
+}
+
+export const deleteRevenueNewEntry = async (token, source, paymentMasterId) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.REVENUE_NEW_ENTRY}/${source}/${paymentMasterId}`,
+    {
+      method: 'DELETE',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  const data = await response.json()
+  if (!response.ok) {
+    throw new Error(data.message || 'Failed to delete revenue entry')
+  }
+  return data
+}
+
 export const ReturnItems = async (token, payload) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
@@ -5099,7 +5146,14 @@ export const updateAdvancePaymentHistory = async (
       credentials: 'include',
     },
   )
-  return response.json()
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok || data.status !== 200) {
+    const err = new Error(data.message || `Update failed (${response.status})`)
+    err.status = data.status ?? response.status
+    err.data = data
+    throw err
+  }
+  return data
 }
 
 export const deleteAdvancePaymentHistory = async (token, paymentHistoryId) => {

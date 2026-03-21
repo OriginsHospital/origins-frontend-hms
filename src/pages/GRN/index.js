@@ -106,7 +106,11 @@ const allGRNsTableColumns = [
     type: 'date',
     headerClassName: 'bg-primary text-secondary font-bold',
 
-    valueFormatter: params => dayjs(params.value).format('DD-MM-YYYY'),
+    valueFormatter: (value) => {
+      if (value == null || value === '') return ''
+      const d = dayjs(value)
+      return d.isValid() ? d.format('DD-MM-YYYY') : ''
+    },
     flex: 0.4,
   },
   {
@@ -122,7 +126,7 @@ const allGRNsTableColumns = [
     width: 200,
     headerClassName: 'bg-primary text-secondary font-bold',
     flex: 1,
-    renderCell: params => {
+    renderCell: (params) => {
       return params.row?.supplierEmail?.toLowerCase()
     },
   },
@@ -172,7 +176,11 @@ const GRNsReturnTable = [
     type: 'date',
     headerClassName: 'bg-primary text-secondary font-bold',
 
-    valueFormatter: params => dayjs(params.value).format('DD-MM-YYYY'),
+    valueFormatter: (value) => {
+      if (value == null || value === '') return ''
+      const d = dayjs(value)
+      return d.isValid() ? d.format('DD-MM-YYYY') : ''
+    },
     flex: 0.5,
   },
   {
@@ -192,7 +200,7 @@ const GRNsReturnTable = [
 ]
 function Grn() {
   // const [suppliers,setSuppliers]=useState('');
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const [grnDetails, setGrnDetails] = useState(createEmptyGrnDetail())
   const dispatch = useDispatch()
 
@@ -249,17 +257,17 @@ function Grn() {
     enabled: !!selectedRow?.id,
   })
 
-  const handleRowEdit = row => {
+  const handleRowEdit = (row) => {
     console.log('row clicked', row)
     dispatch(openModal('editModalInGRNTable'))
     setSelectedRow(row)
   }
   const queryClient = useQueryClient()
   const [selectedItems, setSelectedItems] = useState([])
-  const handleCheckboxChange = item => {
-    if (selectedItems.some(selected => selected.itemId === item.itemId)) {
+  const handleCheckboxChange = (item) => {
+    if (selectedItems.some((selected) => selected.itemId === item.itemId)) {
       setSelectedItems(
-        selectedItems.filter(selected => selected.itemId !== item.itemId),
+        selectedItems.filter((selected) => selected.itemId !== item.itemId),
       )
     } else {
       setSelectedItems([...selectedItems, item])
@@ -326,7 +334,7 @@ function Grn() {
     const payload = {
       grnId: getGRNById?.grnDetails.id,
       supplierId: getGRNById?.grnDetails.supplierId,
-      returnDetails: selectedItems.map(item => ({
+      returnDetails: selectedItems.map((item) => ({
         itemId: item.itemId,
         batchNo: item.batchNo,
         itemName: item.itemName,
@@ -374,7 +382,7 @@ function Grn() {
       }
     },
   })
-  const handleRowEditReturnedGRN = row => {
+  const handleRowEditReturnedGRN = (row) => {
     dispatch(openModal('editModalInReturnedGRNTable'))
     //write code here
     console.log(row)
@@ -511,7 +519,7 @@ function Grn() {
                     /> */}
           <DataGrid
             rows={getAllGRNs}
-            getRowId={row => row.grnId}
+            getRowId={(row) => row.grnId}
             columns={allGRNsTableColumns}
             onRowClick={handleRowEdit}
           />
@@ -543,7 +551,7 @@ function Grn() {
                   {eachItem.isReturned !== 1 ? (
                     <Checkbox
                       checked={selectedItems.some(
-                        selected => selected.itemId === eachItem.itemId,
+                        (selected) => selected.itemId === eachItem.itemId,
                       )}
                       onChange={() => handleCheckboxChange(eachItem)}
                       // disabled={eachItem.isReturned === 1}
@@ -602,7 +610,7 @@ function Grn() {
         <TabPanel value={`returnGRNs`}>
           <DataGrid
             rows={getGRNReturnedHistoryData}
-            getRowId={row => row.id}
+            getRowId={(row) => row.id}
             columns={GRNsReturnTable}
             onRowClick={handleRowEditReturnedGRN}
           />
@@ -630,7 +638,7 @@ function Grn() {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {selectedRowReturn.returnDetails?.map(item => (
+                    {selectedRowReturn.returnDetails?.map((item) => (
                       <TableRow key={item.itemId}>
                         <TableCell>{item.itemName}</TableCell>
                         <TableCell>{item.batchNo}</TableCell>

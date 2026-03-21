@@ -163,6 +163,7 @@ export const API_ROUTES = {
   GET_PURCHASE_RETURN: '/payment/getPurchaseReturnInformation',
   RETURN_PURCHASED_ITEMS: '/payment/returnPurchasedItems',
   SALES_REPORT_DASHBOARD: '/reports/salesReport',
+  REVENUE_NEW_ENTRY: '/reports/revenueNew/entry',
   GET_DAILY_REPORT_SUMMARY: '/reports/dailyReportSummary',
   RETURN_PHARMACY_ITEMS: '/payment/returnPharmacyItems',
   //Sacn module

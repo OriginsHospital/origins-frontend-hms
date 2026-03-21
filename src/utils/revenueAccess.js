@@ -38,3 +38,13 @@ export function hasRevenueNewAccess(userEmail) {
 export function getAllowedRevenueNewEmails() {
   return [...ALLOWED_REVENUE_NEW_EMAILS]
 }
+
+/** Edit/delete row actions on Revenue New report (restricted user only). */
+const REVENUE_NEW_ROW_ACTIONS_EMAIL = 'nikhilsuvva77@gmail.com'
+
+export function hasRevenueNewRowActionsAccess(userEmail) {
+  if (!userEmail) {
+    return false
+  }
+  return userEmail.toLowerCase().trim() === REVENUE_NEW_ROW_ACTIONS_EMAIL
+}

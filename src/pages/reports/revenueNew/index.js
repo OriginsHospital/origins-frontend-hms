@@ -22,7 +22,10 @@ import { useSelector } from 'react-redux'
 import { useRouter } from 'next/router'
 import { toast } from 'react-toastify'
 import { toastconfig } from '@/utils/toastconfig'
-import { hasRevenueNewAccess } from '@/utils/revenueAccess'
+import {
+  hasRevenueNewAccess,
+  hasRevenueNewRowActionsAccess,
+} from '@/utils/revenueAccess'
 
 function SalesNew() {
   const router = useRouter()
@@ -778,6 +781,11 @@ function SalesNew() {
           branchId: branchId === 'ALL' ? 'ALL' : appliedBranchId,
         }}
         activeView={activeView}
+        showRevenueRowActions={hasRevenueNewRowActionsAccess(
+          userDetails?.email,
+        )}
+        accessToken={userDetails?.accessToken}
+        onRevenueMutationSuccess={() => refetch()}
       />
     </div>
   )

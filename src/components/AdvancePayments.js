@@ -125,11 +125,13 @@ function AdvancePayments({ formData }) {
   const [newlyAddedPayment, setNewlyAddedPayment] = useState(null)
   const [menuAnchor, setMenuAnchor] = useState(null)
   const [cardMenuPayment, setCardMenuPayment] = useState(null) // when menu opened from card header
+  const [menuParentPayment, setMenuParentPayment] = useState(null) // parent row when menu opened from history line
   const [selectedPaymentHistory, setSelectedPaymentHistory] = useState(null)
   const [editPaymentHistory, setEditPaymentHistory] = useState(null)
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [deleteEntryConfirm, setDeleteEntryConfirm] = useState(null) // for deleting whole advance payment entry (pending)
   const [editFormData, setEditFormData] = useState({
+    paymentTitle: '',
     paidOrderAmount: '',
     discountAmount: '',
     paymentMode: '',
@@ -144,20 +146,24 @@ function AdvancePayments({ formData }) {
   const isAdmin =
     userDetails.roleDetails?.id === 1 || userDetails.roleDetails?.id === 7
 
-  // Edit/delete advance payment history only for this user (check email and userName)
-  const userEmail = userDetails?.email || userDetails?.userDetails?.email || ''
-  const userName =
-    userDetails?.userName || userDetails?.userDetails?.userName || ''
+  // Edit/delete advance payments only for this account (email on profile; userName if it is the same login id)
   const allowedEmail = 'nikhilsuvva77@gmail.com'
+  const norm = (v) =>
+    String(v ?? '')
+      .trim()
+      .toLowerCase()
   const canEditDeleteAdvancePayment =
-    userEmail.toLowerCase() === allowedEmail ||
-    userName.toLowerCase() === allowedEmail
+    norm(userDetails?.email || userDetails?.userDetails?.email) ===
+      allowedEmail ||
+    norm(userDetails?.userName || userDetails?.userDetails?.userName) ===
+      allowedEmail
 
   // Handle menu open (from payment history row)
-  const handleMenuOpen = (event, paymentHistory) => {
+  const handleMenuOpen = (event, paymentHistory, parentPayment = null) => {
     event.stopPropagation() // Prevent accordion from expanding
     setMenuAnchor(event.currentTarget)
     setCardMenuPayment(null)
+    setMenuParentPayment(parentPayment)
     setSelectedPaymentHistory(paymentHistory)
   }
 
@@ -166,6 +172,7 @@ function AdvancePayments({ formData }) {
     event.stopPropagation()
     setMenuAnchor(event.currentTarget)
     setCardMenuPayment(payment)
+    setMenuParentPayment(null)
     setSelectedPaymentHistory(null)
   }
 
@@ -173,12 +180,14 @@ function AdvancePayments({ formData }) {
   const handleMenuClose = () => {
     setMenuAnchor(null)
     setCardMenuPayment(null)
+    setMenuParentPayment(null)
     setSelectedPaymentHistory(null)
   }
 
   // Handle edit click (history optional when called from card menu)
   const handleEditClick = (historyEntry) => {
     const entry = historyEntry ?? selectedPaymentHistory
+    const parentRow = cardMenuPayment ?? menuParentPayment
     if (entry) {
       setEditPaymentHistory(entry)
       // The query returns paidOrderAmountBeforeDiscount as 'paidOrderAmount' in the JSON
@@ -188,6 +197,7 @@ function AdvancePayments({ formData }) {
       const paidAmountAfterDiscount = paidAmountBeforeDiscount - discount
 
       setEditFormData({
+        paymentTitle: parentRow?.paymentReason ?? '',
         paidOrderAmount:
           paidAmountAfterDiscount > 0
             ? paidAmountAfterDiscount.toString()
@@ -225,30 +235,23 @@ function AdvancePayments({ formData }) {
       toast.success('Payment history updated successfully', toastconfig)
       setEditPaymentHistory(null)
       setEditFormData({
+        paymentTitle: '',
         paidOrderAmount: '',
         discountAmount: '',
         paymentMode: '',
         orderDate: '',
         couponCode: '',
       })
-      // Invalidate queries first
-      queryClient.invalidateQueries({
+      await queryClient.invalidateQueries({
         queryKey: ['otherPaymentsStatus', formData.id],
       })
-      // Refetch after a delay to ensure backend has processed the update
-      setTimeout(async () => {
-        try {
-          const result = await refetchPayments()
-          console.log('Payment data refetched after update:', result?.data)
-        } catch (error) {
-          console.error('Error refetching payments after update:', error)
-        }
-      }, 600)
+      await refetchPayments()
     },
     onError: (error) => {
       console.error('Error updating payment history:', error)
       toast.error(
         error?.response?.data?.message ||
+          error?.data?.message ||
           error?.message ||
           'Failed to update payment history',
         toastconfig,
@@ -330,7 +333,18 @@ function AdvancePayments({ formData }) {
   const handleEditSubmit = () => {
     if (!editPaymentHistory) return
 
+    const titleTrimmed = (editFormData.paymentTitle || '').trim()
+    if (!titleTrimmed) {
+      toast.error('Payment title is required', toastconfig)
+      return
+    }
+    if (titleTrimmed.length > 100) {
+      toast.error('Payment title must be at most 100 characters', toastconfig)
+      return
+    }
+
     const paymentData = {
+      appointmentReason: titleTrimmed,
       paidOrderAmount: parseFloat(editFormData.paidOrderAmount) || 0,
       discountAmount: parseFloat(editFormData.discountAmount) || 0,
       paymentMode: editFormData.paymentMode,
@@ -371,6 +385,7 @@ function AdvancePayments({ formData }) {
       return await getOtherPaymentsStatus(userDetails.accessToken, formData.id)
     },
     enabled: !!formData?.id,
+    staleTime: 0,
   })
 
   // Get coupons for discount
@@ -1004,7 +1019,7 @@ function AdvancePayments({ formData }) {
                                         <IconButton
                                           size="small"
                                           onClick={(e) =>
-                                            handleMenuOpen(e, history)
+                                            handleMenuOpen(e, history, payment)
                                           }
                                           sx={{ ml: 1 }}
                                         >
@@ -1390,6 +1405,7 @@ function AdvancePayments({ formData }) {
         onClose={() => {
           setEditPaymentHistory(null)
           setEditFormData({
+            paymentTitle: '',
             paidOrderAmount: '',
             discountAmount: '',
             paymentMode: '',
@@ -1403,6 +1419,21 @@ function AdvancePayments({ formData }) {
         <DialogTitle>Edit Payment History</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+            <TextField
+              label="Payment title"
+              value={editFormData.paymentTitle}
+              onChange={(e) =>
+                setEditFormData((prev) => ({
+                  ...prev,
+                  paymentTitle: e.target.value,
+                }))
+              }
+              fullWidth
+              size="small"
+              required
+              inputProps={{ maxLength: 100 }}
+              helperText="Shown on the advance payment row (max 100 characters)"
+            />
             {/* Payment Mode */}
             <FormControl fullWidth size="small">
               <InputLabel>Payment Mode</InputLabel>
@@ -1504,6 +1535,7 @@ function AdvancePayments({ formData }) {
             onClick={() => {
               setEditPaymentHistory(null)
               setEditFormData({
+                paymentTitle: '',
                 paidOrderAmount: '',
                 discountAmount: '',
                 paymentMode: '',

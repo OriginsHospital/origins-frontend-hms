@@ -1,8 +1,27 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Card, CardContent } from '@mui/material'
+import {
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControl,
+  IconButton,
+  InputLabel,
+  MenuItem,
+  Select,
+  TextField,
+  Typography,
+} from '@mui/material'
+import { Edit, Delete } from '@mui/icons-material'
 import dayjs from 'dayjs'
+import { useMutation } from '@tanstack/react-query'
+import { toast } from 'react-toastify'
 import SalesChart from './charts/SalesChart'
 import FilteredDataGrid from './FilteredDataGrid'
+import { updateRevenueNewEntry, deleteRevenueNewEntry } from '@/constants/apis'
+import { toastconfig } from '@/utils/toastconfig'
 
 const SERVICE_COLORS = {
   'IVF PACKAGE': '#27ae60',
@@ -137,6 +156,9 @@ const SalesDashboard = ({
   reportType,
   branchName,
   filters: reportFilters,
+  showRevenueRowActions = false,
+  accessToken,
+  onRevenueMutationSuccess,
 }) => {
   const [filters, setFilters] = useState({
     patientName: '',
@@ -151,6 +173,93 @@ const SalesDashboard = ({
   const [isChartLoading, setIsChartLoading] = useState(false)
   const debounceRef = useRef(null)
   const prevRowsSignatureRef = useRef('')
+  const [editRow, setEditRow] = useState(null)
+  const [deleteRow, setDeleteRow] = useState(null)
+  const [editFormData, setEditFormData] = useState({
+    totalOrderAmount: '',
+    discountAmount: '',
+    paidOrderAmount: '',
+    paymentMode: '',
+    productType: '',
+    orderDate: '',
+  })
+
+  const resetEditForm = useCallback(() => {
+    setEditFormData({
+      totalOrderAmount: '',
+      discountAmount: '',
+      paidOrderAmount: '',
+      paymentMode: '',
+      productType: '',
+      orderDate: '',
+    })
+  }, [])
+
+  const updateRevenueMutation = useMutation({
+    mutationFn: async ({ source, paymentMasterId, body }) => {
+      return updateRevenueNewEntry(accessToken, source, paymentMasterId, body)
+    },
+    onSuccess: () => {
+      toast.success('Entry updated successfully', toastconfig)
+      setEditRow(null)
+      resetEditForm()
+      onRevenueMutationSuccess?.()
+    },
+    onError: (err) => {
+      toast.error(err?.message || 'Failed to update entry', toastconfig)
+    },
+  })
+
+  const deleteRevenueMutation = useMutation({
+    mutationFn: async ({ source, paymentMasterId }) => {
+      return deleteRevenueNewEntry(accessToken, source, paymentMasterId)
+    },
+    onSuccess: () => {
+      toast.success('Entry deleted successfully', toastconfig)
+      setDeleteRow(null)
+      onRevenueMutationSuccess?.()
+    },
+    onError: (err) => {
+      toast.error(err?.message || 'Failed to delete entry', toastconfig)
+    },
+  })
+
+  const handleRevenueEditSubmit = useCallback(() => {
+    if (!editRow?.paymentMasterId || !editRow?.revenueSource) return
+    const body = {
+      totalOrderAmount: parseFloat(editFormData.totalOrderAmount) || 0,
+      discountAmount: parseFloat(editFormData.discountAmount) || 0,
+      paidOrderAmount: parseFloat(editFormData.paidOrderAmount) || 0,
+      paymentMode: editFormData.paymentMode,
+      productType: editFormData.productType,
+      orderDate: editFormData.orderDate
+        ? dayjs(editFormData.orderDate).format('YYYY-MM-DD HH:mm:ss')
+        : null,
+    }
+    if (editRow.revenueSource === 'OTHER_PAYMENT') {
+      body.appointmentReason = editFormData.productType
+    }
+    updateRevenueMutation.mutate({
+      source: editRow.revenueSource,
+      paymentMasterId: editRow.paymentMasterId,
+      body,
+    })
+  }, [editRow, editFormData, updateRevenueMutation])
+
+  const handleRevenueDeleteConfirm = useCallback(() => {
+    if (!deleteRow?.paymentMasterId || !deleteRow?.revenueSource) return
+    deleteRevenueMutation.mutate({
+      source: deleteRow.revenueSource,
+      paymentMasterId: deleteRow.paymentMasterId,
+    })
+  }, [deleteRow, deleteRevenueMutation])
+
+  const getRevenueRowId = useCallback((row) => {
+    if (row?.paymentMasterId != null && row?.revenueSource) {
+      return `${row.revenueSource}-${row.paymentMasterId}`
+    }
+    return `${row?.orderId}-${row?.productType || ''}`
+  }, [])
 
   const computeRowsSignature = useCallback((rows) => {
     if (!rows || rows.length === 0) return '__EMPTY__'
@@ -258,107 +367,166 @@ const SalesDashboard = ({
     }
   }, [])
 
-  const columns = [
-    {
-      field: 'date',
-      headerName: 'Date',
-      flex: 1,
-      align: 'left',
-      headerAlign: 'left',
-      renderCell: (params) => (
-        <div>{dayjs(params?.row?.date).format('DD-MM-YYYY')}</div>
-      ),
-      filterField: 'date',
-    },
-    {
-      field: 'patientName',
-      headerName: 'Patient Name',
-      type: 'string',
-      flex: 2,
-      align: 'left',
-      headerAlign: 'left',
-      filterField: 'patientName',
-      renderCell: (params) => <div>{params?.row?.patientName || ''}</div>,
-      // Support searching by both first and last name
-      valueGetter: (params) => params?.row?.patientName || '',
-      filterOperators: [
-        {
-          label: 'contains',
-          value: 'contains',
-          getApplyFilterFn: (filterItem) => {
-            if (!filterItem.value) {
-              return null
-            }
-            return (params) => {
-              const searchValue = filterItem.value.toLowerCase()
-              const patientName = (params.value || '').toLowerCase()
-              return patientName.includes(searchValue)
-            }
+  const showRevenueActionsColumn = Boolean(
+    showRevenueRowActions && accessToken && activeView === 'sales',
+  )
+
+  const columns = useMemo(() => {
+    const baseColumns = [
+      {
+        field: 'date',
+        headerName: 'Date',
+        flex: 1,
+        align: 'left',
+        headerAlign: 'left',
+        renderCell: (params) => (
+          <div>{dayjs(params?.row?.date).format('DD-MM-YYYY')}</div>
+        ),
+        filterField: 'date',
+      },
+      {
+        field: 'patientName',
+        headerName: 'Patient Name',
+        type: 'string',
+        flex: 2,
+        align: 'left',
+        headerAlign: 'left',
+        filterField: 'patientName',
+        renderCell: (params) => <div>{params?.row?.patientName || ''}</div>,
+        valueGetter: (params) => params?.row?.patientName || '',
+        filterOperators: [
+          {
+            label: 'contains',
+            value: 'contains',
+            getApplyFilterFn: (filterItem) => {
+              if (!filterItem.value) {
+                return null
+              }
+              return (params) => {
+                const searchValue = filterItem.value.toLowerCase()
+                const patientName = (params.value || '').toLowerCase()
+                return patientName.includes(searchValue)
+              }
+            },
           },
+        ],
+      },
+      {
+        field: 'productType',
+        headerName: 'Service',
+        flex: 1.2,
+        align: 'left',
+        headerAlign: 'left',
+        renderCell: (params) => (
+          <>
+            {params?.row?.productType?.charAt(0).toUpperCase() +
+              params?.row?.productType?.slice(1).toLowerCase()}
+          </>
+        ),
+        filterField: 'productType',
+      },
+      {
+        field: 'paymentMode',
+        headerName: 'Payment Mode',
+        flex: 1.2,
+        align: 'left',
+        headerAlign: 'left',
+        renderCell: (params) => {
+          if (params?.row?.paymentMode) {
+            return (
+              <>
+                {params?.row?.paymentMode?.charAt(0).toUpperCase() +
+                  params?.row?.paymentMode?.slice(1).toLowerCase()}
+              </>
+            )
+          } else return <>Cash</>
         },
-      ],
-    },
-    {
-      field: 'productType',
-      headerName: 'Service',
-      flex: 1.2,
-      align: 'left',
-      headerAlign: 'left',
-      renderCell: (params) => (
-        <>
-          {params?.row?.productType?.charAt(0).toUpperCase() +
-            params?.row?.productType?.slice(1).toLowerCase()}
-        </>
-      ),
-      filterField: 'productType',
-    },
-    {
-      field: 'paymentMode',
-      headerName: 'Payment Mode',
-      flex: 1.2,
-      align: 'left',
-      headerAlign: 'left',
-      renderCell: (params) => {
-        if (params?.row?.paymentMode) {
+        filterField: 'paymentMode',
+      },
+      {
+        field: 'amount',
+        headerName: 'Amount',
+        type: 'number',
+        flex: 1,
+        align: 'left',
+        headerAlign: 'left',
+        renderCell: (params) => {
+          const amount = params?.row?.amount
+          return <div>{amount ? Math.round(amount) : 0}</div>
+        },
+        valueFormatter: (params) => {
+          const amount = params?.value
+          return amount ? Math.round(amount) : 0
+        },
+        sortComparator: (v1, v2) => v1 - v2,
+      },
+      {
+        field: 'discountAmount',
+        headerName: 'Discount',
+        type: 'number',
+        flex: 1,
+        align: 'left',
+        headerAlign: 'left',
+      },
+    ]
+
+    if (!showRevenueActionsColumn) {
+      return baseColumns
+    }
+
+    return [
+      ...baseColumns,
+      {
+        field: 'actions',
+        headerName: 'Actions',
+        sortable: false,
+        filterable: false,
+        flex: 0.85,
+        minWidth: 108,
+        align: 'center',
+        headerAlign: 'center',
+        renderCell: (params) => {
+          const row = params.row
+          if (!row?.paymentMasterId || !row?.revenueSource) {
+            return null
+          }
           return (
-            <>
-              {params?.row?.paymentMode?.charAt(0).toUpperCase() +
-                params?.row?.paymentMode?.slice(1).toLowerCase()}
-            </>
+            <Box sx={{ display: 'flex', gap: 0.25 }}>
+              <IconButton
+                size="small"
+                aria-label="Edit revenue row"
+                onClick={() => {
+                  setEditRow(row)
+                  setEditFormData({
+                    totalOrderAmount: row.totalOrderAmount ?? '',
+                    discountAmount: row.discountAmount ?? '',
+                    paidOrderAmount: row.amount ?? row.paidOrderAmount ?? '',
+                    paymentMode: String(
+                      row.paymentMode || 'CASH',
+                    ).toUpperCase(),
+                    productType: row.productType || '',
+                    orderDate: row.date
+                      ? dayjs(row.date).format('YYYY-MM-DD')
+                      : '',
+                  })
+                }}
+              >
+                <Edit fontSize="small" />
+              </IconButton>
+              <IconButton
+                size="small"
+                color="error"
+                aria-label="Delete revenue row"
+                onClick={() => setDeleteRow(row)}
+              >
+                <Delete fontSize="small" />
+              </IconButton>
+            </Box>
           )
-        } else return <>Cash</>
+        },
       },
-      filterField: 'paymentMode',
-    },
-    {
-      field: 'amount',
-      headerName: 'Amount',
-      type: 'number',
-      flex: 1,
-      align: 'left',
-      headerAlign: 'left',
-      // Round the displayed value
-      renderCell: (params) => {
-        const amount = params?.row?.amount
-        return <div>{amount ? Math.round(amount) : 0}</div>
-      },
-      // Format value for exports and sorting
-      valueFormatter: (params) => {
-        const amount = params?.value
-        return amount ? Math.round(amount) : 0
-      },
-      // Keep original value for sorting
-      sortComparator: (v1, v2) => v1 - v2,
-    },
-    {
-      field: 'discountAmount',
-      headerName: 'Discount',
-      type: 'number',
-      flex: 1,
-      align: 'left',
-      headerAlign: 'left',
-    },
-  ]
+    ]
+  }, [showRevenueActionsColumn])
 
   // Function to filter data based on current filters
   // const getFilteredData = rawData => {
@@ -592,57 +760,246 @@ const SalesDashboard = ({
     pieChartDataset.amounts.some((amount) => amount > 0)
 
   return (
-    <div className="grid grid-cols-12 gap-5">
-      {/* Table Section with null check */}
-      {activeView === 'sales' ? (
-        <div className="col-span-12 lg:col-span-8">
-          <SalesTable
-            data={rowsForActiveBranch}
-            title="Sales"
-            columns={columns}
-            branchId={branchId}
-            customFilters={customFilters}
-            filterData={filterData}
-            getUniqueValues={getUniqueValues}
-            reportName={reportName}
-            reportType={reportType}
-            branchName={branchName}
-            filters={reportFilters}
-            onRowsChange={scheduleVisibleRowsUpdate}
-          />
-        </div>
-      ) : (
-        <div className="col-span-12">
-          <SalesTable
-            data={rowsForActiveBranchReturns}
-            title={labels?.returns || 'Refunds'}
-            columns={columns}
-            branchId={branchId}
-            customFilters={customFilters}
-            filterData={filterData}
-            getUniqueValues={getUniqueValues}
-            reportName={reportName}
-            reportType={reportType}
-            branchName={branchName}
-            filters={reportFilters}
-          />
-        </div>
-      )}
-      {/* Chart Section with null check */}
-      <div className="col-span-12 lg:col-span-4">
+    <>
+      <div className="grid grid-cols-12 gap-5">
+        {/* Table Section with null check */}
         {activeView === 'sales' ? (
-          <SalesChart
-            dataset={pieChartDataset}
-            isLoading={isChartLoading}
-            hasData={hasChartData}
-          />
+          <div className="col-span-12 lg:col-span-8">
+            <SalesTable
+              data={rowsForActiveBranch}
+              title="Sales"
+              columns={columns}
+              branchId={branchId}
+              customFilters={customFilters}
+              filterData={filterData}
+              getUniqueValues={getUniqueValues}
+              reportName={reportName}
+              reportType={reportType}
+              branchName={branchName}
+              filters={reportFilters}
+              onRowsChange={scheduleVisibleRowsUpdate}
+              getRowId={getRevenueRowId}
+            />
+          </div>
         ) : (
-          <div className="text-center p-4 text-gray-500">
-            No chart available for the selected view
+          <div className="col-span-12">
+            <SalesTable
+              data={rowsForActiveBranchReturns}
+              title={labels?.returns || 'Refunds'}
+              columns={columns}
+              branchId={branchId}
+              customFilters={customFilters}
+              filterData={filterData}
+              getUniqueValues={getUniqueValues}
+              reportName={reportName}
+              reportType={reportType}
+              branchName={branchName}
+              filters={reportFilters}
+              getRowId={getRevenueRowId}
+            />
           </div>
         )}
+        {/* Chart Section with null check */}
+        <div className="col-span-12 lg:col-span-4">
+          {activeView === 'sales' ? (
+            <SalesChart
+              dataset={pieChartDataset}
+              isLoading={isChartLoading}
+              hasData={hasChartData}
+            />
+          ) : (
+            <div className="text-center p-4 text-gray-500">
+              No chart available for the selected view
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+
+      {showRevenueActionsColumn && (
+        <>
+          <Dialog
+            open={Boolean(editRow)}
+            onClose={() => {
+              setEditRow(null)
+              resetEditForm()
+            }}
+            maxWidth="sm"
+            fullWidth
+          >
+            <DialogTitle>Edit revenue entry</DialogTitle>
+            <DialogContent>
+              <Box
+                sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}
+              >
+                <TextField
+                  label="Order ID"
+                  value={editRow?.orderId || ''}
+                  disabled
+                  fullWidth
+                  size="small"
+                />
+                <TextField
+                  label="Source type"
+                  value={editRow?.type || ''}
+                  disabled
+                  fullWidth
+                  size="small"
+                />
+                <TextField
+                  label={
+                    editRow?.revenueSource === 'OTHER_PAYMENT'
+                      ? 'Service title'
+                      : 'Product / service type'
+                  }
+                  value={editFormData.productType}
+                  onChange={(e) =>
+                    setEditFormData((prev) => ({
+                      ...prev,
+                      productType: e.target.value,
+                    }))
+                  }
+                  fullWidth
+                  size="small"
+                />
+                <FormControl fullWidth size="small">
+                  <InputLabel>Payment mode</InputLabel>
+                  <Select
+                    value={editFormData.paymentMode}
+                    label="Payment mode"
+                    onChange={(e) =>
+                      setEditFormData((prev) => ({
+                        ...prev,
+                        paymentMode: e.target.value,
+                      }))
+                    }
+                  >
+                    <MenuItem value="CASH">CASH</MenuItem>
+                    <MenuItem value="ONLINE">ONLINE</MenuItem>
+                    <MenuItem value="CARD">CARD</MenuItem>
+                    <MenuItem value="UPI">UPI</MenuItem>
+                  </Select>
+                </FormControl>
+                <TextField
+                  label="Date"
+                  type="date"
+                  value={editFormData.orderDate}
+                  onChange={(e) =>
+                    setEditFormData((prev) => ({
+                      ...prev,
+                      orderDate: e.target.value,
+                    }))
+                  }
+                  fullWidth
+                  size="small"
+                  InputLabelProps={{ shrink: true }}
+                />
+                <TextField
+                  label="Total amount"
+                  type="number"
+                  value={editFormData.totalOrderAmount}
+                  onChange={(e) =>
+                    setEditFormData((prev) => ({
+                      ...prev,
+                      totalOrderAmount: e.target.value,
+                    }))
+                  }
+                  fullWidth
+                  size="small"
+                  inputProps={{ step: '0.01', min: 0 }}
+                />
+                <TextField
+                  label="Discount"
+                  type="number"
+                  value={editFormData.discountAmount}
+                  onChange={(e) =>
+                    setEditFormData((prev) => ({
+                      ...prev,
+                      discountAmount: e.target.value,
+                    }))
+                  }
+                  fullWidth
+                  size="small"
+                  inputProps={{ step: '0.01', min: 0 }}
+                />
+                <TextField
+                  label="Paid amount"
+                  type="number"
+                  value={editFormData.paidOrderAmount}
+                  onChange={(e) =>
+                    setEditFormData((prev) => ({
+                      ...prev,
+                      paidOrderAmount: e.target.value,
+                    }))
+                  }
+                  fullWidth
+                  size="small"
+                  inputProps={{ step: '0.01', min: 0 }}
+                />
+              </Box>
+            </DialogContent>
+            <DialogActions>
+              <Button
+                onClick={() => {
+                  setEditRow(null)
+                  resetEditForm()
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="contained"
+                onClick={handleRevenueEditSubmit}
+                disabled={updateRevenueMutation.isPending}
+              >
+                {updateRevenueMutation.isPending ? 'Saving…' : 'Save'}
+              </Button>
+            </DialogActions>
+          </Dialog>
+
+          <Dialog
+            open={Boolean(deleteRow)}
+            onClose={() => setDeleteRow(null)}
+            maxWidth="sm"
+            fullWidth
+          >
+            <DialogTitle>Delete revenue entry</DialogTitle>
+            <DialogContent>
+              <Typography variant="body2" color="text.secondary">
+                This removes the payment line from the database. This cannot be
+                undone.
+              </Typography>
+              {deleteRow && (
+                <Box sx={{ mt: 2 }}>
+                  <Typography variant="body2">
+                    <strong>Order ID:</strong> {deleteRow.orderId}
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Service:</strong> {deleteRow.productType || '—'}
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Amount:</strong> ₹
+                    {Math.round(Number(deleteRow.amount) || 0).toLocaleString(
+                      'en-IN',
+                    )}
+                  </Typography>
+                </Box>
+              )}
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setDeleteRow(null)}>Cancel</Button>
+              <Button
+                variant="contained"
+                color="error"
+                onClick={handleRevenueDeleteConfirm}
+                disabled={deleteRevenueMutation.isPending}
+              >
+                {deleteRevenueMutation.isPending ? 'Deleting…' : 'Delete'}
+              </Button>
+            </DialogActions>
+          </Dialog>
+        </>
+      )}
+    </>
   )
 }
 
@@ -659,6 +1016,7 @@ const SalesTable = ({
   branchName,
   filters,
   onRowsChange,
+  getRowId,
 }) => (
   <div className="p-5">
     {/* <Typography variant="h6" className="mb-4">
@@ -667,7 +1025,9 @@ const SalesTable = ({
     <FilteredDataGrid
       key={`SalesTable-${branchId}-${data?.length}`}
       rows={data || []}
-      getRowId={(row) => row.orderId + row.productType}
+      getRowId={
+        getRowId || ((row) => `${row.orderId}-${row.productType || ''}`)
+      }
       columns={columns}
       className="h-[60vh]"
       customFilters={customFilters}
