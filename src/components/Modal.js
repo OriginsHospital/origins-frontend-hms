@@ -6,6 +6,8 @@ import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogContentText from '@mui/material/DialogContentText'
 import DialogTitle from '@mui/material/DialogTitle'
+import IconButton from '@mui/material/IconButton'
+import Close from '@mui/icons-material/Close'
 import { useDispatch, useSelector } from 'react-redux'
 import { closeModal } from '@/redux/modalSlice'
 
@@ -15,6 +17,7 @@ export default function Modal({
   children,
   title,
   closeOnOutsideClick,
+  showCloseButton,
   onOutsideClick,
   paperSx, // Additional sx props for Paper component
 }) {
@@ -58,11 +61,25 @@ export default function Modal({
   // Early return AFTER all hooks
   if (modal.key !== uniqueKey) return null
 
-  const handleClose = (event, reason) => {
-    if (closeOnOutsideClick) {
-      dispatch(closeModal())
-    }
+  const runCloseCallbacks = () => {
+    dispatch(closeModal())
     onOutsideClick?.()
+  }
+
+  const handleClose = (event, reason) => {
+    if (reason === 'backdropClick' && !closeOnOutsideClick) {
+      return
+    }
+    if (
+      closeOnOutsideClick ||
+      (showCloseButton && reason === 'escapeKeyDown')
+    ) {
+      runCloseCallbacks()
+    }
+  }
+
+  const handleCloseClick = () => {
+    runCloseCallbacks()
   }
 
   return (
@@ -84,7 +101,7 @@ export default function Modal({
         },
         onClick: closeOnOutsideClick ? handleClose : undefined,
       }}
-      disableEscapeKeyDown={!closeOnOutsideClick}
+      disableEscapeKeyDown={!closeOnOutsideClick && !showCloseButton}
       disableScrollLock={true} // Don't lock scroll to prevent body issues
       hideBackdrop={false}
       TransitionProps={{
@@ -107,11 +124,54 @@ export default function Modal({
         },
       }}
     >
-      {title && <DialogTitle>{title}</DialogTitle>}
+      {title && showCloseButton && (
+        <DialogTitle
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 1,
+            pr: 1,
+          }}
+        >
+          <span>{title}</span>
+          <IconButton
+            aria-label="Close dialog"
+            onClick={handleCloseClick}
+            edge="end"
+            size="small"
+          >
+            <Close />
+          </IconButton>
+        </DialogTitle>
+      )}
+      {title && !showCloseButton && <DialogTitle>{title}</DialogTitle>}
+      {!title && showCloseButton && (
+        <DialogTitle
+          sx={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            alignItems: 'center',
+            py: 1,
+            minHeight: 0,
+          }}
+        >
+          <IconButton
+            aria-label="Close dialog"
+            onClick={handleCloseClick}
+            edge="end"
+            size="small"
+          >
+            <Close />
+          </IconButton>
+        </DialogTitle>
+      )}
       <DialogContent
         sx={{
-          p: title ? undefined : 0,
-          '&.MuiDialogContent-root': { p: title ? undefined : 0 },
+          p: title || showCloseButton ? undefined : 0,
+          '&.MuiDialogContent-root': {
+            p: title || showCloseButton ? undefined : 0,
+          },
         }}
       >
         {children}

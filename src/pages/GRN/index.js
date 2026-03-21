@@ -364,8 +364,9 @@ function Grn() {
     }
   }
   const handleModalClose = () => {
-    dispatch(closeModal('editModalInGRNTable'))
+    dispatch(closeModal())
     setSelectedRow(null)
+    setSelectedRowReturn(null)
     setSelectedItems([])
   }
   // getGRNReturnedHistory
@@ -526,6 +527,7 @@ function Grn() {
           <Modal
             uniqueKey={'editModalInGRNTable'}
             closeOnOutsideClick={false}
+            showCloseButton
             onOutsideClick={handleModalClose}
             maxWidth="md"
           >
@@ -617,6 +619,7 @@ function Grn() {
           <Modal
             uniqueKey={'editModalInReturnedGRNTable'}
             closeOnOutsideClick={false}
+            showCloseButton
             onOutsideClick={handleModalClose}
             maxWidth="md"
           >
