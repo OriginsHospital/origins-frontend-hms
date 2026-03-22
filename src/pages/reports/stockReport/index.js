@@ -63,6 +63,31 @@ function StockReport({ breadcrumb = true }) {
   }, [branchId, branches])
 
   const isAllBranches = branchId === ALL_BRANCHES_VALUE
+
+  const formatRowBranchLabel = (row) => {
+    if (!isAllBranches && typeof branchId === 'number') {
+      const b = branches?.find((x) => x.id === branchId)
+      if (b) {
+        return [b.branchCode, b.name].filter(Boolean).join(' — ') || '—'
+      }
+      return '—'
+    }
+    const details = parseGrnDetails(row?.grnDetails)
+    const names = [
+      ...new Set(
+        details
+          .map((d) => d.branchName || d.branchId)
+          .filter((x) => x != null && x !== '')
+          .map((x) => String(x).trim())
+          .filter(Boolean),
+      ),
+    ].sort()
+    if (names.length === 0) {
+      return '—'
+    }
+    return names.join(', ')
+  }
+
   const [grnDetails, setGrnDetails] = useState(null)
   const [itemId, setItemId] = useState(null)
   const [editStockRow, setEditStockRow] = useState(null)
@@ -313,7 +338,26 @@ function StockReport({ breadcrumb = true }) {
 
   const columns = [
     { field: 'itemId', headerName: 'Item ID', width: 100 },
-    { field: 'itemName', headerName: 'Item Name', width: 350 },
+    { field: 'itemName', headerName: 'Item Name', width: 320 },
+    {
+      field: 'branchDisplay',
+      headerName: 'Branch',
+      width: 220,
+      minWidth: 140,
+      sortable: true,
+      valueGetter: (first, second) => {
+        const row =
+          second != null && typeof second === 'object' && 'itemId' in second
+            ? second
+            : first?.row
+        return row ? formatRowBranchLabel(row) : '—'
+      },
+      renderCell: (params) => (
+        <span className="text-sm leading-snug block py-1" title={params.value}>
+          {params.value}
+        </span>
+      ),
+    },
     {
       field: 'totalQuantity',
       headerName: 'Available Quantity',
