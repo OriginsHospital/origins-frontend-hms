@@ -1,29 +1,54 @@
 import Breadcrumb from '@/components/Breadcrumb'
 import Modal from '@/components/Modal'
-import { grnStockReport } from '@/constants/apis'
-import { closeModal, openModal } from '@/redux/modalSlice'
-import { Close } from '@mui/icons-material'
 import {
-  Autocomplete,
-  Button,
-  Chip,
-  IconButton,
-  TextField,
-} from '@mui/material'
-import { useQuery } from '@tanstack/react-query'
+  deleteGrnStockReportItem,
+  deleteGrnStockReportLine,
+  grnStockReport,
+  updateGrnStockReportItemSummary,
+  updateGrnStockReportLine,
+} from '@/constants/apis'
+import { isGrnStockReportAdmin } from '@/constants/grnStockReportAdmins'
+import { closeModal, openModal } from '@/redux/modalSlice'
+import { Autocomplete, Button, Chip, Stack, TextField } from '@mui/material'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import React, { useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import FilteredDataGrid from '@/components/FilteredDataGrid'
 import { stockReportfilterData } from '@/constants/filters'
+import { toast } from 'react-toastify'
+import { toastconfig } from '@/utils/toastconfig'
+
+function parseGrnDetails(raw) {
+  if (raw == null) return []
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw)
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  }
+  return Array.isArray(raw) ? raw : []
+}
 
 function StockReport({ breadcrumb = true }) {
-  const userDetails = useSelector(store => store.user)
-  const dropdowns = useSelector(store => store.dropdowns)
+  const userDetails = useSelector((store) => store.user)
+  const dropdowns = useSelector((store) => store.dropdowns)
   const { branches } = dropdowns
   const dispatch = useDispatch()
+  const queryClient = useQueryClient()
   const [branchId, setBranchId] = useState(branches[0]?.id || null)
   const [grnDetails, setGrnDetails] = useState(null)
   const [itemId, setItemId] = useState(null)
+  const [editStockRow, setEditStockRow] = useState(null)
+  const [editLines, setEditLines] = useState([])
+  const [editHeaderItemId, setEditHeaderItemId] = useState('')
+  const [editHeaderItemName, setEditHeaderItemName] = useState('')
+  const [editHeaderTotalQty, setEditHeaderTotalQty] = useState('')
+  const [savingItemSummary, setSavingItemSummary] = useState(false)
+
+  const userEmail = userDetails?.email || userDetails?.userDetails?.email || ''
+  const stockReportAdmin = isGrnStockReportAdmin(userEmail)
 
   const { data: grnStockData } = useQuery({
     queryKey: ['GRN_STOCK_REPORT', userDetails.accessToken, branchId],
@@ -36,13 +61,177 @@ function StockReport({ breadcrumb = true }) {
     enabled: !!branchId,
   })
 
-  const handleViewGRNDetails = row => {
+  const invalidateStockReport = () => {
+    queryClient.invalidateQueries({
+      queryKey: ['GRN_STOCK_REPORT', userDetails.accessToken, branchId],
+    })
+  }
+
+  const handleViewGRNDetails = (row) => {
     setItemId(row.itemId)
     dispatch(openModal(`grnStockDetails-${row.itemId}`))
     setGrnDetails(row?.grnDetails || [])
   }
 
-  // Define columns with filter fields
+  const handleCloseViewModal = () => {
+    dispatch(closeModal())
+    setItemId(null)
+    setGrnDetails(null)
+  }
+
+  const handleOpenEdit = (row) => {
+    const lines = parseGrnDetails(row.grnDetails)
+    setEditStockRow(row)
+    setEditHeaderItemId(String(row.itemId ?? ''))
+    setEditHeaderItemName(String(row.itemName ?? ''))
+    setEditHeaderTotalQty(String(row.totalQuantity ?? ''))
+    setEditLines(
+      lines.map((l) => ({
+        grnItemAssociationId: l.grnItemAssociationId,
+        grnId: l.grnId,
+        supplierName: l.supplierName,
+        branchName: l.branchName,
+        batchNo: l.batchNo,
+        availableQuantity: String(l.availableQuantity ?? ''),
+        expiryDate: l.expiryDate ? String(l.expiryDate).slice(0, 10) : '',
+      })),
+    )
+    dispatch(openModal(`grnStockEdit-${row.itemId}`))
+  }
+
+  const handleCloseEditModal = () => {
+    dispatch(closeModal())
+    setEditStockRow(null)
+    setEditLines([])
+    setEditHeaderItemId('')
+    setEditHeaderItemName('')
+    setEditHeaderTotalQty('')
+  }
+
+  const handleSaveItemSummary = async () => {
+    if (!editStockRow) return
+    const newId = parseInt(editHeaderItemId, 10)
+    if (Number.isNaN(newId)) {
+      toast.error('Item ID must be a valid number.', toastconfig)
+      return
+    }
+    const totalQty = Number(editHeaderTotalQty)
+    if (Number.isNaN(totalQty) || totalQty < 0) {
+      toast.error('Available quantity must be zero or greater.', toastconfig)
+      return
+    }
+    setSavingItemSummary(true)
+    try {
+      const res = await updateGrnStockReportItemSummary(
+        userDetails.accessToken,
+        {
+          branchId,
+          itemId: editStockRow.itemId,
+          itemName: editHeaderItemName,
+          newItemId: newId,
+          totalQuantity: Math.round(totalQty),
+        },
+      )
+      if (res.status === 200) {
+        toast.success(res.message || 'Item updated', toastconfig)
+        await queryClient.invalidateQueries({
+          queryKey: ['GRN_STOCK_REPORT', userDetails.accessToken, branchId],
+        })
+        handleCloseEditModal()
+      } else {
+        toast.error(res.message || 'Update failed', toastconfig)
+      }
+    } finally {
+      setSavingItemSummary(false)
+    }
+  }
+
+  const updateEditLine = (index, field, value) => {
+    setEditLines((prev) =>
+      prev.map((line, i) => (i === index ? { ...line, [field]: value } : line)),
+    )
+  }
+
+  const handleSaveLine = async (index) => {
+    const line = editLines[index]
+    if (!line?.grnItemAssociationId) {
+      toast.error(
+        'This row cannot be updated (refresh the report after deployment).',
+        toastconfig,
+      )
+      return
+    }
+    const qty = parseInt(line.availableQuantity, 10)
+    if (Number.isNaN(qty) || qty < 0) {
+      toast.error('Enter a valid quantity.', toastconfig)
+      return
+    }
+    const res = await updateGrnStockReportLine(
+      userDetails.accessToken,
+      line.grnItemAssociationId,
+      {
+        branchId,
+        totalQuantity: qty,
+        ...(line.expiryDate ? { expiryDate: line.expiryDate } : {}),
+      },
+    )
+    if (res.status === 200) {
+      toast.success(res.message || 'Updated', toastconfig)
+      invalidateStockReport()
+    } else {
+      toast.error(res.message || 'Update failed', toastconfig)
+    }
+  }
+
+  const handleDeleteLine = async (index) => {
+    const line = editLines[index]
+    if (!line?.grnItemAssociationId) {
+      toast.error('This row cannot be removed.', toastconfig)
+      return
+    }
+    if (
+      !window.confirm('Remove this GRN stock line for the selected branch?')
+    ) {
+      return
+    }
+    const res = await deleteGrnStockReportLine(
+      userDetails.accessToken,
+      line.grnItemAssociationId,
+      branchId,
+    )
+    if (res.status === 200) {
+      toast.success(res.message || 'Line removed', toastconfig)
+      setEditLines((prev) => prev.filter((_, i) => i !== index))
+      invalidateStockReport()
+    } else {
+      toast.error(res.message || 'Delete failed', toastconfig)
+    }
+  }
+
+  const handleDeleteItemStock = async (row) => {
+    if (
+      !window.confirm(
+        `Remove all GRN stock lines for "${row.itemName}" at this branch? This cannot be undone.`,
+      )
+    ) {
+      return
+    }
+    const res = await deleteGrnStockReportItem(
+      userDetails.accessToken,
+      row.itemId,
+      branchId,
+    )
+    if (res.status === 200) {
+      toast.success(
+        res.message || `Removed ${res.data?.deletedRows ?? 0} line(s).`,
+        toastconfig,
+      )
+      invalidateStockReport()
+    } else {
+      toast.error(res.message || 'Delete failed', toastconfig)
+    }
+  }
+
   const columns = [
     { field: 'itemId', headerName: 'Item ID', width: 100 },
     { field: 'itemName', headerName: 'Item Name', width: 350 },
@@ -50,7 +239,7 @@ function StockReport({ breadcrumb = true }) {
       field: 'totalQuantity',
       headerName: 'Available Quantity',
       width: 250,
-      renderCell: row => {
+      renderCell: (row) => {
         return (
           <Chip
             variant="contained"
@@ -63,23 +252,46 @@ function StockReport({ breadcrumb = true }) {
     {
       field: 'action',
       headerName: 'Action',
-      width: 250,
-      renderCell: row => {
+      minWidth: stockReportAdmin ? 420 : 250,
+      flex: 0,
+      renderCell: (row) => {
         return (
-          <Button
-            variant="contained"
-            color="primary"
-            className="text-white"
-            onClick={() => handleViewGRNDetails(row.row)}
-          >
-            View GRN Details
-          </Button>
+          <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap>
+            <Button
+              variant="contained"
+              color="primary"
+              className="text-white"
+              size="small"
+              onClick={() => handleViewGRNDetails(row.row)}
+            >
+              View GRN Details
+            </Button>
+            {stockReportAdmin && (
+              <>
+                <Button
+                  variant="contained"
+                  color="secondary"
+                  size="small"
+                  onClick={() => handleOpenEdit(row.row)}
+                >
+                  Edit
+                </Button>
+                <Button
+                  variant="contained"
+                  color="error"
+                  size="small"
+                  onClick={() => handleDeleteItemStock(row.row)}
+                >
+                  Delete
+                </Button>
+              </>
+            )}
+          </Stack>
         )
       },
     },
   ]
 
-  // Define custom filters
   const customFilters = [
     {
       field: 'itemName',
@@ -93,12 +305,13 @@ function StockReport({ breadcrumb = true }) {
     },
   ]
 
-  // Get unique values for dropdowns
-  const getUniqueValues = field => {
+  const getUniqueValues = (field) => {
     if (!grnStockData) return []
-    const values = new Set(grnStockData.map(row => row[field]))
+    const values = new Set(grnStockData.map((row) => row[field]))
     return Array.from(values).filter(Boolean)
   }
+
+  const viewDetailsList = parseGrnDetails(grnDetails)
 
   return (
     <div className="m-5">
@@ -111,10 +324,10 @@ function StockReport({ breadcrumb = true }) {
         <Autocomplete
           className="w-[120px]"
           options={branches || []}
-          getOptionLabel={option => option?.branchCode || option?.name}
-          value={branches?.find(branch => branch.id === branchId) || null}
+          getOptionLabel={(option) => option?.branchCode || option?.name}
+          value={branches?.find((branch) => branch.id === branchId) || null}
           onChange={(_, value) => setBranchId(value?.id || null)}
-          renderInput={params => <TextField {...params} fullWidth />}
+          renderInput={(params) => <TextField {...params} fullWidth />}
           clearIcon={null}
         />
       </div>
@@ -123,11 +336,7 @@ function StockReport({ breadcrumb = true }) {
           key={branchId}
           rows={grnStockData || []}
           columns={columns}
-          getRowId={row => row.itemId}
-          // pageSizeOptions={[5, 8, 10, 25]}
-          // initialState={{
-          //   pagination: { paginationModel: { page: 1, pageSize: 8 } },
-          // }}
+          getRowId={(row) => row.itemId}
           customFilters={customFilters}
           filterData={stockReportfilterData}
           getUniqueValues={getUniqueValues}
@@ -135,19 +344,22 @@ function StockReport({ breadcrumb = true }) {
       </div>
       <Modal
         uniqueKey={`grnStockDetails-${itemId}`}
+        title="GRN Details"
         maxWidth="md"
         closeOnOutsideClick={false}
+        showCloseButton
+        onOutsideClick={handleCloseViewModal}
       >
-        <div className="flex justify-between items-center">
-          <h2 className="text-xl font-bold">GRN Details</h2>
-          <IconButton onClick={() => dispatch(closeModal('grnStockDetails'))}>
-            <Close />
-          </IconButton>
-        </div>
-        <div className="flex flex-col gap-4 mt-3">
-          {grnDetails?.length > 0 ? (
-            grnDetails?.map(item => (
-              <div key={item.grnId} className="border p-4 rounded-lg">
+        <div className="flex flex-col gap-4 mt-1">
+          {viewDetailsList.length > 0 ? (
+            viewDetailsList.map((item) => (
+              <div
+                key={
+                  item.grnItemAssociationId ??
+                  `${item.grnId}-${item.batchNo ?? ''}-${item.expiryDate ?? ''}`
+                }
+                className="border p-4 rounded-lg"
+              >
                 <div className="grid grid-cols-3 gap-2">
                   <div>
                     <p className="text-sm text-gray-600">GRN ID</p>
@@ -177,6 +389,138 @@ function StockReport({ breadcrumb = true }) {
           )}
         </div>
       </Modal>
+
+      {editStockRow ? (
+        <Modal
+          uniqueKey={`grnStockEdit-${editStockRow.itemId}`}
+          title={`Edit stock — ${editStockRow.itemName} (ID ${editStockRow.itemId})`}
+          maxWidth="md"
+          closeOnOutsideClick={false}
+          showCloseButton
+          onOutsideClick={handleCloseEditModal}
+        >
+          <div className="border border-gray-200 rounded-lg p-4 mb-5 bg-gray-50">
+            <p className="text-sm font-semibold text-gray-800 mb-3">
+              Item and branch total
+            </p>
+            <Stack
+              direction={{ xs: 'column', sm: 'row' }}
+              spacing={2}
+              sx={{ mb: 2 }}
+            >
+              <TextField
+                label="Item ID"
+                size="small"
+                type="number"
+                fullWidth
+                value={editHeaderItemId}
+                onChange={(e) => setEditHeaderItemId(e.target.value)}
+                helperText="Change to another existing item ID to move all GRN lines for this branch to that item."
+              />
+              <TextField
+                label="Item name"
+                size="small"
+                fullWidth
+                value={editHeaderItemName}
+                onChange={(e) => setEditHeaderItemName(e.target.value)}
+              />
+              <TextField
+                label="Available quantity (branch total)"
+                size="small"
+                type="number"
+                fullWidth
+                value={editHeaderTotalQty}
+                onChange={(e) => setEditHeaderTotalQty(e.target.value)}
+                inputProps={{ min: 0 }}
+                helperText="Distributes across GRN lines (proportional if several lines)."
+              />
+            </Stack>
+            <Button
+              variant="contained"
+              color="primary"
+              disabled={savingItemSummary}
+              onClick={handleSaveItemSummary}
+            >
+              {savingItemSummary ? 'Saving…' : 'Save item & branch total'}
+            </Button>
+          </div>
+          <p className="text-sm text-gray-600 mb-4">
+            Below: adjust quantity or expiry per GRN line. Save applies that
+            line only. Remove line deletes that GRN line; use Delete on the grid
+            to clear all lines for this item at the current branch.
+          </p>
+          {editLines.length === 0 ? (
+            <p className="text-gray-600">No GRN lines for this item.</p>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {editLines.map((line, index) => (
+                <div
+                  key={`${line.grnItemAssociationId ?? index}-${line.grnId}`}
+                  className="border p-4 rounded-lg space-y-3"
+                >
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                    <div>
+                      <span className="text-gray-600">GRN ID</span>
+                      <p className="font-medium">{line.grnId}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Supplier</span>
+                      <p className="font-medium">{line.supplierName || '—'}</p>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Batch</span>
+                      <p className="font-medium">{line.batchNo || '—'}</p>
+                    </div>
+                  </div>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                    <TextField
+                      label="Available quantity"
+                      type="number"
+                      size="small"
+                      value={line.availableQuantity}
+                      onChange={(e) =>
+                        updateEditLine(
+                          index,
+                          'availableQuantity',
+                          e.target.value,
+                        )
+                      }
+                      inputProps={{ min: 0 }}
+                    />
+                    <TextField
+                      label="Expiry"
+                      type="date"
+                      size="small"
+                      InputLabelProps={{ shrink: true }}
+                      value={line.expiryDate}
+                      onChange={(e) =>
+                        updateEditLine(index, 'expiryDate', e.target.value)
+                      }
+                    />
+                  </Stack>
+                  <Stack direction="row" spacing={1}>
+                    <Button
+                      variant="contained"
+                      size="small"
+                      onClick={() => handleSaveLine(index)}
+                    >
+                      Save line
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      size="small"
+                      onClick={() => handleDeleteLine(index)}
+                    >
+                      Remove line
+                    </Button>
+                  </Stack>
+                </div>
+              ))}
+            </div>
+          )}
+        </Modal>
+      ) : null}
     </div>
   )
 }

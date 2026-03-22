@@ -175,6 +175,10 @@ export const API_ROUTES = {
 
   GRN_SALES_REPORT: '/reports/grnSalesReport',
   GRN_STOCK_REPORT: '/reports/stockReport',
+  UPDATE_GRN_STOCK_REPORT_LINE: '/pharmacy/grnStockReport/line',
+  DELETE_GRN_STOCK_REPORT_LINE: '/pharmacy/grnStockReport/line',
+  DELETE_GRN_STOCK_REPORT_ITEM: '/pharmacy/grnStockReport/item',
+  UPDATE_GRN_STOCK_REPORT_ITEM_SUMMARY: '/pharmacy/grnStockReport/itemSummary',
   NOSHOW_REPORT: '/reports/noShowReport',
   VENDOR_MANUFACTURER_DEPT_REPORT:
     '/reports/vendorManufacturerDepartmentReport',
