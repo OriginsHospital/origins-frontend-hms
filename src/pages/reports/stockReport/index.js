@@ -11,7 +11,7 @@ import { isGrnStockReportAdmin } from '@/constants/grnStockReportAdmins'
 import { closeModal, openModal } from '@/redux/modalSlice'
 import { Autocomplete, Button, Chip, Stack, TextField } from '@mui/material'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import FilteredDataGrid from '@/components/FilteredDataGrid'
 import { stockReportfilterData } from '@/constants/filters'
@@ -31,13 +31,38 @@ function parseGrnDetails(raw) {
   return Array.isArray(raw) ? raw : []
 }
 
+/** Sentinel value for branch filter state (all branches in dropdown). */
+const ALL_BRANCHES_VALUE = 'all'
+const ALL_BRANCHES_OPTION = {
+  id: ALL_BRANCHES_VALUE,
+  branchCode: 'All',
+  name: 'All branches',
+}
+
 function StockReport({ breadcrumb = true }) {
   const userDetails = useSelector((store) => store.user)
   const dropdowns = useSelector((store) => store.dropdowns)
   const { branches } = dropdowns
   const dispatch = useDispatch()
   const queryClient = useQueryClient()
-  const [branchId, setBranchId] = useState(branches[0]?.id || null)
+  const [branchId, setBranchId] = useState(branches[0]?.id ?? null)
+
+  const branchOptions = useMemo(
+    () => [ALL_BRANCHES_OPTION, ...(branches || [])],
+    [branches],
+  )
+
+  const branchIdsForQuery = useMemo(() => {
+    if (branchId === ALL_BRANCHES_VALUE) {
+      return (branches || []).map((b) => b.id).filter((id) => id != null)
+    }
+    if (branchId != null && branchId !== ALL_BRANCHES_VALUE) {
+      return [branchId]
+    }
+    return []
+  }, [branchId, branches])
+
+  const isAllBranches = branchId === ALL_BRANCHES_VALUE
   const [grnDetails, setGrnDetails] = useState(null)
   const [itemId, setItemId] = useState(null)
   const [editStockRow, setEditStockRow] = useState(null)
@@ -53,18 +78,35 @@ function StockReport({ breadcrumb = true }) {
   const { data: grnStockData } = useQuery({
     queryKey: ['GRN_STOCK_REPORT', userDetails.accessToken, branchId],
     queryFn: async () => {
-      const res = await grnStockReport(userDetails.accessToken, branchId)
+      const res = await grnStockReport(
+        userDetails.accessToken,
+        branchIdsForQuery,
+      )
       if (res.status == 200) {
         return res.data
       }
     },
-    enabled: !!branchId,
+    enabled: branchIdsForQuery.length > 0,
   })
 
   const invalidateStockReport = () => {
     queryClient.invalidateQueries({
-      queryKey: ['GRN_STOCK_REPORT', userDetails.accessToken, branchId],
+      queryKey: ['GRN_STOCK_REPORT', userDetails.accessToken],
     })
+  }
+
+  const resolveLineBranchId = (line) => {
+    const raw = line?.branchId
+    if (raw != null && raw !== '') {
+      const n = typeof raw === 'number' ? raw : parseInt(String(raw), 10)
+      if (!Number.isNaN(n)) {
+        return n
+      }
+    }
+    if (typeof branchId === 'number' && !Number.isNaN(branchId)) {
+      return branchId
+    }
+    return null
   }
 
   const handleViewGRNDetails = (row) => {
@@ -89,6 +131,7 @@ function StockReport({ breadcrumb = true }) {
       lines.map((l) => ({
         grnItemAssociationId: l.grnItemAssociationId,
         grnId: l.grnId,
+        branchId: l.branchId,
         supplierName: l.supplierName,
         branchName: l.branchName,
         batchNo: l.batchNo,
@@ -110,6 +153,13 @@ function StockReport({ breadcrumb = true }) {
 
   const handleSaveItemSummary = async () => {
     if (!editStockRow) return
+    if (isAllBranches) {
+      toast.error(
+        'Select a single branch in the dropdown to save item and branch total.',
+        toastconfig,
+      )
+      return
+    }
     const newId = parseInt(editHeaderItemId, 10)
     if (Number.isNaN(newId)) {
       toast.error('Item ID must be a valid number.', toastconfig)
@@ -134,9 +184,7 @@ function StockReport({ breadcrumb = true }) {
       )
       if (res.status === 200) {
         toast.success(res.message || 'Item updated', toastconfig)
-        await queryClient.invalidateQueries({
-          queryKey: ['GRN_STOCK_REPORT', userDetails.accessToken, branchId],
-        })
+        invalidateStockReport()
         handleCloseEditModal()
       } else {
         toast.error(res.message || 'Update failed', toastconfig)
@@ -166,11 +214,19 @@ function StockReport({ breadcrumb = true }) {
       toast.error('Enter a valid quantity.', toastconfig)
       return
     }
+    const lineBranchId = resolveLineBranchId(line)
+    if (lineBranchId == null) {
+      toast.error(
+        'Could not determine branch for this line. Refresh and try again.',
+        toastconfig,
+      )
+      return
+    }
     const res = await updateGrnStockReportLine(
       userDetails.accessToken,
       line.grnItemAssociationId,
       {
-        branchId,
+        branchId: lineBranchId,
         totalQuantity: qty,
         ...(line.expiryDate ? { expiryDate: line.expiryDate } : {}),
       },
@@ -189,6 +245,14 @@ function StockReport({ breadcrumb = true }) {
       toast.error('This row cannot be removed.', toastconfig)
       return
     }
+    const lineBranchId = resolveLineBranchId(line)
+    if (lineBranchId == null) {
+      toast.error(
+        'Could not determine branch for this line. Refresh and try again.',
+        toastconfig,
+      )
+      return
+    }
     if (
       !window.confirm('Remove this GRN stock line for the selected branch?')
     ) {
@@ -197,7 +261,7 @@ function StockReport({ breadcrumb = true }) {
     const res = await deleteGrnStockReportLine(
       userDetails.accessToken,
       line.grnItemAssociationId,
-      branchId,
+      lineBranchId,
     )
     if (res.status === 200) {
       toast.success(res.message || 'Line removed', toastconfig)
@@ -209,27 +273,42 @@ function StockReport({ breadcrumb = true }) {
   }
 
   const handleDeleteItemStock = async (row) => {
+    const idsToClear =
+      isAllBranches && branches?.length
+        ? branches.map((b) => b.id).filter((id) => id != null)
+        : typeof branchId === 'number'
+          ? [branchId]
+          : []
+    if (!idsToClear.length) {
+      toast.error('Select at least one branch.', toastconfig)
+      return
+    }
+    const scopeLabel = isAllBranches
+      ? `ALL branches (${idsToClear.length})`
+      : 'this branch'
     if (
       !window.confirm(
-        `Remove all GRN stock lines for "${row.itemName}" at this branch? This cannot be undone.`,
+        `Remove all GRN stock lines for "${row.itemName}" at ${scopeLabel}? This cannot be undone.`,
       )
     ) {
       return
     }
-    const res = await deleteGrnStockReportItem(
-      userDetails.accessToken,
-      row.itemId,
-      branchId,
-    )
-    if (res.status === 200) {
-      toast.success(
-        res.message || `Removed ${res.data?.deletedRows ?? 0} line(s).`,
-        toastconfig,
+    let removed = 0
+    for (const bid of idsToClear) {
+      const res = await deleteGrnStockReportItem(
+        userDetails.accessToken,
+        row.itemId,
+        bid,
       )
-      invalidateStockReport()
-    } else {
-      toast.error(res.message || 'Delete failed', toastconfig)
+      if (res.status === 200) {
+        removed += res.data?.deletedRows ?? 0
+      } else {
+        toast.error(res.message || 'Delete failed', toastconfig)
+        return
+      }
     }
+    toast.success(`Removed ${removed} line(s).`, toastconfig)
+    invalidateStockReport()
   }
 
   const columns = [
@@ -322,18 +401,35 @@ function StockReport({ breadcrumb = true }) {
       >
         {breadcrumb && <Breadcrumb />}
         <Autocomplete
-          className="w-[120px]"
-          options={branches || []}
-          getOptionLabel={(option) => option?.branchCode || option?.name}
-          value={branches?.find((branch) => branch.id === branchId) || null}
-          onChange={(_, value) => setBranchId(value?.id || null)}
+          className="min-w-[140px] w-[160px]"
+          options={branchOptions}
+          getOptionLabel={(option) =>
+            option?.id === ALL_BRANCHES_VALUE
+              ? 'All'
+              : option?.branchCode || option?.name || ''
+          }
+          isOptionEqualToValue={(option, value) => option?.id === value?.id}
+          value={
+            branchId === ALL_BRANCHES_VALUE
+              ? ALL_BRANCHES_OPTION
+              : (branches?.find((b) => b.id === branchId) ?? null)
+          }
+          onChange={(_, value) => {
+            if (!value) {
+              setBranchId(branches?.[0]?.id ?? null)
+              return
+            }
+            setBranchId(
+              value.id === ALL_BRANCHES_VALUE ? ALL_BRANCHES_VALUE : value.id,
+            )
+          }}
           renderInput={(params) => <TextField {...params} fullWidth />}
           clearIcon={null}
         />
       </div>
       <div>
         <FilteredDataGrid
-          key={branchId}
+          key={String(branchId)}
           rows={grnStockData || []}
           columns={columns}
           getRowId={(row) => row.itemId}
@@ -355,8 +451,9 @@ function StockReport({ breadcrumb = true }) {
             viewDetailsList.map((item) => (
               <div
                 key={
-                  item.grnItemAssociationId ??
-                  `${item.grnId}-${item.batchNo ?? ''}-${item.expiryDate ?? ''}`
+                  item.grnItemAssociationId != null
+                    ? `${item.grnItemAssociationId}-${item.branchId ?? ''}`
+                    : `${item.grnId}-${item.branchId ?? ''}-${item.batchNo ?? ''}-${item.expiryDate ?? ''}`
                 }
                 className="border p-4 rounded-lg"
               >
@@ -403,6 +500,13 @@ function StockReport({ breadcrumb = true }) {
             <p className="text-sm font-semibold text-gray-800 mb-3">
               Item and branch total
             </p>
+            {isAllBranches ? (
+              <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded px-3 py-2 mb-3">
+                Branch filter is <strong>All</strong>. Choose one branch in the
+                dropdown to edit item name, item ID move, or branch total.
+                Per-line edits below still use each line&apos;s branch.
+              </p>
+            ) : null}
             <Stack
               direction={{ xs: 'column', sm: 'row' }}
               spacing={2}
@@ -413,6 +517,7 @@ function StockReport({ breadcrumb = true }) {
                 size="small"
                 type="number"
                 fullWidth
+                disabled={isAllBranches}
                 value={editHeaderItemId}
                 onChange={(e) => setEditHeaderItemId(e.target.value)}
                 helperText="Change to another existing item ID to move all GRN lines for this branch to that item."
@@ -421,6 +526,7 @@ function StockReport({ breadcrumb = true }) {
                 label="Item name"
                 size="small"
                 fullWidth
+                disabled={isAllBranches}
                 value={editHeaderItemName}
                 onChange={(e) => setEditHeaderItemName(e.target.value)}
               />
@@ -429,6 +535,7 @@ function StockReport({ breadcrumb = true }) {
                 size="small"
                 type="number"
                 fullWidth
+                disabled={isAllBranches}
                 value={editHeaderTotalQty}
                 onChange={(e) => setEditHeaderTotalQty(e.target.value)}
                 inputProps={{ min: 0 }}
@@ -438,7 +545,7 @@ function StockReport({ breadcrumb = true }) {
             <Button
               variant="contained"
               color="primary"
-              disabled={savingItemSummary}
+              disabled={savingItemSummary || isAllBranches}
               onClick={handleSaveItemSummary}
             >
               {savingItemSummary ? 'Saving…' : 'Save item & branch total'}
@@ -447,7 +554,11 @@ function StockReport({ breadcrumb = true }) {
           <p className="text-sm text-gray-600 mb-4">
             Below: adjust quantity or expiry per GRN line. Save applies that
             line only. Remove line deletes that GRN line; use Delete on the grid
-            to clear all lines for this item at the current branch.
+            to clear lines for this item (
+            {isAllBranches
+              ? 'all branches when filter is All'
+              : 'current branch'}
+            ).
           </p>
           {editLines.length === 0 ? (
             <p className="text-gray-600">No GRN lines for this item.</p>
@@ -455,7 +566,7 @@ function StockReport({ breadcrumb = true }) {
             <div className="flex flex-col gap-4">
               {editLines.map((line, index) => (
                 <div
-                  key={`${line.grnItemAssociationId ?? index}-${line.grnId}`}
+                  key={`${line.grnItemAssociationId ?? index}-${line.grnId}-${line.branchId ?? ''}`}
                   className="border p-4 rounded-lg space-y-3"
                 >
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
@@ -471,6 +582,14 @@ function StockReport({ breadcrumb = true }) {
                       <span className="text-gray-600">Batch</span>
                       <p className="font-medium">{line.batchNo || '—'}</p>
                     </div>
+                    {isAllBranches ? (
+                      <div className="md:col-span-3">
+                        <span className="text-gray-600">Branch</span>
+                        <p className="font-medium">
+                          {line.branchName || line.branchId || '—'}
+                        </p>
+                      </div>
+                    ) : null}
                   </div>
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                     <TextField

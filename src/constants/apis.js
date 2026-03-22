@@ -2272,12 +2272,20 @@ export const grnSalesReport = async (token) => {
 
 //GRN_STOCK_REPORT
 
-export const grnStockReport = async (token, branchId) => {
+export const grnStockReport = async (token, branchIds) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
+  const ids = Array.isArray(branchIds) ? branchIds : [branchIds]
+  const params = new URLSearchParams()
+  ids.forEach((id) => {
+    if (id != null && id !== '') {
+      params.append('branchId', String(id))
+    }
+  })
+  const qs = params.toString()
   const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GRN_STOCK_REPORT}?branchId=${branchId}`,
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GRN_STOCK_REPORT}${qs ? `?${qs}` : ''}`,
     {
       method: 'GET',
       headers: myHeaders,
