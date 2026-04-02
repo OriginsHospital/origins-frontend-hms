@@ -112,6 +112,59 @@ const BIOPSY_KIT = {
   ],
 }
 
+const OPU_KIT = {
+  kitName: 'OPU KIT',
+  kitValue: 'OPU_KIT',
+  medicines: [
+    { name: 'IV CANNULA', quantity: 1 },
+    { name: 'IV SET', quantity: 1 },
+    { name: 'EASY FIX', quantity: 1 },
+    { name: 'NIPRO SYRINGE 2.5ML', quantity: 5 },
+    { name: 'NIPRO SYRINGE 5 ML', quantity: 5 },
+    { name: 'NIPRO SYRINGE 10ML', quantity: 3 },
+    { name: 'NS 100ML', quantity: 3 },
+    { name: 'RL 500ML', quantity: 1 },
+    { name: 'NS 500ML', quantity: 1 },
+    { name: 'FACE MASK', quantity: 6 },
+    { name: 'HEAD CAPS', quantity: 6 },
+    { name: 'UNDER PADS', quantity: 1 },
+    { name: 'TRIMMER', quantity: 1 },
+    { name: 'MONOCEF 1 GM', quantity: 1 },
+    { name: 'NEOMIT INJ', quantity: 1 },
+    { name: 'PANTOTAZ 40 INJ', quantity: 1 },
+    { name: 'TEXAKIND INJ', quantity: 1 },
+    { name: 'K -STAT INJ', quantity: 1 },
+    { name: 'NEOROF 20ML INJ', quantity: 1 },
+    { name: 'PYROLATE INJ', quantity: 1 },
+    { name: 'SKINTAC 6.5 GLOVE', quantity: 1 },
+  ],
+}
+
+const CERVICAL_CERCLAGE_KIT = {
+  kitName: 'CERVICAL CERCLAGE',
+  kitValue: 'CERVICAL_CERCLAGE_KIT',
+  medicines: [
+    { name: 'IV SET', quantity: 1 },
+    { name: 'IV CANNULA', quantity: 1 },
+    { name: 'EASY FIX', quantity: 1 },
+    { name: 'MONOCEF 1 GM', quantity: 1 },
+    { name: 'PANTOTAZ 40 INJ', quantity: 1 },
+    { name: 'NEOMIT INJ', quantity: 1 },
+    { name: 'NEOROF 20', quantity: 1 },
+    { name: 'PYROLATE INJ', quantity: 1 },
+    { name: 'K STAT', quantity: 1 },
+    { name: 'TEXAKIND', quantity: 1 },
+    { name: 'FACE MASK', quantity: 8 },
+    { name: 'HEAD CAPS', quantity: 8 },
+    { name: 'UNDER PADS', quantity: 1 },
+    { name: 'NIPRO SYRINGE 5ML', quantity: 5 },
+    { name: 'NIPRO SYRINGE 10ML', quantity: 5 },
+    { name: 'NIPRO SYRINGE 2.5 ML', quantity: 5 },
+    { name: 'SURGICAL GLOVE 6.5', quantity: 6 },
+    { name: 'TRUSILK', quantity: 1 },
+  ],
+}
+
 // Array of all available kits
 const ALL_MEDICINE_KITS = [
   CLEO_SHOT_KIT,
@@ -120,6 +173,8 @@ const ALL_MEDICINE_KITS = [
   FLUSH_KIT,
   FLUID_ASPIRATIONS_KIT,
   BIOPSY_KIT,
+  OPU_KIT,
+  CERVICAL_CERCLAGE_KIT,
 ]
 
 const JoditEditor = dynamic(() => import('jodit-react'), {
