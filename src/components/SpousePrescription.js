@@ -30,8 +30,8 @@ function SpousePrescription({
   appointmentId,
   activeVisitAppointments,
 }) {
-  const user = useSelector(store => store.user)
-  const { billTypes } = useSelector(store => store.dropdowns)
+  const user = useSelector((store) => store.user)
+  const { billTypes } = useSelector((store) => store.dropdowns)
   const [notesValue, setNotesValue] = useState()
   const [defaultLineBillValues, setDefaultLineBillValues] = useState(null)
   const [printTemplate, setPrintTemplate] = useState(null)
@@ -41,36 +41,34 @@ function SpousePrescription({
   const queryClient = useQueryClient()
   const billTypesMap = useMemo(() => {
     const map = {}
-    billTypes.map(eachBillType => {
+    billTypes.map((eachBillType) => {
       map[eachBillType.id] = eachBillType.name
       map[eachBillType.name] = eachBillType.id
     })
     return map
   }, [billTypes])
 
-  const {
-    data: lineBillsAndNotesDataForCurrentAppointment,
-    isLoading,
-  } = useQuery({
-    queryKey: ['lineBillsAndNotesForCurrentAppointment', type, appointmentId],
-    queryFn: async () => {
-      const responsejson = await getLineBillsAndNotesForAppointment(
-        user.accessToken,
-        type,
-        appointmentId,
-      )
-      if (responsejson.status == 200) {
-        return responsejson.data
-      } else {
-        throw new Error(
-          'Error occurred while fetching Line Bills and Notes for Current Appointment',
+  const { data: lineBillsAndNotesDataForCurrentAppointment, isLoading } =
+    useQuery({
+      queryKey: ['lineBillsAndNotesForCurrentAppointment', type, appointmentId],
+      queryFn: async () => {
+        const responsejson = await getLineBillsAndNotesForAppointment(
+          user.accessToken,
+          type,
+          appointmentId,
         )
-      }
-    },
-  })
+        if (responsejson.status == 200) {
+          return responsejson.data
+        } else {
+          throw new Error(
+            'Error occurred while fetching Line Bills and Notes for Current Appointment',
+          )
+        }
+      },
+    })
 
   const { mutate, isPending } = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const res = await saveLineBillsAndNotes(user.accessToken, payload)
       if (res.status === 200) {
         dispatch(closeModal())
@@ -105,18 +103,21 @@ function SpousePrescription({
     if (defaultLineBillValues) {
       const SelectedTypeIdArray = Object.keys(defaultLineBillValues)
       if (SelectedTypeIdArray.length != 0) {
-        SelectedTypeIdArray?.map(data => {
+        SelectedTypeIdArray?.map((data) => {
           const SelectedTypeValuesArray = defaultLineBillValues?.[data]
           // console.log(SelectedTypeValuesArray)
           if (SelectedTypeValuesArray?.length != 0) {
             // Filter out paid items and remove status field from each item
             const billTypeValues = SelectedTypeValuesArray.filter(
-              item => item.status !== 'PAID',
-            ).map(({ status, ...item }) => item) // Destructure to remove status
+              (item) => item.status !== 'PAID',
+            ).map(({ status, ...item }) => ({
+              ...item,
+              amount: Number(item.amount),
+            }))
 
             if (billTypeValues.length > 0) {
               billTypeStruct.push({
-                billTypeId: data,
+                billTypeId: Number(data),
                 billTypeValues: billTypeValues,
               })
             }
@@ -127,29 +128,29 @@ function SpousePrescription({
     console.log(billTypeStruct)
     return billTypeStruct
   }
-  const setSelectedValues = name => selectedOptions => {
+  const setSelectedValues = (name) => (selectedOptions) => {
     const billTypeId = billTypesMap[name]
 
     // Get current paid items
     const currentPaidItems =
       defaultLineBillValues?.[billTypeId]?.filter(
-        item => item.status === 'PAID',
+        (item) => item.status === 'PAID',
       ) ?? []
 
     let copyOfDefaultLineBillValues = { ...defaultLineBillValues }
     let billTypeValues = [...currentPaidItems] // Start with paid items
 
     // Add selected unpaid items
-    selectedOptions?.forEach(element => {
+    selectedOptions?.forEach((element) => {
       // Skip if it's already in paid items
-      if (!currentPaidItems.some(paid => paid.id === element.value)) {
+      if (!currentPaidItems.some((paid) => paid.id === element.value)) {
         const BillTypeValuesArray = allBillTypeValues[name]
-        const BillTYpeValueObject = BillTypeValuesArray.find(values => {
+        const BillTYpeValueObject = BillTypeValuesArray.find((values) => {
           return values.id === element.value
         })
 
         if (name === 'Pharmacy') {
-          const infoObject = defaultLineBillValues['3']?.find(values => {
+          const infoObject = defaultLineBillValues['3']?.find((values) => {
             return values.id === BillTYpeValueObject.id
           })
 
@@ -177,18 +178,18 @@ function SpousePrescription({
     setDefaultLineBillValues(copyOfDefaultLineBillValues)
   }
   const handleDeleteClicked = (pharmacyId, id) => {
-    setDefaultLineBillValues(prevState => {
+    setDefaultLineBillValues((prevState) => {
       if (!prevState) return {}
       const copyOfLineBillValues = { ...prevState }
       if (copyOfLineBillValues?.[pharmacyId]) {
         copyOfLineBillValues[pharmacyId] = copyOfLineBillValues[
           pharmacyId
-        ].filter(lineBill => lineBill.id !== id)
+        ].filter((lineBill) => lineBill.id !== id)
       }
       return copyOfLineBillValues
     })
   }
-  const getMultipleForQuatityCalculation = intake => {
+  const getMultipleForQuatityCalculation = (intake) => {
     if (intake?.startsWith('OTHER_')) {
       return 1
     }
@@ -227,7 +228,7 @@ function SpousePrescription({
     )
     let tempLineBillValues = copyOfDefaultLineBillValues?.[
       billTypeIdPrescription
-    ]?.map(lineBillValues => {
+    ]?.map((lineBillValues) => {
       if (lineBillValues.id == prescriptionId) {
         console.log(lineBillValues)
         lineBillValues.prescriptionDays = days
@@ -250,7 +251,7 @@ function SpousePrescription({
     )
     let tempLineBillValues = copyOfDefaultLineBillValues?.[
       billTypeIdPrescription
-    ]?.map(lineBillValues => {
+    ]?.map((lineBillValues) => {
       console.log(lineBillValues, medIntake)
       if (lineBillValues.id == prescriptionId) {
         lineBillValues.prescriptionDetails = medIntake
@@ -270,35 +271,38 @@ function SpousePrescription({
     let tempdefaultData = {}
     if (lineBillsAndNotesDataForCurrentAppointment) {
       const selectedData = ['lineBillsData', 'Notesdata']
-      lineBillsAndNotesDataForCurrentAppointment[selectedData[0]].map(data => {
-        const billTypeId = data['billType']?.id
-        console.log(billTypeId)
-        const updatedArray = data?.billTypeValues
-          ?.map(
-            ({
-              id,
-              name,
-              amount,
-              prescribedQuantity,
-              prescriptionDetails,
-              prescriptionDays,
-              status,
-              isSpouse,
-            }) => ({
-              id,
-              name,
-              amount,
-              prescribedQuantity: billTypeId === 3 ? prescribedQuantity : '1',
-              prescriptionDetails: billTypeId === 3 ? prescriptionDetails : '',
-              prescriptionDays:
-                billTypeId === 3 && prescriptionDays ? prescriptionDays : 1,
-              status,
-              isSpouse,
-            }),
-          )
-          .filter(item => item.isSpouse === 1)
-        tempdefaultData[data.billType.id] = updatedArray
-      })
+      lineBillsAndNotesDataForCurrentAppointment[selectedData[0]].map(
+        (data) => {
+          const billTypeId = data['billType']?.id
+          console.log(billTypeId)
+          const updatedArray = data?.billTypeValues
+            ?.map(
+              ({
+                id,
+                name,
+                amount,
+                prescribedQuantity,
+                prescriptionDetails,
+                prescriptionDays,
+                status,
+                isSpouse,
+              }) => ({
+                id,
+                name,
+                amount: Number(amount),
+                prescribedQuantity: billTypeId === 3 ? prescribedQuantity : '1',
+                prescriptionDetails:
+                  billTypeId === 3 ? prescriptionDetails : '',
+                prescriptionDays:
+                  billTypeId === 3 && prescriptionDays ? prescriptionDays : 1,
+                status,
+                isSpouse,
+              }),
+            )
+            .filter((item) => item.isSpouse === 1)
+          tempdefaultData[data.billType.id] = updatedArray
+        },
+      )
       const notesText =
         lineBillsAndNotesDataForCurrentAppointment.spouseNotesData?.notes
       setNotesValue(notesText ? notesText : '')
@@ -347,15 +351,15 @@ function SpousePrescription({
         // Process line bills
         let tempDefaultData = {}
         if (data.lineBillsData) {
-          data.lineBillsData.forEach(billTypeData => {
+          data.lineBillsData.forEach((billTypeData) => {
             if (billTypeData.billType && billTypeData.billTypeValues) {
               const billTypeId = billTypeData.billType.id
               const updatedArray = billTypeData.billTypeValues
-                .filter(item => item.isSpouse === 1) // Filter spouse items
-                .map(item => ({
+                .filter((item) => item.isSpouse === 1) // Filter spouse items
+                .map((item) => ({
                   id: item.id,
                   name: item.name,
-                  amount: item.amount,
+                  amount: Number(item.amount),
                   prescribedQuantity:
                     billTypeId === 3 ? item.prescribedQuantity || 1 : 1,
                   prescriptionDetails:
@@ -372,7 +376,7 @@ function SpousePrescription({
           })
         }
 
-        setDefaultLineBillValues(prev => {
+        setDefaultLineBillValues((prev) => {
           const newState = { ...tempDefaultData }
           return newState
         })
@@ -415,14 +419,14 @@ function SpousePrescription({
           <div className="flex flex-col gap-2 py-2">
             <span className="font-semibold">Previous Prescriptions</span>
             <Select
-              options={activeVisitAppointments.map(appointment => ({
+              options={activeVisitAppointments.map((appointment) => ({
                 value: `${appointment.type}-${appointment.appointmentId}`,
                 label: `${dayjs(appointment.appointmentDate).format(
                   'DD-MM-YYYY',
                 )} | ${appointment.type} | ${appointment.doctorName}`,
                 appointment: appointment,
               }))}
-              onChange={selected => {
+              onChange={(selected) => {
                 if (
                   selected &&
                   confirm('Are you sure you want to copy this prescription?')
@@ -449,16 +453,16 @@ function SpousePrescription({
 
           {/* Bill Types Section */}
           {allBillTypeValues ? (
-            billTypes.map(billType => {
+            billTypes.map((billType) => {
               const defaultValues =
-                defaultLineBillValues?.[billType.id]?.map(billData => ({
+                defaultLineBillValues?.[billType.id]?.map((billData) => ({
                   value: billData.id,
                   label: billData.name,
                   status: billData.status,
                 })) ?? []
 
               const selectOptions =
-                allBillTypeValues?.[billType.name]?.map(data => ({
+                allBillTypeValues?.[billType.name]?.map((data) => ({
                   value: data.id,
                   label: data.name,
                 })) ?? []
@@ -470,7 +474,7 @@ function SpousePrescription({
                   {/* Paid Items Display */}
                   <div className="flex flex-wrap gap-2">
                     {defaultValues.map(
-                      item =>
+                      (item) =>
                         item.status === 'PAID' && (
                           <span
                             key={`paid-${item.value}`}
@@ -487,7 +491,9 @@ function SpousePrescription({
                   <Select
                     isMulti
                     name={billType.name}
-                    value={defaultValues.filter(item => item.status !== 'PAID')}
+                    value={defaultValues.filter(
+                      (item) => item.status !== 'PAID',
+                    )}
                     options={selectOptions}
                     onChange={setSelectedValues(billType.name)}
                     classNamePrefix={`select-${billType.name.toLowerCase()}`}
@@ -498,7 +504,7 @@ function SpousePrescription({
                     <div className="h-48 border flex flex-col items-center p-2 overflow-y-auto gap-2 bg-primary/10 rounded-lg">
                       {defaultLineBillValues?.['3']?.length > 0 ? (
                         defaultLineBillValues['3'].map(
-                          prescription =>
+                          (prescription) =>
                             prescription.id &&
                             prescription.status !== 'PAID' && (
                               <RenderPrescriptionPharmacy
@@ -528,7 +534,7 @@ function SpousePrescription({
                   {billType.name === 'Pharmacy' && (
                     <div className="border flex flex-col p-2 overflow-y-auto gap-2 rounded-lg">
                       {defaultLineBillValues?.['3']?.length > 0 ? (
-                        defaultLineBillValues['3'].map(prescription =>
+                        defaultLineBillValues['3'].map((prescription) =>
                           prescription.id && prescription.status === 'PAID' ? (
                             <div
                               className="w-full border p-2 flex items-center justify-between rounded bg-gray-100"

@@ -32,9 +32,11 @@ const CLEO_SHOT_KIT = {
     { name: 'Americano MVI INJ', quantity: 1 },
     { name: 'Cynocan 12', quantity: 1 },
     { name: 'MAXX - TRACE', quantity: 1 },
-    { name: 'NIPRO SYRINGE 5ML', quantity: 2 },
+    { name: 'NIPRO SYRINGE 10ML', quantity: 2 },
     { name: 'IV CANNULA-22', quantity: 1 },
-    { name: 'NS 100 ML', quantity: 1 },
+    { name: 'NS100ML', quantity: 1 },
+    { name: 'EASY FIX', quantity: 1 },
+    { name: 'IV SET', quantity: 1 },
   ],
 }
 
@@ -45,13 +47,15 @@ const NAPO_SHOT_KIT = {
     { name: 'MOCELL INJ 600MG', quantity: 3 },
     { name: 'LEVO VEN', quantity: 1 },
     { name: 'MUCONICS 2ML', quantity: 1 },
-    { name: 'DS VIT - C 1.5', quantity: 1 },
+    { name: 'DS VIT C 1.5 INJ', quantity: 1 },
     { name: 'Americano MVI INJ', quantity: 1 },
     { name: 'Cynocan 12', quantity: 1 },
     { name: 'MAXX TRACE', quantity: 1 },
-    { name: 'NIPRO SYRINGE 5ML', quantity: 2 },
+    { name: 'NIPRO SYRINGE 10ML', quantity: 2 },
     { name: 'IV CANNULA-22', quantity: 1 },
-    { name: 'NS 100 ML', quantity: 1 },
+    { name: 'NS 100ML', quantity: 1 },
+    { name: 'EASY FIX', quantity: 1 },
+    { name: 'IV SET', quantity: 1 },
   ],
 }
 
@@ -66,7 +70,7 @@ const HYFOSY_KIT = {
     { name: 'Surgicare 6.5 Glove', quantity: 1 },
     { name: 'BUSCOGAST INJ', quantity: 1 },
     { name: 'NIPRO SYRINGE 2.5ML', quantity: 2 },
-    { name: 'ZADY 500 MG', quantity: 5 },
+    { name: 'ZADY 500mg', quantity: 5 },
     { name: 'DROTIN-M TAB', quantity: 3 },
   ],
 }
@@ -90,9 +94,9 @@ const FLUID_ASPIRATIONS_KIT = {
   kitValue: 'FLUID_ASPIRATIONS_KIT',
   medicines: [
     { name: 'IUI CATHETER', quantity: 1 },
-    { name: 'NIPRO SYRINGE 2.5ML', quantity: 1 },
+    { name: 'NIPRO SYRINGE 5ML', quantity: 1 },
     { name: 'NS 100ML', quantity: 1 },
-    { name: 'Clean Care Gloves', quantity: 1 },
+    { name: 'CLEEN CARE GLOVE', quantity: 1 },
   ],
 }
 
@@ -102,7 +106,7 @@ const BIOPSY_KIT = {
   medicines: [
     { name: 'ENDO-PSY CATHETER', quantity: 1 },
     { name: 'NS 100ML', quantity: 1 },
-    { name: 'Clean Care Gloves', quantity: 1 },
+    { name: 'CLEEN CARE GLOVE', quantity: 1 },
     { name: 'BUSCOGAST INJ', quantity: 1 },
     { name: 'NIPRO SYRINGE 2.5ML', quantity: 1 },
   ],
@@ -209,11 +213,14 @@ function PatientPrescription({
             // Filter out paid items and remove status field from each item
             const billTypeValues = SelectedTypeValuesArray.filter(
               (item) => item.status !== 'PAID',
-            ).map(({ status, ...item }) => item) // Destructure to remove status
+            ).map(({ status, ...item }) => ({
+              ...item,
+              amount: Number(item.amount),
+            })) // Destructure to remove status; coerce amount for API (Joi number)
 
             if (billTypeValues.length > 0) {
               billTypeStruct.push({
-                billTypeId: data,
+                billTypeId: Number(data),
                 billTypeValues: billTypeValues,
               })
             }
@@ -506,7 +513,8 @@ function PatientPrescription({
               }) => ({
                 id,
                 name,
-                amount,
+                // API often returns amount as string; Joi requires a number on save
+                amount: Number(amount),
                 prescribedQuantity: billTypeId === 3 ? prescribedQuantity : 1,
                 prescriptionDetails:
                   billTypeId === 3 ? prescriptionDetails : '',

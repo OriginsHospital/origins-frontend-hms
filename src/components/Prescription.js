@@ -1716,9 +1716,13 @@ function Prescription({
                 label="Trigger Time"
                 className="bg-white rounded-lg w-max-content"
                 name="triggerTime"
+                format="DD/MM/YYYY hh:mm A"
+                value={triggerTime ? dayjs(triggerTime) : null}
                 onChange={(newValue) =>
                   setTriggerTime(
-                    dayjs(newValue).format('YYYY-MM-DDTHH:mm:00[Z]'),
+                    newValue && dayjs(newValue).isValid()
+                      ? dayjs(newValue).format('YYYY-MM-DDTHH:mm:00[Z]')
+                      : null,
                   )
                 }
                 viewRenderers={{

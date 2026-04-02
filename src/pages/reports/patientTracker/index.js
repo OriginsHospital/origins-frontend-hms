@@ -25,6 +25,8 @@ import {
   List,
   ListItemButton,
   ListItemText,
+  Menu,
+  ListItemIcon,
 } from '@mui/material'
 import {
   Person as PersonIcon,
@@ -37,6 +39,8 @@ import {
   Lock as LockIcon,
   CalendarToday as CalendarTodayIcon,
   Visibility as VisibilityIcon,
+  FileDownload as FileDownloadIcon,
+  MoreVert as MoreVertIcon,
 } from '@mui/icons-material'
 import { DatePicker } from '@mui/x-date-pickers/DatePicker'
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
@@ -81,6 +85,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts'
+import { exportAsCSV, exportAsExcel } from '@/utils/reportExport'
 
 // User-level field access control configuration
 const ROW_ACCESS_RULES = {
@@ -745,6 +750,8 @@ function PatientTrackerReports() {
   const [automatedSummaryTreatmentType, setAutomatedSummaryTreatmentType] =
     useState('')
   const [automatedSummarySearch, setAutomatedSummarySearch] = useState('')
+  const [automatedExportMenuAnchor, setAutomatedExportMenuAnchor] =
+    useState(null)
 
   // Patient History popup (Summary Automated - click on patient name)
   const [patientForHistory, setPatientForHistory] = useState(null)
@@ -3568,6 +3575,86 @@ function PatientTrackerReports() {
     patientPackageData,
   ])
 
+  const automatedSummaryExportColumns = useMemo(
+    () =>
+      automatedSummaryColumns.map(({ field, headerName }) => ({
+        field,
+        headerName,
+      })),
+    [automatedSummaryColumns],
+  )
+
+  const handleExportAutomatedSummary = useCallback(
+    (format = 'csv') => {
+      if (isLoadingAutomatedSummary) {
+        toast.warning('Please wait for data to finish loading.', {
+          position: 'top-right',
+        })
+        return
+      }
+      if (!automatedSummaryRows.length) {
+        toast.warning('No data to export for the current filters.', {
+          position: 'top-right',
+        })
+        return
+      }
+
+      const formatPackage = (value) => {
+        if (value === null || value === undefined || value === '-') return '-'
+        const numValue = typeof value === 'number' ? value : parseFloat(value)
+        if (isNaN(numValue)) return '-'
+        if (numValue === 0) return '0'
+        return numValue.toLocaleString('en-IN')
+      }
+
+      const exportRows = automatedSummaryRows.map((row) => ({
+        ...row,
+        date: row.date ? dayjs(row.date).format('DD-MM-YYYY') : '-',
+        lastRenewalDate: row.lastRenewalDate
+          ? dayjs(row.lastRenewalDate).format('DD-MM-YYYY')
+          : '-',
+        doctorsPackage: formatPackage(row.doctorsPackage),
+        marketingPackage: formatPackage(row.marketingPackage),
+        registrationAmount:
+          row.registrationAmount === null ||
+          row.registrationAmount === undefined ||
+          row.registrationAmount === 0
+            ? '0'
+            : (() => {
+                const numValue =
+                  typeof row.registrationAmount === 'number'
+                    ? row.registrationAmount
+                    : parseFloat(row.registrationAmount)
+                return isNaN(numValue) ? '0' : numValue.toLocaleString('en-IN')
+              })(),
+        paidAmount: `₹${row.paidAmount ?? 0}`,
+        pendingAmount: `₹${row.pendingAmount ?? 0}`,
+      }))
+
+      const options = {
+        reportName: 'Patient_Tracker_Summary_Automated',
+        branchName:
+          automatedSummaryBranch && automatedSummaryBranch !== 'ALL'
+            ? automatedSummaryBranch
+            : undefined,
+      }
+
+      if (format === 'xlsx') {
+        exportAsExcel(exportRows, automatedSummaryExportColumns, options)
+        toast.success('Excel file downloaded', { position: 'top-right' })
+      } else {
+        exportAsCSV(exportRows, automatedSummaryExportColumns, options)
+        toast.success('CSV file downloaded', { position: 'top-right' })
+      }
+    },
+    [
+      isLoadingAutomatedSummary,
+      automatedSummaryRows,
+      automatedSummaryExportColumns,
+      automatedSummaryBranch,
+    ],
+  )
+
   // Graph data processing for Summary Graph tab
   const graphChartData = useMemo(() => {
     let filteredData = graphSummaryData
@@ -4569,6 +4656,7 @@ function PatientTrackerReports() {
                 gap: 1.5,
                 alignItems: 'center',
                 flexWrap: 'wrap',
+                width: '100%',
               }}
             >
               <LocalizationProvider dateAdapter={AdapterDayjs}>
@@ -4679,6 +4767,67 @@ function PatientTrackerReports() {
                   },
                 }}
               />
+              <Tooltip title="Export">
+                <span>
+                  <Button
+                    id="export-automated-summary-button"
+                    variant="outlined"
+                    size="small"
+                    aria-label="Export options"
+                    aria-haspopup="true"
+                    aria-expanded={Boolean(automatedExportMenuAnchor)}
+                    onClick={(e) =>
+                      setAutomatedExportMenuAnchor(e.currentTarget)
+                    }
+                    disabled={
+                      isLoadingAutomatedSummary ||
+                      automatedSummaryRows.length === 0
+                    }
+                    sx={{
+                      minWidth: 40,
+                      px: 1,
+                      ml: { xs: 0, sm: 'auto' },
+                    }}
+                  >
+                    <MoreVertIcon />
+                  </Button>
+                </span>
+              </Tooltip>
+              <Menu
+                anchorEl={automatedExportMenuAnchor}
+                open={Boolean(automatedExportMenuAnchor)}
+                onClose={() => setAutomatedExportMenuAnchor(null)}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+                slotProps={{
+                  list: {
+                    'aria-labelledby': 'export-automated-summary-button',
+                  },
+                }}
+              >
+                <MenuItem
+                  onClick={() => {
+                    setAutomatedExportMenuAnchor(null)
+                    handleExportAutomatedSummary('csv')
+                  }}
+                >
+                  <ListItemIcon>
+                    <FileDownloadIcon fontSize="small" />
+                  </ListItemIcon>
+                  Download as CSV
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    setAutomatedExportMenuAnchor(null)
+                    handleExportAutomatedSummary('xlsx')
+                  }}
+                >
+                  <ListItemIcon>
+                    <FileDownloadIcon fontSize="small" />
+                  </ListItemIcon>
+                  Download as Excel
+                </MenuItem>
+              </Menu>
             </Box>
 
             {/* Data Grid Table */}

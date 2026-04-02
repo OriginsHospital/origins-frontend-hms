@@ -34,6 +34,7 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  DialogContentText,
   DialogActions,
   Menu,
   ListItemIcon,
@@ -51,6 +52,8 @@ import {
   getTreatmentsHistoryByVisitId,
   updatePaymentHistory,
   deletePaymentHistory,
+  getChecklistByPatientId,
+  getSavedLabTestResult,
 } from '@/constants/apis'
 import { useDispatch, useSelector } from 'react-redux'
 import { closeModal, openModal } from '@/redux/modalSlice'
@@ -72,6 +75,7 @@ import {
   Edit,
   Delete,
   MoreVert,
+  Visibility,
 } from '@mui/icons-material'
 import { Generate_Invoice } from '@/constants/apis'
 import { useRouter } from 'next/router'
@@ -1071,10 +1075,25 @@ const PaymentHistoryTab = ({ data }) => {
   )
 }
 
+function normalizeChecklistLabTests(rawData) {
+  if (!rawData) return []
+  const row = Array.isArray(rawData) ? rawData[0] : rawData
+  let list = row?.labTestsList
+  if (typeof list === 'string') {
+    try {
+      list = JSON.parse(list)
+    } catch {
+      list = []
+    }
+  }
+  return Array.isArray(list) ? list : []
+}
+
 function PatientHistory({ patient, onClose }) {
   const dispatch = useDispatch()
   const router = useRouter()
   const user = useSelector((store) => store.user)
+  const billTypes = useSelector((store) => store.dropdowns?.billTypes ?? [])
   const [activeTab, setActiveTab] = useState(0)
   const [selectedVisit, setSelectedVisit] = useState()
   // patient?.activeVisitId
@@ -1082,6 +1101,8 @@ function PatientHistory({ patient, onClose }) {
   const [selectedType, setSelectedType] = useState(0)
   const [selectedAppointment, setSelectedAppointment] = useState(null)
   const [showAppointmentDetail, setShowAppointmentDetail] = useState(false)
+  const [selectedInvestigationTest, setSelectedInvestigationTest] =
+    useState(null)
 
   const hasReadAccess = usePermissionCheck('manageUsers', [
     ACCESS_TYPES.READ,
@@ -1134,13 +1155,34 @@ function PatientHistory({ patient, onClose }) {
   })
 
   const {
+    data: investigationChecklist,
+    isLoading: investigationChecklistLoading,
+    error: investigationChecklistError,
+  } = useQuery({
+    queryKey: ['patientHistoryChecklist', patient?.patientId],
+    queryFn: async () => {
+      const responsejson = await getChecklistByPatientId(
+        user.accessToken,
+        patient?.patientId,
+      )
+      if (responsejson.status !== 200) {
+        throw new Error(
+          responsejson.message || 'Failed to load investigation checklist',
+        )
+      }
+      return normalizeChecklistLabTests(responsejson.data)
+    },
+    enabled: !!patient?.patientId && activeTab === 3,
+  })
+
+  const {
     data: notesHistory,
     isLoading: notesHistoryLoading,
     error: notesHistoryError,
   } = useQuery({
     queryKey: ['notesHistory', selectedVisit],
     queryFn: () => getNotesHistoryByVisitId(user.accessToken, selectedVisit),
-    enabled: !!selectedVisit && activeTab === 3,
+    enabled: !!selectedVisit && activeTab === 4,
   })
 
   const {
@@ -1150,7 +1192,37 @@ function PatientHistory({ patient, onClose }) {
   } = useQuery({
     queryKey: ['paymentHistory', selectedVisit],
     queryFn: () => getPaymentHistoryByVisitId(user.accessToken, selectedVisit),
-    enabled: !!selectedVisit && activeTab === 4,
+    enabled: !!selectedVisit && activeTab === 5 && hasReadAccess,
+  })
+
+  const {
+    data: investigationReportData,
+    isLoading: investigationReportLoading,
+    error: investigationReportError,
+  } = useQuery({
+    queryKey: [
+      'patientHistoryLabReport',
+      selectedInvestigationTest?.appointmentId,
+      selectedInvestigationTest?.billTypeValue,
+      selectedInvestigationTest?.type,
+    ],
+    queryFn: async () => {
+      const responsejson = await getSavedLabTestResult(
+        user.accessToken,
+        selectedInvestigationTest?.type,
+        selectedInvestigationTest?.appointmentId,
+        selectedInvestigationTest?.billTypeValue,
+        selectedInvestigationTest?.isSpouse ?? 0,
+      )
+      if (responsejson.status !== 200) {
+        throw new Error(
+          responsejson.message || 'Failed to load lab test result',
+        )
+      }
+      const row = responsejson.data
+      return row?.labTestResult ?? null
+    },
+    enabled: !!selectedInvestigationTest,
   })
 
   // Handle opening the modal with route
@@ -1416,6 +1488,60 @@ function PatientHistory({ patient, onClose }) {
     )
   }
 
+  const renderInvestigationTab = () => {
+    if (investigationChecklistLoading) return <LoadingState />
+    if (investigationChecklistError)
+      return <ErrorState message={investigationChecklistError.message} />
+    if (!investigationChecklist?.length)
+      return <EmptyState message="No check list data found" />
+
+    return (
+      <div className="space-y-3">
+        <div className="flex justify-start gap-3 items-center flex-wrap px-1">
+          <span className="font-semibold text-secondary">Check List</span>
+          <Chip
+            label={`${investigationChecklist.length} tests`}
+            size="small"
+            className="bg-blue-100 text-blue-800"
+          />
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+          {investigationChecklist.map((test, index) => (
+            <Box
+              key={`${test.appointmentId}-${test.billTypeValue}-${index}`}
+              className="flex flex-col gap-2 p-2 items-start border border-gray-200 rounded-lg justify-between bg-white"
+            >
+              <div className="flex justify-between w-full">
+                <span className="text-xs text-gray-500">
+                  {billTypes.find((bt) => bt.id == test.billTypeId)?.name ||
+                    'Lab Test'}
+                </span>
+                <span className="text-xs text-gray-500">
+                  {test.appointmentDate
+                    ? dayjs(test.appointmentDate).format('DD-MM-YYYY')
+                    : '—'}
+                </span>
+              </div>
+              <div className="flex gap-2 justify-between w-full items-center">
+                <span className="text-base uppercase font-semibold text-gray-900 line-clamp-2">
+                  {test.labTestName}
+                </span>
+                <IconButton
+                  size="small"
+                  aria-label="View lab report"
+                  onClick={() => setSelectedInvestigationTest(test)}
+                  className="hover:text-secondary shrink-0"
+                >
+                  <Visibility />
+                </IconButton>
+              </div>
+            </Box>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   const renderNotesHistoryTab = () => {
     if (notesHistoryLoading) return <LoadingState />
     if (notesHistoryError)
@@ -1584,7 +1710,8 @@ function PatientHistory({ patient, onClose }) {
                       <Tab label="Embryology" />
                       <Tab label="Consultations" />
                       <Tab label="Treatments" />
-                      <Tab label="Notes History" />
+                      <Tab label="INVESTIGATION" />
+                      <Tab label="Notes" />
                       {hasReadAccess && <Tab label="Payment History" />}
                     </Tabs>
                   </Box>
@@ -1593,8 +1720,9 @@ function PatientHistory({ patient, onClose }) {
                     {activeTab === 0 && renderEmbryologyTab()}
                     {activeTab === 1 && renderConsultationsTab()}
                     {activeTab === 2 && renderTreatmentsTab()}
-                    {activeTab === 3 && renderNotesHistoryTab()}
-                    {activeTab === 4 &&
+                    {activeTab === 3 && renderInvestigationTab()}
+                    {activeTab === 4 && renderNotesHistoryTab()}
+                    {activeTab === 5 &&
                       hasReadAccess &&
                       renderPaymentHistoryTab()}
                   </div>
@@ -1621,6 +1749,56 @@ function PatientHistory({ patient, onClose }) {
           </div>
         </div>
       </Modal>
+
+      <Dialog
+        open={!!selectedInvestigationTest}
+        onClose={() => setSelectedInvestigationTest(null)}
+        maxWidth="lg"
+        fullWidth
+      >
+        <DialogTitle className="flex justify-between items-center pr-2">
+          <span>Lab report</span>
+          <IconButton
+            aria-label="close"
+            onClick={() => setSelectedInvestigationTest(null)}
+          >
+            <Close />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent className="min-h-[50vh]">
+          {investigationReportLoading && (
+            <div className="flex justify-center py-12">
+              <CircularProgress />
+            </div>
+          )}
+          {investigationReportError && (
+            <Alert severity="error" className="my-2">
+              {investigationReportError.message}
+            </Alert>
+          )}
+          {!investigationReportLoading &&
+            !investigationReportError &&
+            (investigationReportData == null ||
+            investigationReportData === '' ? (
+              <DialogContentText color="text.secondary">
+                No report uploaded for this test yet.
+              </DialogContentText>
+            ) : typeof investigationReportData === 'string' &&
+              (investigationReportData.includes('.pdf') ||
+                investigationReportData.startsWith('http')) ? (
+              <iframe
+                title="Lab report"
+                src={investigationReportData}
+                className="w-full min-h-[60vh] border-0"
+              />
+            ) : (
+              <RichText
+                value={String(investigationReportData)}
+                readOnly={true}
+              />
+            ))}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
