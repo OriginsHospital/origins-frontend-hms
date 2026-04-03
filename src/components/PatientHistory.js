@@ -1710,7 +1710,7 @@ function PatientHistory({ patient, onClose }) {
                       <Tab label="Embryology" />
                       <Tab label="Consultations" />
                       <Tab label="Treatments" />
-                      <Tab label="INVESTIGATION" />
+                      <Tab label="INVESTIGATIONS" />
                       <Tab label="Notes" />
                       {hasReadAccess && <Tab label="Payment History" />}
                     </Tabs>
