@@ -28,26 +28,10 @@ const toastconfig = {
 /** Branches allowed for GRN entry (pharmacy requirement). */
 const GRN_ALLOWED_BRANCH_CODES = new Set(['HYD', 'HNK', 'SPL', 'KMM'])
 
-const normalizeGrnSupplierName = (name) =>
-  (name ?? '').toString().trim().replace(/\s+/g, ' ').toLowerCase()
-
-/** GRN supplier dropdown: only these master suppliers (matched case-insensitively). */
-const GRN_SUPPLIER_ALLOWLIST_NORMALIZED = new Set(
-  [
-    'MEDANSH PHARMACEUTICALS',
-    'Redicine Medical Distributors',
-    'Sree Lalitha Medicals',
-    'Sree Venkateshwara Medical And Surgicals',
-    'Zomenties Healthcare Pvt Ltd',
-    'CELLENT PHARMA PRIVATE LIMITED',
-    'Krishco Medical Products Pvt Ltd',
-    'DIAMOND LIFESCIENCES PVT. LTD',
-    'DIAMOND LIFESCIENCES PVT.LTD',
-    'R.k.medical Agencies',
-    'GAYATHRI MEDICARE',
-    'Sri Balaji Pharma',
-  ].map(normalizeGrnSupplierName),
-)
+const isActiveSupplier = (s) => {
+  const v = s?.isActive
+  return v === true || v === 1 || v === '1'
+}
 
 // const createEmptyItem = () => ({
 //   itemId: '',
@@ -125,12 +109,8 @@ const GrnComponent = ({
 
   const grnSupplierOptions = useMemo(() => {
     const list = Array.isArray(suppliers) ? suppliers : []
-    const filtered = list.filter((s) =>
-      GRN_SUPPLIER_ALLOWLIST_NORMALIZED.has(
-        normalizeGrnSupplierName(s?.supplier),
-      ),
-    )
-    return [...filtered].sort((a, b) =>
+    const active = list.filter(isActiveSupplier)
+    return [...active].sort((a, b) =>
       (a.supplier || '').localeCompare(b.supplier || '', undefined, {
         sensitivity: 'base',
       }),
