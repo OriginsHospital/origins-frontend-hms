@@ -41,7 +41,7 @@ import DialogContent from '@mui/material/DialogContent'
 import DialogActions from '@mui/material/DialogActions'
 
 function BlockCalender({ doctorsData }) {
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const dispatch = useDispatch()
   const [date, setDate] = useState(null)
   const [blockedTimeSlot, setBlockedTimeSlot] = useState({
@@ -87,7 +87,7 @@ function BlockCalender({ doctorsData }) {
   })
 
   const { mutate, isPending } = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const res = await saveBlockedTimeSlots(user.accessToken, payload)
       if (res.status === 200) {
         toast.success('Saved Successfully')
@@ -123,7 +123,7 @@ function BlockCalender({ doctorsData }) {
     setBlockedTimeSlot({ ...blockedTimeSlot, type: e.target.value })
     if (e.target.value == 'L' && blockedTimeSlot.doctorId) {
       const filteredDoctor = doctorsData.find(
-        eachDoctor => eachDoctor.doctorId == blockedTimeSlot.doctorId,
+        (eachDoctor) => eachDoctor.doctorId == blockedTimeSlot.doctorId,
       )
       if (filteredDoctor?.shiftFrom && filteredDoctor?.shiftTo) {
         setBlockedTimeSlot({
@@ -139,10 +139,10 @@ function BlockCalender({ doctorsData }) {
   function handleFromChange(e) {
     setBlockedTimeSlot({ ...blockedTimeSlot, from: e.target.value })
     const division = timeDivisionsData.find(
-      eachDivision => eachDivision.time == e.target.value,
+      (eachDivision) => eachDivision.time == e.target.value,
     )
     const filtered = timeDivisionsData.filter(
-      eachDivision => eachDivision.id > division.id,
+      (eachDivision) => eachDivision.id > division.id,
     )
     setFilteredTimeDivisionsData([...filtered])
   }
@@ -179,12 +179,14 @@ function BlockCalender({ doctorsData }) {
   }
 
   function handleCrossClick(id) {
-    const filtered = blockedTimeSlotsData.filter(eachSlot => eachSlot.id != id)
+    const filtered = blockedTimeSlotsData.filter(
+      (eachSlot) => eachSlot.id != id,
+    )
     setBlockedTimeSlotsData([...filtered])
   }
 
   function handleSaveClick() {
-    const slotsArray = blockedTimeSlotsData.map(eachSlot => {
+    const slotsArray = blockedTimeSlotsData.map((eachSlot) => {
       return {
         doctorId: eachSlot.doctorId,
         timeStart: eachSlot.from,
@@ -211,7 +213,7 @@ function BlockCalender({ doctorsData }) {
   useEffect(() => {
     if (blockedSlotsByDate) {
       const idsObj = {}
-      const modifiedData = blockedSlotsByDate.map(eachSlot => {
+      const modifiedData = blockedSlotsByDate.map((eachSlot) => {
         const id = `${eachSlot.doctorId}-${eachSlot.timeStart}-${eachSlot.timeEnd}-${eachSlot.blockType}`
         idsObj[id] = true
         return {
@@ -266,7 +268,7 @@ function BlockCalender({ doctorsData }) {
             value={blockedTimeSlot.doctorId}
             onChange={handleDoctorChange}
           >
-            {doctorsData?.map(eachDoctor => {
+            {doctorsData?.map((eachDoctor) => {
               return (
                 <MenuItem
                   key={eachDoctor.fullName + eachDoctor.doctorId}
@@ -300,7 +302,7 @@ function BlockCalender({ doctorsData }) {
             value={blockedTimeSlot.from}
             onChange={handleFromChange}
           >
-            {timeDivisionsData.map(eachDivision => {
+            {timeDivisionsData.map((eachDivision) => {
               return (
                 <MenuItem key={eachDivision.id} value={eachDivision.time}>
                   {eachDivision.time}
@@ -319,7 +321,7 @@ function BlockCalender({ doctorsData }) {
             value={blockedTimeSlot.to}
             onChange={handleToChange}
           >
-            {filteredTimeDivisionsData?.map(eachDivision => {
+            {filteredTimeDivisionsData?.map((eachDivision) => {
               return (
                 <MenuItem key={eachDivision.id} value={eachDivision.time}>
                   {eachDivision.time}
@@ -341,11 +343,12 @@ function BlockCalender({ doctorsData }) {
         </Button>
       </div>
       <div className="w-full grid grid-cols-1 md:grid-cols-4 gap-8">
-        {blockedTimeSlotsData.map(slot => {
+        {blockedTimeSlotsData.map((slot) => {
           return (
             <div
-              className={`grid grid-cols-2 p-3 gap-3 rounded shadow bg-white border ${slot.saved &&
-                'border-success text-success-content'}`}
+              className={`grid grid-cols-2 p-3 gap-3 rounded shadow bg-white border ${
+                slot.saved && 'border-success text-success-content'
+              }`}
               key={slot.id}
             >
               <div className="col-span-2 pb-3 flex justify-between border-b">
@@ -390,7 +393,7 @@ function BlockCalender({ doctorsData }) {
 }
 
 function ShiftTimings({ doctorsData }) {
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const dispatch = useDispatch()
   const [formDetails, setFormDetails] = useState({
     doctorId: '',
@@ -425,15 +428,18 @@ function ShiftTimings({ doctorsData }) {
     queryFn: async () => {
       const responsejson = await getDoctorsForAvailability(user.accessToken)
       if (responsejson.status === 200) {
-        return responsejson.data
-      } else {
-        throw new Error('Error occurred while fetching shift timings')
+        return responsejson.data ?? []
       }
+      const msg =
+        responsejson.message ||
+        'Could not load doctor shifts. Please try again later.'
+      toast.error(msg, toastconfig)
+      throw new Error(msg)
     },
   })
 
   const { mutate, isPending } = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const res = await saveDoctorAvailability(user.accessToken, payload)
       if (res.status === 200) {
         toast.success('Saved Successfully')
@@ -523,7 +529,7 @@ function ShiftTimings({ doctorsData }) {
   }
 
   function handleSaveClick() {
-    const shiftsArray = shiftTimingsData.map(eachShift => {
+    const shiftsArray = shiftTimingsData.map((eachShift) => {
       return {
         doctorId: eachShift.doctorId,
         doctorName: eachShift.doctorName,
@@ -548,7 +554,7 @@ function ShiftTimings({ doctorsData }) {
   useEffect(() => {
     if (savedShiftTimingsData) {
       const idsObj = {}
-      const modifiedData = savedShiftTimingsData.map(each => {
+      const modifiedData = savedShiftTimingsData.map((each) => {
         const id = each.doctorId
         idsObj[id] = true
         return {
@@ -575,7 +581,7 @@ function ShiftTimings({ doctorsData }) {
 
   // Add new function to check for unsaved changes
   const hasUnsavedChanges = useMemo(() => {
-    return shiftTimingsData.some(shift => !shift.saved)
+    return shiftTimingsData.some((shift) => !shift.saved)
   }, [shiftTimingsData])
 
   return (
@@ -640,7 +646,7 @@ function ShiftTimings({ doctorsData }) {
               onChange={handleDoctorChange}
               label="Select Doctor"
             >
-              {doctorsData?.map(doctor => (
+              {doctorsData?.map((doctor) => (
                 <MenuItem key={doctor.doctorId} value={doctor.doctorId}>
                   {doctor.fullName}
                 </MenuItem>
@@ -657,7 +663,7 @@ function ShiftTimings({ doctorsData }) {
                 onChange={handleFromChange}
                 label="Shift Start"
               >
-                {timeDivisionsData.map(time => (
+                {timeDivisionsData.map((time) => (
                   <MenuItem key={time.id} value={time.time}>
                     {time.time}
                   </MenuItem>
@@ -673,7 +679,7 @@ function ShiftTimings({ doctorsData }) {
                 onChange={handleToChange}
                 label="Shift End"
               >
-                {timeDivisionsData.map(time => (
+                {timeDivisionsData.map((time) => (
                   <MenuItem key={time.id} value={time.time}>
                     {time.time}
                   </MenuItem>
@@ -759,12 +765,12 @@ function ShiftTimings({ doctorsData }) {
             <Select
               size="small"
               value={editShift.from}
-              onChange={e =>
+              onChange={(e) =>
                 setEditShift({ ...editShift, from: e.target.value })
               }
               label="Shift Start"
             >
-              {timeDivisionsData.map(time => (
+              {timeDivisionsData.map((time) => (
                 <MenuItem key={time.id} value={time.time}>
                   {time.time}
                 </MenuItem>
@@ -777,10 +783,12 @@ function ShiftTimings({ doctorsData }) {
             <Select
               size="small"
               value={editShift.to}
-              onChange={e => setEditShift({ ...editShift, to: e.target.value })}
+              onChange={(e) =>
+                setEditShift({ ...editShift, to: e.target.value })
+              }
               label="Shift End"
             >
-              {timeDivisionsData.map(time => (
+              {timeDivisionsData.map((time) => (
                 <MenuItem key={time.id} value={time.time}>
                   {time.time}
                 </MenuItem>
@@ -806,7 +814,7 @@ function ShiftTimings({ doctorsData }) {
 }
 
 function Doctor() {
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const dispatch = useDispatch()
   const [tab, setTab] = useState('shiftTimings')
 

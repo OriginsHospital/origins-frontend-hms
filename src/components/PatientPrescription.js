@@ -765,7 +765,11 @@ function PatientPrescription({
 
               // Add all medicine kit options for Pharmacy
               if (billType.name === 'Pharmacy') {
-                const kitOptions = ALL_MEDICINE_KITS.map((kit) => ({
+                // Pharmacy in "Prescription" should allow CLEO SHOT,
+                // but not NAPO SHOT (spouse will handle NAPO).
+                const kitOptions = ALL_MEDICINE_KITS.filter(
+                  (kit) => kit.kitValue !== NAPO_SHOT_KIT.kitValue,
+                ).map((kit) => ({
                   value: kit.kitValue,
                   label: kit.kitName,
                   isKit: true, // Flag to identify it's a kit

@@ -24,6 +24,30 @@ const JoditEditor = dynamic(() => import('jodit-react'), {
   ssr: false,
 })
 
+// Medicine Kit Configurations
+// Spouse prescription should show only NAPO SHOT as a kit trigger in Pharmacy.
+const NAPO_SHOT_KIT = {
+  kitName: 'NAPO SHOT',
+  kitValue: 'NAPO_SHOT_KIT',
+  medicines: [
+    { name: 'MOCELL INJ 600MG', quantity: 3 },
+    { name: 'LEVO VEN', quantity: 1 },
+    { name: 'MUCONICS 2ML', quantity: 1 },
+    { name: 'DS VIT - C 1.5 INJ', quantity: 1 },
+    { name: 'Americano MVI INJ', quantity: 1 },
+    { name: 'Cynocan 12', quantity: 1 },
+    { name: 'MAXX - TRACE', quantity: 1 },
+    { name: 'NIPRO SYRINGE 10ML', quantity: 2 },
+    { name: 'IV CANNULA-22', quantity: 1 },
+    { name: 'NS 100ML', quantity: 1 },
+    { name: 'EASY FIX', quantity: 1 },
+    { name: 'IV SET', quantity: 1 },
+  ],
+}
+
+// Only the NAPO kit is allowed in SpousePrescription Pharmacy.
+const ALL_MEDICINE_KITS = [NAPO_SHOT_KIT]
+
 function SpousePrescription({
   allBillTypeValues,
   type,
@@ -140,30 +164,174 @@ function SpousePrescription({
     let copyOfDefaultLineBillValues = { ...defaultLineBillValues }
     let billTypeValues = [...currentPaidItems] // Start with paid items
 
-    // Add selected unpaid items
-    selectedOptions?.forEach((element) => {
-      // Skip if it's already in paid items
-      if (!currentPaidItems.some((paid) => paid.id === element.value)) {
-        const BillTypeValuesArray = allBillTypeValues[name]
-        const BillTYpeValueObject = BillTypeValuesArray.find((values) => {
-          return values.id === element.value
+    if (name === 'Pharmacy') {
+      // Helper function to process a medicine kit
+      const processKit = (kit) => {
+        const BillTypeValuesArray = allBillTypeValues[name] || []
+        const existingAllItems = copyOfDefaultLineBillValues[billTypeId] || []
+
+        kit.medicines.forEach((kitMedicine) => {
+          // Find the medicine in the available pharmacy items (by name match)
+          const medicineInPharmacy = BillTypeValuesArray.find(
+            (item) =>
+              item.name?.toUpperCase().trim() ===
+              kitMedicine.name.toUpperCase().trim(),
+          )
+
+          if (medicineInPharmacy) {
+            // Check if medicine already exists in the prescription (both paid and unpaid)
+            const existingMedicineIndex = existingAllItems.findIndex(
+              (item) => item.id === medicineInPharmacy.id,
+            )
+
+            if (existingMedicineIndex >= 0) {
+              const existingMedicine = existingAllItems[existingMedicineIndex]
+
+              // Only update if it's not paid (can't modify paid items)
+              if (existingMedicine.status !== 'PAID') {
+                const existingBillTypeValuesIndex = billTypeValues.findIndex(
+                  (item) => item.id === medicineInPharmacy.id,
+                )
+
+                if (existingBillTypeValuesIndex >= 0) {
+                  // Update quantity by adding the kit quantity
+                  billTypeValues[
+                    existingBillTypeValuesIndex
+                  ].prescribedQuantity =
+                    (billTypeValues[existingBillTypeValuesIndex]
+                      .prescribedQuantity || 0) + kitMedicine.quantity
+                } else {
+                  // Medicine exists but not in current billTypeValues
+                  const infoObject = defaultLineBillValues['3']?.find(
+                    (values) => values.id === medicineInPharmacy.id,
+                  )
+
+                  billTypeValues.push({
+                    id: medicineInPharmacy.id,
+                    name: medicineInPharmacy.name,
+                    amount: parseInt(medicineInPharmacy.amount, 10),
+                    prescribedQuantity:
+                      (existingMedicine.prescribedQuantity || 0) +
+                      kitMedicine.quantity,
+                    prescriptionDetails:
+                      infoObject?.prescriptionDetails ??
+                      existingMedicine.prescriptionDetails ??
+                      '',
+                    prescriptionDays:
+                      infoObject?.prescriptionDays ??
+                      existingMedicine.prescriptionDays ??
+                      1,
+                    status: 'UNPAID',
+                  })
+                }
+              }
+            } else {
+              // Add new medicine with predefined quantity
+              const infoObject = defaultLineBillValues['3']?.find(
+                (values) => values.id === medicineInPharmacy.id,
+              )
+
+              billTypeValues.push({
+                id: medicineInPharmacy.id,
+                name: medicineInPharmacy.name,
+                amount: parseInt(medicineInPharmacy.amount, 10),
+                prescribedQuantity: kitMedicine.quantity,
+                prescriptionDetails: infoObject?.prescriptionDetails ?? '',
+                prescriptionDays: infoObject?.prescriptionDays ?? 1,
+                status: 'UNPAID',
+              })
+            }
+          }
         })
+      }
 
-        if (name === 'Pharmacy') {
-          const infoObject = defaultLineBillValues['3']?.find((values) => {
-            return values.id === BillTYpeValueObject.id
+      // Detect which kits were selected (only NAPO_SHOT_KIT is in this screen)
+      const selectedKits = []
+      selectedOptions?.forEach((option) => {
+        ALL_MEDICINE_KITS.forEach((kit) => {
+          const kitSelected =
+            option.value === kit.kitValue ||
+            option.label?.toUpperCase() === kit.kitName.toUpperCase()
+          if (kitSelected) {
+            selectedKits.push(kit)
+          }
+        })
+      })
+
+      // Process all selected kits
+      selectedKits.forEach((kit) => processKit(kit))
+
+      if (selectedKits.length > 0) {
+        // Remove all kit trigger options from selected options
+        const kitValues = ALL_MEDICINE_KITS.map((k) => k.kitValue)
+        const kitNames = ALL_MEDICINE_KITS.map((k) => k.kitName.toUpperCase())
+        const filteredOptions = selectedOptions.filter(
+          (option) =>
+            !kitValues.includes(option.value) &&
+            !kitNames.includes(option.label?.toUpperCase()),
+        )
+
+        // Continue with remaining selected items (non-kit items)
+        filteredOptions?.forEach((element) => {
+          if (!currentPaidItems.some((paid) => paid.id === element.value)) {
+            const BillTypeValuesArray = allBillTypeValues[name] || []
+            const BillTYpeValueObject = BillTypeValuesArray.find(
+              (values) => values.id === element.value,
+            )
+            if (!BillTYpeValueObject) return
+
+            const infoObject = defaultLineBillValues['3']?.find(
+              (values) => values.id === BillTYpeValueObject.id,
+            )
+
+            billTypeValues.push({
+              id: element.value,
+              name: element.label,
+              amount: parseInt(BillTYpeValueObject.amount, 10),
+              prescribedQuantity: infoObject?.prescribedQuantity ?? 1,
+              prescriptionDetails: infoObject?.prescriptionDetails ?? '',
+              prescriptionDays: infoObject?.prescriptionDays ?? 1,
+              status: 'UNPAID',
+            })
+          }
+        })
+      } else {
+        // Normal flow for non-kit selections
+        selectedOptions?.forEach((element) => {
+          if (!currentPaidItems.some((paid) => paid.id === element.value)) {
+            const BillTypeValuesArray = allBillTypeValues[name] || []
+            const BillTYpeValueObject = BillTypeValuesArray.find(
+              (values) => values.id === element.value,
+            )
+            if (!BillTYpeValueObject) return
+
+            const infoObject = defaultLineBillValues['3']?.find(
+              (values) => values.id === BillTYpeValueObject.id,
+            )
+
+            billTypeValues.push({
+              id: element.value,
+              name: element.label,
+              amount: parseInt(BillTYpeValueObject.amount, 10),
+              prescribedQuantity: infoObject?.prescribedQuantity ?? 1,
+              prescriptionDetails: infoObject?.prescriptionDetails ?? '',
+              prescriptionDays: infoObject?.prescriptionDays ?? 1,
+              status: 'UNPAID',
+            })
+          }
+        })
+      }
+    } else {
+      // Non-Pharmacy bill types
+      selectedOptions?.forEach((element) => {
+        if (!currentPaidItems.some((paid) => paid.id === element.value)) {
+          const BillTypeValuesArray = allBillTypeValues[name]
+          const BillTYpeValueObject = BillTypeValuesArray.find((values) => {
+            return values.id === element.value
           })
 
-          billTypeValues.push({
-            id: element.value,
-            name: element.label,
-            amount: BillTYpeValueObject.amount,
-            prescribedQuantity: infoObject?.prescribedQuantity ?? 1,
-            prescriptionDetails: infoObject?.prescriptionDetails ?? '',
-            prescriptionDays: infoObject?.prescriptionDays ?? 1,
-            status: 'UNPAID',
-          })
-        } else {
+          if (!BillTYpeValueObject) return
+
           billTypeValues.push({
             id: element.value,
             name: element.label,
@@ -171,8 +339,8 @@ function SpousePrescription({
             status: 'UNPAID',
           })
         }
-      }
-    })
+      })
+    }
 
     copyOfDefaultLineBillValues[billTypeId] = billTypeValues
     setDefaultLineBillValues(copyOfDefaultLineBillValues)
@@ -461,11 +629,23 @@ function SpousePrescription({
                   status: billData.status,
                 })) ?? []
 
-              const selectOptions =
+              let selectOptions =
                 allBillTypeValues?.[billType.name]?.map((data) => ({
                   value: data.id,
                   label: data.name,
                 })) ?? []
+
+              // Add NAPO SHOT kit as a special option for spouse Pharmacy
+              if (billType.name === 'Pharmacy') {
+                const kitOptions = [
+                  {
+                    value: NAPO_SHOT_KIT.kitValue,
+                    label: NAPO_SHOT_KIT.kitName,
+                    isKit: true,
+                  },
+                ]
+                selectOptions = [...kitOptions, ...selectOptions]
+              }
               // console.log(selectOptions)
               return (
                 <React.Fragment key={`${billType.name}-multiselect`}>

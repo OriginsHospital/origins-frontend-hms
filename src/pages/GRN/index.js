@@ -40,7 +40,7 @@ const createEmptyItem = () => ({
   itemId: '',
   itemName: '',
   batchNo: '',
-  expiryDate: dayjs(new Date()).format('YYYY-MM-DD'),
+  expiryDate: '',
   pack: 0,
   quantity: 0,
   freeQuantity: 0,

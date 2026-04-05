@@ -861,7 +861,27 @@ export const getDoctorsForAvailability = async (token) => {
       credentials: 'include',
     },
   )
-  return response.json()
+  const text = await response.text()
+  try {
+    const json = text ? JSON.parse(text) : {}
+    if (!response.ok && json.status === undefined) {
+      return {
+        ...json,
+        status: response.status,
+        message:
+          json.message ||
+          response.statusText ||
+          'Could not load doctor availability',
+      }
+    }
+    return json
+  } catch {
+    return {
+      status: response.status || 500,
+      message: 'Could not parse server response',
+      data: null,
+    }
+  }
 }
 
 export const createConsultationOrTreatment = async (token, payload) => {

@@ -1049,13 +1049,16 @@ function RenderAccordianDetails({
     const enteredQty = Number(med?.prescribedQuantity || 0)
     if (enteredQty === 0) return 0
 
-    // Calculate price using entered quantity × average MRP from available GRNs
-    if (availableGrns && availableGrns.length > 0) {
+    // Average MRP from GRNs that still have stock (same set as Select GRN dropdown)
+    const grnsInStock = (availableGrns || []).filter(
+      (grn) => Number(grn.totalQuantity || 0) > 0,
+    )
+    if (grnsInStock.length > 0) {
       const avgMrp =
-        availableGrns.reduce(
+        grnsInStock.reduce(
           (sum, grn) => sum + Number(grn.mrpPerTablet || 0),
           0,
-        ) / availableGrns.length
+        ) / grnsInStock.length
       return enteredQty * avgMrp
     }
 
@@ -2210,16 +2213,9 @@ function RenderAccordianDetails({
                 {column.label === 'PRESCRIBED' && (
                   <Autocomplete
                     className="flex-1"
-                    options={
-                      availableGrns
-                      //   ?.filter(
-                      //   grn =>
-                      //     !grnRows[med.id].some(
-                      //       (row, i) =>
-                      //         i !== index && row.grnId?.grnId === grn.grnId,
-                      //     ),
-                      // )
-                    }
+                    options={(availableGrns || []).filter(
+                      (grn) => Number(grn.totalQuantity || 0) > 0,
+                    )}
                     value={row.grnId}
                     onChange={(_, newValue) =>
                       handleGrnRowChange(med.id, index, 'grnId', newValue)

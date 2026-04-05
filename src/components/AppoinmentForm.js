@@ -23,21 +23,34 @@ export default function AppoinmentForm({
   handleBookAppointment,
   appointmentId,
 }) {
-  const user = useSelector(store => store.user)
-  const dropdowns = useSelector(store => store.dropdowns)
+  const user = useSelector((store) => store.user)
+  const dropdowns = useSelector((store) => store.dropdowns)
   const { branches } = dropdowns
   //getAllAppointmentsReasons using useQuery
   const { data: appointmentReasons } = useQuery({
-    queryKey: ['getAllAppointmentsReasons'],
+    queryKey: [
+      'getAllAppointmentsReasons',
+      appointmentForm?.consultationId,
+      appointmentId,
+    ],
     queryFn: async () => {
       const response = await getAllAppointmentsReasons(
         user?.accessToken,
         appointmentForm.consultationId,
         appointmentId,
       )
-      console.log(response)
-      return response.data
+      if (response?.status === 200) {
+        return response.data ?? []
+      }
+      throw new Error(response?.message || 'Could not load appointment reasons')
     },
+    enabled: Boolean(
+      user?.accessToken &&
+        appointmentForm?.consultationId != null &&
+        appointmentForm?.consultationId !== '' &&
+        appointmentId != null &&
+        appointmentId !== '',
+    ),
   })
 
   return (
@@ -49,7 +62,7 @@ export default function AppoinmentForm({
         className="bg-white rounded-lg"
         value={appointmentForm?.date ? dayjs(appointmentForm?.date) : null}
         name="date"
-        onChange={newValue =>
+        onChange={(newValue) =>
           setAppointmentForm({
             ...appointmentForm,
             date: dayjs(newValue).format('YYYY-MM-DD'),
@@ -60,10 +73,11 @@ export default function AppoinmentForm({
       <FormControl fullWidth>
         <Autocomplete
           options={branches || []}
-          getOptionLabel={option => option.name}
+          getOptionLabel={(option) => option.name}
           value={
-            branches?.find(branch => branch.id === appointmentForm.branchId) ||
-            null
+            branches?.find(
+              (branch) => branch.id === appointmentForm.branchId,
+            ) || null
           }
           onChange={(_, value) =>
             setAppointmentForm({
@@ -71,7 +85,7 @@ export default function AppoinmentForm({
               branchId: value?.id || null,
             })
           }
-          renderInput={params => (
+          renderInput={(params) => (
             <TextField {...params} label="Branch" fullWidth />
           )}
         />
@@ -88,7 +102,7 @@ export default function AppoinmentForm({
           label="Doctor"
           onChange={handleChangeForm}
         >
-          {doctorsList?.map(each => (
+          {doctorsList?.map((each) => (
             <MenuItem key={each.doctorId} value={each.doctorId}>
               {each.name}
             </MenuItem>
@@ -106,7 +120,7 @@ export default function AppoinmentForm({
           label="Time Slot"
           onChange={handleChangeForm}
         >
-          {availableSlots?.data?.map(each => (
+          {availableSlots?.data?.map((each) => (
             <MenuItem key={each} value={each}>
               {each}
             </MenuItem>
@@ -114,8 +128,8 @@ export default function AppoinmentForm({
         </Select>
       </FormControl>
       <Autocomplete
-        options={appointmentReasons}
-        getOptionLabel={option =>
+        options={appointmentReasons ?? []}
+        getOptionLabel={(option) =>
           option.name +
           ' ( Rs.' +
           option.appointmentCharges +
@@ -130,7 +144,7 @@ export default function AppoinmentForm({
           })
         }}
         name="appointmentReasonId"
-        renderInput={params => (
+        renderInput={(params) => (
           <TextField
             {...params}
             label="Appointment Reason"

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   Autocomplete,
   Button,
@@ -24,6 +24,30 @@ const toastconfig = {
   theme: 'light',
   transition: Bounce,
 }
+
+/** Branches allowed for GRN entry (pharmacy requirement). */
+const GRN_ALLOWED_BRANCH_CODES = new Set(['HYD', 'HNK', 'SPL', 'KMM'])
+
+const normalizeGrnSupplierName = (name) =>
+  (name ?? '').toString().trim().replace(/\s+/g, ' ').toLowerCase()
+
+/** GRN supplier dropdown: only these master suppliers (matched case-insensitively). */
+const GRN_SUPPLIER_ALLOWLIST_NORMALIZED = new Set(
+  [
+    'MEDANSH PHARMACEUTICALS',
+    'Redicine Medical Distributors',
+    'Sree Lalitha Medicals',
+    'Sree Venkateshwara Medical And Surgicals',
+    'Zomenties Healthcare Pvt Ltd',
+    'CELLENT PHARMA PRIVATE LIMITED',
+    'Krishco Medical Products Pvt Ltd',
+    'DIAMOND LIFESCIENCES PVT. LTD',
+    'DIAMOND LIFESCIENCES PVT.LTD',
+    'R.k.medical Agencies',
+    'GAYATHRI MEDICARE',
+    'Sri Balaji Pharma',
+  ].map(normalizeGrnSupplierName),
+)
 
 // const createEmptyItem = () => ({
 //   itemId: '',
@@ -85,12 +109,37 @@ const GrnComponent = ({
 }) => {
   const [itemSuggestions, setItemSuggestions] = useState([])
   const [loadingItemsSuggestion, setLoadingItemsSuggestion] = useState(false)
-  const user = useSelector(store => store.user)
-  const dropdowns = useSelector(store => store.dropdowns)
+  const user = useSelector((store) => store.user)
+  const dropdowns = useSelector((store) => store.dropdowns)
   const { branches } = dropdowns
+
+  const grnBranchOptions = useMemo(() => {
+    return (branches || []).filter((b) => {
+      const code = (b.branchCode || b.name || '')
+        .toString()
+        .trim()
+        .toUpperCase()
+      return GRN_ALLOWED_BRANCH_CODES.has(code)
+    })
+  }, [branches])
+
+  const grnSupplierOptions = useMemo(() => {
+    const list = Array.isArray(suppliers) ? suppliers : []
+    const filtered = list.filter((s) =>
+      GRN_SUPPLIER_ALLOWLIST_NORMALIZED.has(
+        normalizeGrnSupplierName(s?.supplier),
+      ),
+    )
+    return [...filtered].sort((a, b) =>
+      (a.supplier || '').localeCompare(b.supplier || '', undefined, {
+        sensitivity: 'base',
+      }),
+    )
+  }, [suppliers])
+
   const handleSupplierChange = (event, value) => {
     if (value) {
-      setGrnDetails(prevDetails => ({
+      setGrnDetails((prevDetails) => ({
         ...prevDetails,
         supplierId: value.id,
         supplierName: value.supplier,
@@ -99,7 +148,7 @@ const GrnComponent = ({
         supplierGstNumber: value.gstNumber,
       }))
     } else {
-      setGrnDetails(prevDetails => ({
+      setGrnDetails((prevDetails) => ({
         ...prevDetails,
         supplierId: null,
         supplierEmail: '',
@@ -112,7 +161,7 @@ const GrnComponent = ({
     setGrnItemDetails([...grnItemDetails, createEmptyItem()])
   }
 
-  const handleGRNdetailsChange = event => {
+  const handleGRNdetailsChange = (event) => {
     setGrnDetails({ ...grnDetails, [event.target.name]: event.target.value })
   }
   // const handleGRNItemdetailsChange = (index, event) => {
@@ -272,7 +321,7 @@ const GrnComponent = ({
     if (subTotal > 0) {
       console.log(subTotal)
       const roundedSubTotal = Number(subTotal.toFixed(2))
-      setGrnPaymentDetails(prev => ({
+      setGrnPaymentDetails((prev) => ({
         ...prev,
         subTotal: roundedSubTotal,
         overAllDiscountAmount:
@@ -291,7 +340,7 @@ const GrnComponent = ({
             prev.cst,
             prev.excise,
             prev.cess,
-          ].every(charge => charge === 0)
+          ].every((charge) => charge === 0)
             ? roundedSubTotal
             : roundedSubTotal -
               prev.overAllDiscountAmount +
@@ -341,7 +390,7 @@ const GrnComponent = ({
       toast.error(response.message, toastconfig)
     }
   }
-  const fetchItemSuggestions = async searchValue => {
+  const fetchItemSuggestions = async (searchValue) => {
     setLoadingItemsSuggestion(true)
     try {
       const response = await getItemSuggestionGRN(
@@ -367,11 +416,11 @@ const GrnComponent = ({
     setGrnItemDetails(updatedGrnItemDetails)
   }
 
-  const handleGRNPaymentChange = useCallback(event => {
+  const handleGRNPaymentChange = useCallback((event) => {
     const { name, value } = event.target
     const parsedValue = Number(value)
 
-    setGrnPaymentDetails(prev => {
+    setGrnPaymentDetails((prev) => {
       const updated = { ...prev }
 
       if (name === 'overAllDiscountPercentage') {
@@ -415,12 +464,12 @@ const GrnComponent = ({
   }, [])
 
   const validateForm = () => {
-    const isGRNDetailsValid = Object.values(grnDetails).every(value => value)
-    const areGRNItemsValid = grnItemDetails.every(item =>
-      Object.values(item).every(value => value),
+    const isGRNDetailsValid = Object.values(grnDetails).every((value) => value)
+    const areGRNItemsValid = grnItemDetails.every((item) =>
+      Object.values(item).every((value) => value),
     )
     const isGRNPaymentDetailsValid = Object.values(grnPaymentDetails).every(
-      value => value,
+      (value) => value,
     )
 
     return isGRNDetailsValid && areGRNItemsValid && isGRNPaymentDetailsValid
@@ -442,7 +491,7 @@ const GrnComponent = ({
             value={dayjs(grnDetails.date)}
             name="date"
             format="DD/MM/YYYY"
-            onChange={newValue =>
+            onChange={(newValue) =>
               setGrnDetails({
                 ...grnDetails,
                 date: dayjs(newValue).format('YYYY-MM-DD'),
@@ -450,23 +499,31 @@ const GrnComponent = ({
             }
           />
           <Autocomplete
-            options={branches || []}
-            getOptionLabel={option => option.name}
+            options={grnBranchOptions}
+            getOptionLabel={(option) => option.name}
+            value={
+              grnBranchOptions.find((b) => b.id === grnDetails.branchId) ?? null
+            }
             onChange={(_, value) =>
               setGrnDetails({
                 ...grnDetails,
                 branchId: value?.id || null,
               })
             }
-            renderInput={params => (
+            renderInput={(params) => (
               <TextField {...params} label="branch" className="min-w-56" />
             )}
           />
           <Autocomplete
-            options={suppliers}
-            getOptionLabel={option => option.supplier}
+            options={grnSupplierOptions}
+            value={
+              grnSupplierOptions.find((s) => s.id === grnDetails.supplierId) ??
+              null
+            }
+            isOptionEqualToValue={(a, b) => a?.id === b?.id}
+            getOptionLabel={(option) => option.supplier}
             onChange={handleSupplierChange}
-            renderInput={params => (
+            renderInput={(params) => (
               <TextField {...params} label="Supplier" className="min-w-56" />
             )}
           />
@@ -510,7 +567,7 @@ const GrnComponent = ({
               <span className="font-semibold">{`${index + 1}.`}</span>
               {index > 0 && (
                 <Button
-                  onClick={e => handleRemoveItem(e, index)}
+                  onClick={(e) => handleRemoveItem(e, index)}
                   variant="outlined"
                   color="error"
                   className="capitalize"
@@ -524,35 +581,42 @@ const GrnComponent = ({
               <Autocomplete
                 className="min-w-56"
                 options={itemSuggestions}
-                getOptionLabel={option => option.itemName}
+                getOptionLabel={(option) => option.itemName}
                 //No options
                 value={itemSuggestions.find(
-                  option => option.id === item.itemId,
+                  (option) => option.id === item.itemId,
                 )}
                 onInputChange={handleItemInputChange}
                 loading={loadingItemsSuggestion}
                 onChange={(event, value) =>
                   handleItemChange(index, event, value)
                 }
-                renderInput={params => <TextField {...params} label="Item" />}
+                renderInput={(params) => <TextField {...params} label="Item" />}
               />
               <TextField
                 label="Batch No"
                 value={item.batchNo}
                 name="batchNo"
-                onChange={event => handleGRNItemdetailsChange(index, event)}
+                onChange={(event) => handleGRNItemdetailsChange(index, event)}
               />
               <DatePicker
                 className="w-56"
                 label="Expiry Date"
-                value={dayjs(item.expiryDate)}
+                value={
+                  item.expiryDate && dayjs(item.expiryDate).isValid()
+                    ? dayjs(item.expiryDate)
+                    : null
+                }
                 name="expiryDate"
                 format="DD/MM/YYYY"
-                onChange={newValue =>
+                onChange={(newValue) =>
                   handleGRNItemdetailsChange(index, {
                     target: {
                       name: 'expiryDate',
-                      value: dayjs(newValue).format('YYYY-MM-DD'),
+                      value:
+                        newValue != null && dayjs(newValue).isValid()
+                          ? dayjs(newValue).format('YYYY-MM-DD')
+                          : '',
                     },
                   })
                 }
@@ -563,21 +627,21 @@ const GrnComponent = ({
                 type="number"
                 // defaultValue={''}
                 name="pack"
-                onChange={event => handleGRNItemdetailsChange(index, event)}
+                onChange={(event) => handleGRNItemdetailsChange(index, event)}
               />
               <TextField
                 label="Quantity"
                 value={item.quantity || ''}
                 name="quantity"
                 type="number"
-                onChange={event => handleGRNItemdetailsChange(index, event)}
+                onChange={(event) => handleGRNItemdetailsChange(index, event)}
               />
               <TextField
                 label="Free Quantity"
                 value={item.freeQuantity || ''}
                 name="freeQuantity"
                 type="number"
-                onChange={event => handleGRNItemdetailsChange(index, event)}
+                onChange={(event) => handleGRNItemdetailsChange(index, event)}
               />
               <TextField
                 label="MRP per pack size"
@@ -585,7 +649,7 @@ const GrnComponent = ({
                 className="w-56"
                 name="mrp"
                 type="number"
-                onChange={event => handleGRNItemdetailsChange(index, event)}
+                onChange={(event) => handleGRNItemdetailsChange(index, event)}
                 InputProps={{
                   endAdornment: (
                     <InputAdornment position="end">
@@ -611,7 +675,7 @@ const GrnComponent = ({
                 name="rate"
                 className="w-56"
                 type="number"
-                onChange={event => handleGRNItemdetailsChange(index, event)}
+                onChange={(event) => handleGRNItemdetailsChange(index, event)}
                 InputProps={{
                   endAdornment: (
                     <InputAdornment position="end">
@@ -663,7 +727,7 @@ const GrnComponent = ({
                     height: '56px',
                   },
                 }}
-                onChange={event => handleGRNItemdetailsChange(index, event)}
+                onChange={(event) => handleGRNItemdetailsChange(index, event)}
               />
               {/* <TextField
               label="Tax Amount"
@@ -696,7 +760,7 @@ const GrnComponent = ({
                     </InputAdornment>
                   ),
                 }}
-                onChange={event => handleGRNItemdetailsChange(index, event)}
+                onChange={(event) => handleGRNItemdetailsChange(index, event)}
               />
               {/* <TextField
               label="Discount Amount"
@@ -850,7 +914,7 @@ const GrnComponent = ({
             // multiline
             // rows={3}
             className="w-56"
-            onChange={event =>
+            onChange={(event) =>
               setGrnPaymentDetails({
                 ...grnPaymentDetails,
                 remarks: event.target.value,

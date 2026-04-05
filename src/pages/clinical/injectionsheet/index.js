@@ -28,8 +28,26 @@ import { DataGrid } from '@mui/x-data-grid'
 import { DatePicker, TimePicker } from '@mui/x-date-pickers'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
+import customParseFormat from 'dayjs/plugin/customParseFormat'
 import React, { useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
+
+dayjs.extend(customParseFormat)
+
+function parseInjectionDateTime(administeredDate, administeredTime) {
+  if (!administeredDate) return null
+  const time = administeredTime || '00:00'
+  const iso = dayjs(`${administeredDate}T${time}`)
+  if (iso.isValid()) return iso
+  const withAmPm = dayjs(
+    `${administeredDate} ${time}`,
+    'YYYY-MM-DD hh:mm A',
+    true,
+  )
+  if (withAmPm.isValid()) return withAmPm
+  const dOnly = dayjs(administeredDate)
+  return dOnly.isValid() ? dOnly.hour(0).minute(0).second(0) : null
+}
 import { LinearProgress } from '@mui/material'
 import { debounce } from 'lodash'
 import { Close } from '@mui/icons-material'
@@ -41,14 +59,14 @@ function InjectionSheet() {
   const router = useRouter()
   const [fromDate, setFromDate] = useState(dayjs(new Date()).subtract(7, 'day'))
   const [toDate, setToDate] = useState(null)
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const dispatch = useDispatch()
   const [InjectForm, setInjectionForm] = useState({
     patientId: '',
     medicationId: '',
     patientName: '',
-    administeredDate: dayjs(new Date()).format('DD-MM-YYYY'),
-    administeredTime: dayjs(new Date()).format('hh:mm A'),
+    administeredDate: dayjs().format('YYYY-MM-DD'),
+    administeredTime: dayjs().format('HH:mm'),
     medicationName: '',
     dosage: '',
     administeredNurseId: '',
@@ -79,7 +97,7 @@ function InjectionSheet() {
   const filterData = (data, filters) => {
     if (!data) return []
 
-    const filtered = data.filter(row => {
+    const filtered = data.filter((row) => {
       return Object.entries(filters).every(([field, filter]) => {
         if (!filter || !filter.value) return true
 
@@ -117,11 +135,11 @@ function InjectionSheet() {
   }
 
   // Add function to get unique values for filters
-  const getUniqueValues = field => {
+  const getUniqueValues = (field) => {
     if (!getInjectionList?.data) return []
 
     const values = new Set(
-      getInjectionList?.data.map(row => {
+      getInjectionList?.data.map((row) => {
         if (field === 'medicationName') {
           return row.medicationName?.trim()
         }
@@ -135,7 +153,7 @@ function InjectionSheet() {
   }
 
   // Debounced function to fetch medication suggestions
-  const debouncedGetSuggestions = debounce(async searchText => {
+  const debouncedGetSuggestions = debounce(async (searchText) => {
     try {
       setIsLoadingMedications(true)
       const response = await getInjectionSuggestionList(
@@ -151,7 +169,7 @@ function InjectionSheet() {
   }, 300) // 300ms delay
 
   // Debounced function to fetch patient suggestions
-  const debouncedGetPatientSuggestions = debounce(async searchText => {
+  const debouncedGetPatientSuggestions = debounce(async (searchText) => {
     try {
       setIsLoadingPatients(true)
       const response = await getAllPatients(user?.accessToken, searchText)
@@ -163,23 +181,21 @@ function InjectionSheet() {
     }
   }, 300)
 
-  const {
-    data: getInjectionList,
-    isLoading: getInjectionListLoading,
-  } = useQuery({
-    queryKey: ['getInjectionSheetList', user, fromDate, toDate],
-    queryFn: async () => {
-      const res = await getInjectionSheetList(
-        user?.accessToken,
-        dayjs(fromDate).format('YYYY-MM-DD'),
-        toDate && dayjs(toDate).format('YYYY-MM-DD'),
-      )
-      setFilteredData(res.data)
-      return res
-    },
+  const { data: getInjectionList, isLoading: getInjectionListLoading } =
+    useQuery({
+      queryKey: ['getInjectionSheetList', user, fromDate, toDate],
+      queryFn: async () => {
+        const res = await getInjectionSheetList(
+          user?.accessToken,
+          dayjs(fromDate).format('YYYY-MM-DD'),
+          toDate && dayjs(toDate).format('YYYY-MM-DD'),
+        )
+        setFilteredData(res.data)
+        return res
+      },
 
-    enabled: !!fromDate,
-  })
+      enabled: !!fromDate,
+    })
   const { data: otDropdowns, isLoading: otDropdownsLoading } = useQuery({
     queryKey: ['otDropdownsData'],
     queryFn: () => getOTDropdowns(user?.accessToken),
@@ -188,7 +204,7 @@ function InjectionSheet() {
   // const dropdowns = useSelector(store => store.dropdowns)
   const addNewOTMutation = useMutation({
     mutationKey: ['addInjection', user?.accessToken],
-    mutationFn: async data => {
+    mutationFn: async (data) => {
       const res = await addNewInjection(user?.accessToken, data)
       console.log(res)
       if (res.status == 200) {
@@ -198,8 +214,8 @@ function InjectionSheet() {
           patientId: '',
           medicationId: '',
           patientName: '',
-          administeredDate: dayjs(new Date()).format('DD-MM-YYYY'),
-          administeredTime: dayjs(new Date()).format('hh:mm A'),
+          administeredDate: dayjs().format('YYYY-MM-DD'),
+          administeredTime: dayjs().format('HH:mm'),
           medicationName: '',
           dosage: '',
           administeredNurseId: '',
@@ -211,13 +227,13 @@ function InjectionSheet() {
     onSuccess: () => {
       console.log('OT added successfully')
     },
-    onError: error => {
+    onError: (error) => {
       console.error('Error adding OT', error)
     },
   })
   const saveChangesInjectionMutation = useMutation({
     mutationKey: ['saveInjectionChanges', user?.accessToken],
-    mutationFn: async data => {
+    mutationFn: async (data) => {
       const { administeredNurseName, ...payload } = InjectForm
       const res = await saveInjectionChanges(user?.accessToken, payload)
       console.log(res)
@@ -228,8 +244,8 @@ function InjectionSheet() {
           patientId: '',
           medicationId: '',
           patientName: '',
-          administeredDate: dayjs(new Date()).format('DD-MM-YYYY'),
-          administeredTime: dayjs(new Date()).format('hh:mm A'),
+          administeredDate: dayjs().format('YYYY-MM-DD'),
+          administeredTime: dayjs().format('HH:mm'),
           medicationName: '',
           dosage: '',
           administeredNurseId: '',
@@ -241,7 +257,7 @@ function InjectionSheet() {
     onSuccess: () => {
       console.log('OT added successfully')
     },
-    onError: error => {
+    onError: (error) => {
       console.error('Error adding OT', error)
     },
   })
@@ -263,20 +279,20 @@ function InjectionSheet() {
       patientId: '',
       medicationId: '',
       patientName: '',
-      administeredDate: dayjs(new Date()).format('DD-MM-YYYY'),
-      administeredTime: dayjs(new Date()).format('hh:mm A'),
+      administeredDate: dayjs().format('YYYY-MM-DD'),
+      administeredTime: dayjs().format('HH:mm'),
       medicationName: '',
       dosage: '',
       administeredNurseId: '',
     })
     dispatch(openModal('injectionModalNew'))
   }
-  const handleInjectionFormChange = e => {
+  const handleInjectionFormChange = (e) => {
     setInjectionForm({ ...InjectForm, [e.target.name]: e.target.value })
   }
-  const filterPersonListByDesignationId = designationId => {
+  const filterPersonListByDesignationId = (designationId) => {
     const designation = otDropdowns?.data.find(
-      designation => designation.mappingId === designationId,
+      (designation) => designation.mappingId === designationId,
     )
     return designation?.personList || []
   }
@@ -301,7 +317,7 @@ function InjectionSheet() {
       headerName: 'Administered Date',
       minWidth: 150,
       flex: 0.7,
-      renderCell: params => (
+      renderCell: (params) => (
         <span>{dayjs(params.row.administeredDate).format('DD-MM-YYYY')}</span>
       ),
     },
@@ -339,7 +355,7 @@ function InjectionSheet() {
       headerName: 'Action',
       flex: 1,
       minWidth: 100,
-      renderCell: params => {
+      renderCell: (params) => {
         const isAdminorManagerAccess =
           user.roleDetails?.id === 1 || user.roleDetails?.id === 7
         const isToday = dayjs(params.row.administeredDate).isSame(
@@ -351,7 +367,16 @@ function InjectionSheet() {
             disabled={isAdminorManagerAccess ? false : !isToday}
             onClick={() => {
               dispatch(openModal('injectionModal' + params.row.id))
-              setInjectionForm(params.row)
+              const row = params.row
+              const parsedDate = dayjs(row.administeredDate)
+              setInjectionForm({
+                ...row,
+                administeredDate: parsedDate.isValid()
+                  ? parsedDate.format('YYYY-MM-DD')
+                  : row.administeredDate,
+                administeredTime:
+                  row.administeredTime || dayjs().format('HH:mm'),
+              })
               setModal('edit')
             }}
           >
@@ -362,7 +387,7 @@ function InjectionSheet() {
     },
   ]
 
-  const permissionedAddInjection = function() {
+  const permissionedAddInjection = function () {
     const AddInjectionButton = () => (
       <Button
         variant="outlined"
@@ -420,11 +445,11 @@ function InjectionSheet() {
   }, [])
 
   // Handle date changes
-  const handleFromDateChange = newValue => {
+  const handleFromDateChange = (newValue) => {
     setFromDate(newValue)
   }
 
-  const handleToDateChange = newValue => {
+  const handleToDateChange = (newValue) => {
     setToDate(newValue)
   }
 
@@ -447,8 +472,8 @@ function InjectionSheet() {
               setInjectionForm({
                 patientId: null,
                 patientName: '',
-                administeredDate: dayjs(new Date()).format('DD-MM-YYYY'),
-                administeredTime: dayjs(new Date()).format('hh:mm A'),
+                administeredDate: dayjs().format('YYYY-MM-DD'),
+                administeredTime: dayjs().format('HH:mm'),
                 medicationName: '',
                 dosage: '',
                 administeredNurseId: '',
@@ -463,7 +488,7 @@ function InjectionSheet() {
             freeSolo
             loading={isLoadingPatients}
             options={patientSuggestions}
-            getOptionLabel={option => {
+            getOptionLabel={(option) => {
               return typeof option === 'string' ? option : option?.Name || ''
             }}
             value={InjectForm.patientName || null}
@@ -484,7 +509,7 @@ function InjectionSheet() {
                 debouncedGetPatientSuggestions(newInputValue)
               }
             }}
-            renderInput={params => (
+            renderInput={(params) => (
               <TextField
                 {...params}
                 label="Patient"
@@ -496,22 +521,33 @@ function InjectionSheet() {
           <div className="flex gap-3">
             <DatePicker
               name="administeredDate"
-              value={dayjs(InjectForm?.administeredDate)}
-              onChange={newValue =>
-                setInjectionForm({ ...InjectForm, administeredDate: newValue })
+              label="Date"
+              value={
+                InjectForm?.administeredDate &&
+                dayjs(InjectForm.administeredDate).isValid()
+                  ? dayjs(InjectForm.administeredDate)
+                  : null
+              }
+              onChange={(newValue) =>
+                setInjectionForm({
+                  ...InjectForm,
+                  administeredDate: newValue?.format('YYYY-MM-DD') ?? '',
+                })
               }
               format="DD/MM/YYYY"
             />
             <TimePicker
               name="administeredTime"
-              value={dayjs(
-                `${InjectForm?.administeredDate}T${InjectForm?.administeredTime}`,
+              label="Time"
+              value={parseInjectionDateTime(
+                InjectForm?.administeredDate,
+                InjectForm?.administeredTime,
               )}
               ampm={false}
-              onChange={date => {
+              onChange={(date) => {
                 setInjectionForm({
                   ...InjectForm,
-                  administeredTime: date.format('HH:mm'),
+                  administeredTime: date?.format('HH:mm') ?? '',
                 })
               }}
             />
@@ -526,7 +562,7 @@ function InjectionSheet() {
               onChange={handleInjectionFormChange}
               name="administeredNurseId"
             >
-              {filterPersonListByDesignationId(5)?.map(eachBranch => {
+              {filterPersonListByDesignationId(5)?.map((eachBranch) => {
                 return (
                   <MenuItem key={eachBranch.id} value={eachBranch.id}>
                     {eachBranch.personName}
@@ -539,7 +575,7 @@ function InjectionSheet() {
             freeSolo
             loading={isLoadingMedications}
             options={medicationSuggestions}
-            getOptionLabel={option => {
+            getOptionLabel={(option) => {
               return typeof option === 'string'
                 ? option
                 : option?.itemName || ''
@@ -561,7 +597,7 @@ function InjectionSheet() {
                 debouncedGetSuggestions(newInputValue)
               }
             }}
-            renderInput={params => (
+            renderInput={(params) => (
               <TextField
                 {...params}
                 label="Medication"
@@ -648,7 +684,7 @@ function InjectionSheet() {
             }}
             loading={getInjectionListLoading}
             columns={InjectionColumns}
-            getRowId={row => row.id}
+            getRowId={(row) => row.id}
             disableRowSelectionOnClick
             sx={{
               '& .MuiDataGrid-loadingOverlay': {
