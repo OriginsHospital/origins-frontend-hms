@@ -501,7 +501,14 @@ export const createPatientRecord = async (
   // uploadedDocuments,
 ) => {
   const formData = new FormData()
-  const { aadhaarCard, marriageCertificate, affidavit, ...rest } = payload
+  const {
+    aadhaarCard,
+    marriageCertificate,
+    affidavit,
+    spouseAadhaarPhoto,
+    spouseAadhaarPhotoUrl,
+    ...rest
+  } = payload
 
   Object.keys(rest).forEach((key) => {
     if (typeof payload[key] === 'object') {
@@ -521,6 +528,20 @@ export const createPatientRecord = async (
   }
   if (typeof affidavit === 'object') {
     formData.append('affidavit', affidavit)
+  }
+  if (
+    spouseAadhaarPhoto &&
+    (spouseAadhaarPhoto instanceof File ||
+      (typeof spouseAadhaarPhoto === 'object' &&
+        spouseAadhaarPhoto !== null &&
+        !Array.isArray(spouseAadhaarPhoto)))
+  ) {
+    const spouseDocFile = new File(
+      [spouseAadhaarPhoto],
+      `spouse_aadhaar_${Date.now()}_${spouseAadhaarPhoto.name || 'document'}`,
+      { type: spouseAadhaarPhoto.type || 'application/octet-stream' },
+    )
+    formData.append('uploadedDocuments', spouseDocFile)
   }
 
   const myHeaders = new Headers()
@@ -549,7 +570,14 @@ export const editPatientRecord = async (
   // uploadedDocuments,
 ) => {
   const formData = new FormData()
-  const { aadhaarCard, marriageCertificate, affidavit, ...rest } = payload
+  const {
+    aadhaarCard,
+    marriageCertificate,
+    affidavit,
+    spouseAadhaarPhoto,
+    spouseAadhaarPhotoUrl,
+    ...rest
+  } = payload
 
   // Log payload for debugging
   console.log('Edit Patient Payload:', payload)
@@ -618,6 +646,20 @@ export const editPatientRecord = async (
       affidavit.name || affidavit,
     )
     formData.append('affidavit', affidavit)
+  }
+  if (
+    spouseAadhaarPhoto &&
+    (spouseAadhaarPhoto instanceof File ||
+      (typeof spouseAadhaarPhoto === 'object' &&
+        spouseAadhaarPhoto !== null &&
+        !Array.isArray(spouseAadhaarPhoto)))
+  ) {
+    const spouseDocFile = new File(
+      [spouseAadhaarPhoto],
+      `spouse_aadhaar_${Date.now()}_${spouseAadhaarPhoto.name || 'document'}`,
+      { type: spouseAadhaarPhoto.type || 'application/octet-stream' },
+    )
+    formData.append('uploadedDocuments', spouseDocFile)
   }
 
   const myHeaders = new Headers()
@@ -2189,6 +2231,21 @@ export const getScanByDate = async (token, date, branchId) => {
   )
   return response.json()
 }
+export const getScanReports = async (token, fromDate, toDate, branchId) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_SCAN_REPORTS}?fromDate=${fromDate}&toDate=${toDate}&branchId=${branchId ?? ''}`,
+    {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
 export const getSavedScanResults = async (
   token,
   type,
@@ -2306,6 +2363,62 @@ export const grnStockReport = async (token, branchIds) => {
   const qs = params.toString()
   const response = await fetch(
     `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GRN_STOCK_REPORT}${qs ? `?${qs}` : ''}`,
+    {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const getGrnStockReportTab = async (
+  token,
+  fromDate,
+  toDate,
+  branchId,
+) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const params = new URLSearchParams()
+  if (fromDate) params.append('fromDate', fromDate)
+  if (toDate) params.append('toDate', toDate)
+  if (branchId != null && branchId !== '' && branchId !== 'all') {
+    params.append('branchId', String(branchId))
+  }
+  const qs = params.toString()
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GRN_STOCK_REPORT_TAB}${qs ? `?${qs}` : ''}`,
+    {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const getPharmacySalesDetailedReport = async (
+  token,
+  fromDate,
+  toDate,
+  branchId,
+) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const params = new URLSearchParams()
+  if (fromDate) params.append('fromDate', fromDate)
+  if (toDate) params.append('toDate', toDate)
+  if (branchId != null && branchId !== '' && branchId !== 'all') {
+    params.append('branchId', String(branchId))
+  }
+  const qs = params.toString()
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.PHARMACY_SALES_DETAILED_REPORT}${qs ? `?${qs}` : ''}`,
     {
       method: 'GET',
       headers: myHeaders,
@@ -4161,12 +4274,22 @@ export const createNewOrder = async (token, payload) => {
   return response.json()
 }
 
-export const getAllPayments = async (token) => {
+export const getAllPayments = async (token, filters = {}) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
+  const params = new URLSearchParams()
+  if (filters?.branchId) params.append('branchId', filters.branchId)
+  if (filters?.departmentId) params.append('departmentId', filters.departmentId)
+  if (filters?.vendorId) params.append('vendorId', filters.vendorId)
+  if (filters?.amount) params.append('amount', filters.amount)
+  if (filters?.paymentDate) params.append('paymentDate', filters.paymentDate)
+  if (filters?.invoiceDate) params.append('invoiceDate', filters.invoiceDate)
+  if (filters?.fromDate) params.append('fromDate', filters.fromDate)
+  if (filters?.toDate) params.append('toDate', filters.toDate)
+  const query = params.toString()
   const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_ALL_PAYMENTS}`,
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_ALL_PAYMENTS}${query ? `?${query}` : ''}`,
     {
       method: 'GET',
       headers: myHeaders,
@@ -4490,6 +4613,30 @@ export const getAllOutsourcingLabTests = async (token, searchQuery) => {
   myHeaders.append('Content-Type', 'application/json')
   const response = await fetch(
     `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_ALL_OUTSOURCING_LAB_TESTS}?searchQuery=${searchQuery}`,
+    {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+
+  return response.json()
+}
+
+export const getLabReports = async (
+  token,
+  fromDate,
+  toDate,
+  branchId,
+  labCategoryType,
+) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_LAB_REPORTS}?fromDate=${fromDate}&toDate=${toDate}&branchId=${branchId ?? ''}&labCategoryType=${labCategoryType}`,
     {
       method: 'GET',
       headers: myHeaders,

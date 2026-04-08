@@ -115,11 +115,21 @@ function PaymentsPage() {
   const [filteredPayments, setFilteredPayments] = useState([])
   const [isDownloadingInvoices, setIsDownloadingInvoices] = useState(false)
   const [isDownloadingReceipts, setIsDownloadingReceipts] = useState(false)
-  const [exportAnchorEl, setExportAnchorEl] = useState(null)
   const [filterAnchorEl, setFilterAnchorEl] = useState(null)
   const [filterValues, setFilterValues] = useState({})
   const [uploadingPaymentId, setUploadingPaymentId] = useState(null)
   const [uploadingFileType, setUploadingFileType] = useState(null)
+  const [reportFilters, setReportFilters] = useState({
+    branchId: '',
+    departmentId: '',
+    vendorId: '',
+    amount: '',
+    fromDate: null,
+    toDate: null,
+  })
+  const [createSearchText, setCreateSearchText] = useState('')
+  const [summarySearchText, setSummarySearchText] = useState('')
+  const [reportSearchText, setReportSearchText] = useState('')
   const fileInputRefs = useRef({})
   const modalOpeningRef = useRef(false)
   const modalJustOpenedRef = useRef(false)
@@ -428,8 +438,7 @@ function PaymentsPage() {
             .querySelector('[class*="MuiMenu-list"]'))
 
       if (isSelectClick) {
-        e.stopPropagation() // Stop propagation to prevent interference
-        e.preventDefault() // Prevent default to keep menu open
+        // Allow dropdown/menu/select interactions to work normally.
         return // Don't interfere with form controls and dropdowns
       }
 
@@ -729,6 +738,36 @@ function PaymentsPage() {
   const { data, isLoading, isFetching, isError, error } = useQuery({
     queryKey: ['allPayments'],
     queryFn: () => getAllPayments(userDetails?.accessToken),
+  })
+
+  const { data: reportData, isLoading: isReportLoading } = useQuery({
+    queryKey: [
+      'paymentsReportData',
+      reportFilters.branchId,
+      reportFilters.departmentId,
+      reportFilters.vendorId,
+      reportFilters.amount,
+      reportFilters.fromDate
+        ? dayjs(reportFilters.fromDate).format('YYYY-MM-DD')
+        : null,
+      reportFilters.toDate
+        ? dayjs(reportFilters.toDate).format('YYYY-MM-DD')
+        : null,
+    ],
+    enabled: activeTab === 2,
+    queryFn: () =>
+      getAllPayments(userDetails?.accessToken, {
+        branchId: reportFilters.branchId || undefined,
+        departmentId: reportFilters.departmentId || undefined,
+        vendorId: reportFilters.vendorId || undefined,
+        amount: reportFilters.amount || undefined,
+        fromDate: reportFilters.fromDate
+          ? dayjs(reportFilters.fromDate).format('YYYY-MM-DD')
+          : undefined,
+        toDate: reportFilters.toDate
+          ? dayjs(reportFilters.toDate).format('YYYY-MM-DD')
+          : undefined,
+      }),
   })
 
   // Fetch departments
@@ -1036,25 +1075,29 @@ function PaymentsPage() {
     }
   }
 
-  // Transform payments data for display
-  const paymentsData =
-    data?.data?.map((payment) => {
-      // Get invoiceDate from payment
-      const invoiceDate = payment.invoiceDate || null
+  const mapPaymentRows = useCallback((rows) => {
+    return (
+      rows?.map((payment) => {
+        const invoiceDate = payment.invoiceDate || null
+        return {
+          id: payment.id,
+          paymentId: payment.id,
+          branch: payment.branch || '',
+          department: payment.department || '',
+          vendor: payment.vendor || '',
+          amount: payment.amount || 0,
+          paymentDate: payment.paymentDate,
+          invoiceDate: invoiceDate,
+          invoiceUrl: payment.invoiceUrl,
+          receiptUrl: payment.receiptUrl,
+        }
+      }) || []
+    )
+  }, [])
 
-      return {
-        id: payment.id,
-        paymentId: payment.id,
-        branch: payment.branch || '',
-        department: payment.department || '',
-        vendor: payment.vendor || '',
-        amount: payment.amount || 0,
-        paymentDate: payment.paymentDate,
-        invoiceDate: invoiceDate,
-        invoiceUrl: payment.invoiceUrl,
-        receiptUrl: payment.receiptUrl,
-      }
-    }) || []
+  // Transform payments data for display
+  const paymentsData = mapPaymentRows(data?.data)
+  const reportPaymentsData = mapPaymentRows(reportData?.data)
 
   // Initialize filteredPayments when paymentsData is available
   useEffect(() => {
@@ -1078,6 +1121,36 @@ function PaymentsPage() {
       (payment) => !payment.invoiceUrl || !payment.receiptUrl,
     )
   }, [paymentsData])
+
+  const searchPayments = useCallback((rows, searchText) => {
+    const term = (searchText || '').trim().toLowerCase()
+    if (!term) return rows || []
+    return (rows || []).filter((row) => {
+      const branch = String(row?.branch || '').toLowerCase()
+      const department = String(row?.department || '').toLowerCase()
+      const vendor = String(row?.vendor || '').toLowerCase()
+      return (
+        branch.includes(term) ||
+        department.includes(term) ||
+        vendor.includes(term)
+      )
+    })
+  }, [])
+
+  const createTabFilteredPayments = useMemo(
+    () => searchPayments(dataTabPayments, createSearchText),
+    [dataTabPayments, createSearchText, searchPayments],
+  )
+
+  const summaryTabFilteredPayments = useMemo(
+    () => searchPayments(summaryTabPayments, summarySearchText),
+    [summaryTabPayments, summarySearchText, searchPayments],
+  )
+
+  const reportTabFilteredPayments = useMemo(
+    () => searchPayments(reportPaymentsData, reportSearchText),
+    [reportPaymentsData, reportSearchText, searchPayments],
+  )
 
   // Mutation for updating payment files
   const updatePaymentFilesMutation = useMutation({
@@ -1654,6 +1727,62 @@ function PaymentsPage() {
     ],
   )
 
+  const reportColumns = useMemo(
+    () => [
+      {
+        field: 'branch',
+        headerName: 'Branch',
+        flex: 0.8,
+        minWidth: 100,
+      },
+      {
+        field: 'paymentDate',
+        headerName: 'Payment Date',
+        flex: 1,
+        minWidth: 130,
+        renderCell: ({ row }) =>
+          row.paymentDate ? dayjs(row.paymentDate).format('DD-MM-YYYY') : '-',
+      },
+      {
+        field: 'invoiceDate',
+        headerName: 'Invoice Date',
+        flex: 1,
+        minWidth: 130,
+        renderCell: ({ row }) =>
+          row.invoiceDate ? dayjs(row.invoiceDate).format('DD-MM-YYYY') : '-',
+      },
+      {
+        field: 'department',
+        headerName: 'Department',
+        flex: 1.2,
+        minWidth: 130,
+      },
+      {
+        field: 'vendor',
+        headerName: 'Vendor',
+        flex: 1.5,
+        minWidth: 150,
+      },
+      {
+        field: 'amount',
+        headerName: 'Amount',
+        flex: 1,
+        minWidth: 120,
+        align: 'right',
+        headerAlign: 'right',
+        renderCell: ({ row }) =>
+          `₹${parseFloat(row.amount || 0).toLocaleString('en-IN')}`,
+      },
+    ],
+    [],
+  )
+  const reportRowsForExport = useMemo(() => {
+    // Always allow export: if no data, export headers with a blank row.
+    return reportTabFilteredPayments && reportTabFilteredPayments.length > 0
+      ? reportTabFilteredPayments
+      : [{}]
+  }, [reportTabFilteredPayments])
+
   const customFilters = [
     {
       field: 'branch',
@@ -2170,6 +2299,7 @@ function PaymentsPage() {
           >
             <Tab label="Create" />
             <Tab label="Summary" />
+            <Tab label="Report" />
           </Tabs>
         </Box>
 
@@ -2343,72 +2473,17 @@ function PaymentsPage() {
                     </Box>
                   </Box>
                 </Menu>
+                <TextField
+                  size="small"
+                  placeholder="Search Branch / Department / Vendor"
+                  value={createSearchText}
+                  onChange={(e) => setCreateSearchText(e.target.value)}
+                  sx={{ minWidth: 280 }}
+                />
               </Box>
 
               {/* Action Buttons */}
               <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                <Button
-                  variant="outlined"
-                  startIcon={<Download />}
-                  onClick={(e) => setExportAnchorEl(e.currentTarget)}
-                  disabled={!dataTabPayments || dataTabPayments.length === 0}
-                  sx={{ textTransform: 'none' }}
-                >
-                  Export
-                </Button>
-                <Menu
-                  anchorEl={exportAnchorEl}
-                  open={Boolean(exportAnchorEl)}
-                  onClose={() => setExportAnchorEl(null)}
-                  anchorOrigin={{
-                    vertical: 'bottom',
-                    horizontal: 'left',
-                  }}
-                  transformOrigin={{
-                    vertical: 'top',
-                    horizontal: 'left',
-                  }}
-                >
-                  <MenuItem
-                    onClick={() => {
-                      exportReport(dataTabPayments, columns, 'csv', {
-                        reportName: 'Payments_Report',
-                        reportType: 'payments',
-                        branchName: 'All_Branches',
-                        filters: currentFilters,
-                      })
-                      setExportAnchorEl(null)
-                    }}
-                  >
-                    Download as CSV
-                  </MenuItem>
-                  <MenuItem
-                    onClick={() => {
-                      exportReport(dataTabPayments, columns, 'xlsx', {
-                        reportName: 'Payments_Report',
-                        reportType: 'payments',
-                        branchName: 'All_Branches',
-                        filters: currentFilters,
-                      })
-                      setExportAnchorEl(null)
-                    }}
-                  >
-                    Download as Excel
-                  </MenuItem>
-                  <MenuItem
-                    onClick={() => {
-                      exportReport(dataTabPayments, columns, 'pdf', {
-                        reportName: 'Payments_Report',
-                        reportType: 'payments',
-                        branchName: 'All_Branches',
-                        filters: currentFilters,
-                      })
-                      setExportAnchorEl(null)
-                    }}
-                  >
-                    Download as PDF
-                  </MenuItem>
-                </Menu>
                 <Button
                   variant="outlined"
                   startIcon={<FileDownload />}
@@ -2476,7 +2551,7 @@ function PaymentsPage() {
               }}
             >
               <FilteredDataGrid
-                rows={dataTabPayments}
+                rows={createTabFilteredPayments}
                 getRowId={(row) => row.id}
                 columns={columns}
                 className="my-5 mx-2 py-3 bg-white"
@@ -2661,74 +2736,17 @@ function PaymentsPage() {
                     </Box>
                   </Box>
                 </Menu>
+                <TextField
+                  size="small"
+                  placeholder="Search Branch / Department / Vendor"
+                  value={summarySearchText}
+                  onChange={(e) => setSummarySearchText(e.target.value)}
+                  sx={{ minWidth: 280 }}
+                />
               </Box>
 
               {/* Action Buttons */}
               <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                <Button
-                  variant="outlined"
-                  startIcon={<Download />}
-                  onClick={(e) => setExportAnchorEl(e.currentTarget)}
-                  disabled={
-                    !summaryTabPayments || summaryTabPayments.length === 0
-                  }
-                  sx={{ textTransform: 'none' }}
-                >
-                  Export
-                </Button>
-                <Menu
-                  anchorEl={exportAnchorEl}
-                  open={Boolean(exportAnchorEl)}
-                  onClose={() => setExportAnchorEl(null)}
-                  anchorOrigin={{
-                    vertical: 'bottom',
-                    horizontal: 'left',
-                  }}
-                  transformOrigin={{
-                    vertical: 'top',
-                    horizontal: 'left',
-                  }}
-                >
-                  <MenuItem
-                    onClick={() => {
-                      exportReport(summaryTabPayments, columns, 'csv', {
-                        reportName: 'Payments_Report',
-                        reportType: 'payments',
-                        branchName: 'All_Branches',
-                        filters: currentFilters,
-                      })
-                      setExportAnchorEl(null)
-                    }}
-                  >
-                    Download as CSV
-                  </MenuItem>
-                  <MenuItem
-                    onClick={() => {
-                      exportReport(summaryTabPayments, columns, 'xlsx', {
-                        reportName: 'Payments_Report',
-                        reportType: 'payments',
-                        branchName: 'All_Branches',
-                        filters: currentFilters,
-                      })
-                      setExportAnchorEl(null)
-                    }}
-                  >
-                    Download as Excel
-                  </MenuItem>
-                  <MenuItem
-                    onClick={() => {
-                      exportReport(summaryTabPayments, columns, 'pdf', {
-                        reportName: 'Payments_Report',
-                        reportType: 'payments',
-                        branchName: 'All_Branches',
-                        filters: currentFilters,
-                      })
-                      setExportAnchorEl(null)
-                    }}
-                  >
-                    Download as PDF
-                  </MenuItem>
-                </Menu>
                 <Button
                   variant="outlined"
                   startIcon={<FileDownload />}
@@ -2797,7 +2815,7 @@ function PaymentsPage() {
               }}
             >
               <FilteredDataGrid
-                rows={summaryTabPayments}
+                rows={summaryTabFilteredPayments}
                 getRowId={(row) => row.id}
                 columns={columns}
                 className="my-5 mx-2 py-3 bg-white"
@@ -3642,6 +3660,235 @@ function PaymentsPage() {
             )}
           </CardContent>
         </TabPanel>
+
+        {/* REPORT TAB */}
+        <TabPanel value={activeTab} index={2}>
+          <CardContent sx={{ p: 2.5 }}>
+            <Card
+              sx={{
+                mb: 2.5,
+                p: 2,
+                bgcolor: '#f8f9fa',
+                border: '1px solid #e0e0e0',
+              }}
+            >
+              <Grid container spacing={2}>
+                <Grid item xs={12} sm={6} md={2}>
+                  <Autocomplete
+                    options={[
+                      { id: '', branchCode: 'All Branches' },
+                      ...(dropdowns?.branches || []),
+                    ]}
+                    getOptionLabel={(option) =>
+                      option?.branchCode || option?.name || ''
+                    }
+                    value={
+                      [
+                        { id: '', branchCode: 'All Branches' },
+                        ...(dropdowns?.branches || []),
+                      ].find(
+                        (b) => String(b.id) === String(reportFilters.branchId),
+                      ) || { id: '', branchCode: 'All Branches' }
+                    }
+                    onChange={(_, value) =>
+                      setReportFilters((prev) => ({
+                        ...prev,
+                        branchId: value?.id ?? '',
+                      }))
+                    }
+                    renderInput={(params) => (
+                      <TextField {...params} label="Branch" size="small" />
+                    )}
+                    disableClearable
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6} md={2}>
+                  <DatePicker
+                    label="From Date"
+                    value={reportFilters.fromDate}
+                    onChange={(value) =>
+                      setReportFilters((prev) => ({
+                        ...prev,
+                        fromDate: value,
+                      }))
+                    }
+                    slotProps={{
+                      textField: { size: 'small', fullWidth: true },
+                    }}
+                    format="DD-MM-YYYY"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6} md={2}>
+                  <DatePicker
+                    label="To Date"
+                    value={reportFilters.toDate}
+                    onChange={(value) =>
+                      setReportFilters((prev) => ({
+                        ...prev,
+                        toDate: value,
+                      }))
+                    }
+                    slotProps={{
+                      textField: { size: 'small', fullWidth: true },
+                    }}
+                    format="DD-MM-YYYY"
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6} md={2}>
+                  <Autocomplete
+                    options={[
+                      { id: '', name: 'All Departments' },
+                      ...(departmentsData?.data || []),
+                    ]}
+                    getOptionLabel={(option) => option?.name || ''}
+                    value={
+                      [
+                        { id: '', name: 'All Departments' },
+                        ...(departmentsData?.data || []),
+                      ].find(
+                        (d) =>
+                          String(d.id) === String(reportFilters.departmentId),
+                      ) || { id: '', name: 'All Departments' }
+                    }
+                    onChange={(_, value) =>
+                      setReportFilters((prev) => ({
+                        ...prev,
+                        departmentId: value?.id ?? '',
+                      }))
+                    }
+                    renderInput={(params) => (
+                      <TextField {...params} label="Department" size="small" />
+                    )}
+                    disableClearable
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6} md={2}>
+                  <Autocomplete
+                    options={[
+                      { id: '', name: 'All Vendors' },
+                      ...(vendorsData?.data || []),
+                    ]}
+                    getOptionLabel={(option) => option?.name || ''}
+                    value={
+                      [
+                        { id: '', name: 'All Vendors' },
+                        ...(vendorsData?.data || []),
+                      ].find(
+                        (v) => String(v.id) === String(reportFilters.vendorId),
+                      ) || { id: '', name: 'All Vendors' }
+                    }
+                    onChange={(_, value) =>
+                      setReportFilters((prev) => ({
+                        ...prev,
+                        vendorId: value?.id ?? '',
+                      }))
+                    }
+                    renderInput={(params) => (
+                      <TextField {...params} label="Vendor" size="small" />
+                    )}
+                    disableClearable
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6} md={2}>
+                  <TextField
+                    label="Amount"
+                    size="small"
+                    fullWidth
+                    value={reportFilters.amount}
+                    onChange={(e) =>
+                      setReportFilters((prev) => ({
+                        ...prev,
+                        amount: e.target.value,
+                      }))
+                    }
+                  />
+                </Grid>
+              </Grid>
+            </Card>
+
+            <Box
+              sx={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                mb: 2,
+                flexWrap: 'wrap',
+                gap: 1.5,
+              }}
+            >
+              <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                <Button
+                  variant="outlined"
+                  onClick={() =>
+                    setReportFilters({
+                      branchId: '',
+                      departmentId: '',
+                      vendorId: '',
+                      amount: '',
+                      fromDate: null,
+                      toDate: null,
+                    })
+                  }
+                >
+                  Clear Filters
+                </Button>
+                <TextField
+                  size="small"
+                  placeholder="Search Branch / Department / Vendor"
+                  value={reportSearchText}
+                  onChange={(e) => setReportSearchText(e.target.value)}
+                  sx={{ minWidth: 280 }}
+                />
+              </Box>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button
+                  variant="outlined"
+                  startIcon={<Download />}
+                  onClick={() =>
+                    exportReport(reportRowsForExport, reportColumns, 'xlsx', {
+                      reportName: 'Payments_Report',
+                      reportType: 'payments',
+                      branchName: reportFilters.branchId || 'All_Branches',
+                    })
+                  }
+                  sx={{ textTransform: 'none' }}
+                >
+                  Export
+                </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<Download />}
+                  onClick={() =>
+                    exportReport(reportRowsForExport, reportColumns, 'pdf', {
+                      reportName: 'Payments_Report',
+                      reportType: 'payments',
+                      branchName: reportFilters.branchId || 'All_Branches',
+                    })
+                  }
+                  sx={{ textTransform: 'none' }}
+                >
+                  PDF
+                </Button>
+              </Box>
+            </Box>
+
+            <Box sx={{ height: '70vh', width: '100%' }}>
+              <DataGrid
+                rows={reportTabFilteredPayments}
+                columns={reportColumns}
+                loading={isReportLoading}
+                getRowId={(row) => row.id}
+                disableRowSelectionOnClick
+                pageSizeOptions={[10, 25, 50]}
+                initialState={{
+                  pagination: {
+                    paginationModel: { page: 0, pageSize: 25 },
+                  },
+                }}
+              />
+            </Box>
+          </CardContent>
+        </TabPanel>
       </Card>
 
       {/* View Invoice Modal */}
@@ -4163,6 +4410,11 @@ const CreatePaymentForm = ({
 
   const handleSubmit = () => {
     if (
+      !paymentForm.branchId ||
+      !paymentForm.paymentDate ||
+      paymentForm.paymentDate === 'Invalid Date' ||
+      !paymentForm.invoiceDate ||
+      paymentForm.invoiceDate === 'Invalid Date' ||
       !paymentForm.departmentId ||
       !paymentForm.vendorId ||
       !paymentForm.amount
@@ -4222,7 +4474,7 @@ const CreatePaymentForm = ({
             renderInput={(params) => (
               <TextField
                 {...params}
-                label="Branch"
+                label="Branch *"
                 variant="outlined"
                 size="small"
                 fullWidth
@@ -4239,12 +4491,15 @@ const CreatePaymentForm = ({
         {/* Payment Date Field */}
         <Grid item xs={12} sm={6} md={2}>
           <DatePicker
-            label="Payment Date"
+            label="Payment Date *"
             value={dayjs(paymentForm.paymentDate)}
             onChange={(newDate) =>
               setPaymentForm((prev) => ({
                 ...prev,
-                paymentDate: dayjs(newDate).format('YYYY-MM-DD'),
+                paymentDate:
+                  newDate && dayjs(newDate).isValid()
+                    ? dayjs(newDate).format('YYYY-MM-DD')
+                    : '',
               }))
             }
             format="DD-MM-YYYY"
@@ -4266,12 +4521,15 @@ const CreatePaymentForm = ({
         {/* Invoice Date Field */}
         <Grid item xs={12} sm={6} md={2}>
           <DatePicker
-            label="Invoice Date"
+            label="Invoice Date *"
             value={dayjs(paymentForm.invoiceDate)}
             onChange={(newDate) =>
               setPaymentForm((prev) => ({
                 ...prev,
-                invoiceDate: dayjs(newDate).format('YYYY-MM-DD'),
+                invoiceDate:
+                  newDate && dayjs(newDate).isValid()
+                    ? dayjs(newDate).format('YYYY-MM-DD')
+                    : '',
               }))
             }
             format="DD-MM-YYYY"
@@ -4314,7 +4572,7 @@ const CreatePaymentForm = ({
             renderInput={(params) => (
               <TextField
                 {...params}
-                label="Department"
+                label="Department *"
                 variant="outlined"
                 size="small"
                 fullWidth

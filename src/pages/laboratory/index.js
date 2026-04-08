@@ -16,6 +16,7 @@ import { toast } from 'react-toastify'
 import { toastconfig } from '@/utils/toastconfig'
 import {
   getAllLabTestsByDate,
+  getLabReports,
   getLabTestsTemplate,
   saveLabTestResult,
   getSavedLabTestResult,
@@ -23,6 +24,7 @@ import {
   deleteOutsourcingLabTestResult,
 } from '@/constants/apis'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { DataGrid } from '@mui/x-data-grid'
 import Avatar from '@mui/material/Avatar'
 import { DatePicker } from '@mui/x-date-pickers/DatePicker'
 import dayjs from 'dayjs'
@@ -39,14 +41,15 @@ import {
 } from '@mui/material'
 import { Close, Delete } from '@mui/icons-material'
 import CloudUploadIcon from '@mui/icons-material/CloudUpload'
+import { exportReport } from '@/utils/reportExport'
 
 function TextJoedit({ contents, savedContent }) {
   // const [content, setContent] = useState(contents)
   const editorRef = useRef(null)
 
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const userModule = user.moduleList?.find(
-    eachModuleObj => eachModuleObj.enum == 'labModule',
+    (eachModuleObj) => eachModuleObj.enum == 'labModule',
   )
   const readOnly = userModule.accessType.includes([ACCESS_TYPES.READ])
 
@@ -56,7 +59,7 @@ function TextJoedit({ contents, savedContent }) {
         ref={editorRef}
         value={contents}
         tabIndex={1} // tabIndex of textarea
-        onBlur={newContent => {
+        onBlur={(newContent) => {
           savedContent(newContent)
           // setSaveContent(newContent)
           // setContent(newContent)
@@ -95,7 +98,7 @@ const UserRelatedTestDetails = ({
   isSpouse,
 }) => {
   // console.log('category', category)
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const [labtestIdSelected, setLabtestIdSelected] = useState()
   const [labTemplate, setLabTemplate] = useState(null)
   const [editorContent, setEditorContent] = useState(null)
@@ -194,7 +197,7 @@ const UserRelatedTestDetails = ({
     }
   }
 
-  const handleSavedContent = content => {
+  const handleSavedContent = (content) => {
     setEditorContent(content)
   }
   // const checkFileType = async (url) => {
@@ -239,7 +242,7 @@ const UserRelatedTestDetails = ({
     }
   }
 
-  const onSaveClick = contents => {
+  const onSaveClick = (contents) => {
     if (editorContent && labtestIdSelected) {
       inhouseMutate({
         appointmentId: appointmentId,
@@ -255,7 +258,7 @@ const UserRelatedTestDetails = ({
   }
 
   const { mutate: inhouseMutate, isPending: isPendingInhouse } = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       // console.log('payload', payload)
       const res = await saveLabTestResult(user.accessToken, payload)
       if (res.status === 200) {
@@ -275,25 +278,26 @@ const UserRelatedTestDetails = ({
       queryClient.invalidateQueries(['LabtestsByDate'])
     },
   })
-  const {
-    mutate: outsourcingMutate,
-    isPending: isPendingOutsourcing,
-  } = useMutation({
-    mutationFn: async payload => {
-      console.log('outsourcing payload', payload)
-      const res = await saveOutsourcingLabTestResult(user.accessToken, payload)
-      if (res.status === 200) {
-        if (payload?.labTestStatus == 1) {
-          toast.success('Collected Successfully', toastconfig)
-        } else {
-          toast.success('Saved Successfully', toastconfig)
+  const { mutate: outsourcingMutate, isPending: isPendingOutsourcing } =
+    useMutation({
+      mutationFn: async (payload) => {
+        console.log('outsourcing payload', payload)
+        const res = await saveOutsourcingLabTestResult(
+          user.accessToken,
+          payload,
+        )
+        if (res.status === 200) {
+          if (payload?.labTestStatus == 1) {
+            toast.success('Collected Successfully', toastconfig)
+          } else {
+            toast.success('Saved Successfully', toastconfig)
+          }
+          queryClient.invalidateQueries(['LabtestsByDate'])
         }
-        queryClient.invalidateQueries(['LabtestsByDate'])
-      }
-    },
-  })
+      },
+    })
 
-  const collectButtonWithPermission = function(testsInfo, isSpouse) {
+  const collectButtonWithPermission = function (testsInfo, isSpouse) {
     const CollectButton = () => (
       <Button
         variant="contained"
@@ -443,7 +447,7 @@ const UserRelatedTestDetails = ({
                     <input
                       type="file"
                       accept=".pdf,.jpg,.jpeg,.png"
-                      onChange={e => {
+                      onChange={(e) => {
                         const file = e.target.files[0]
                         if (file) {
                           if (file.size > 5 * 1024 * 1024) {
@@ -488,14 +492,8 @@ const UserRelatedTestDetails = ({
   )
 }
 function LabTestCards(props) {
-  const {
-    patientName,
-    appointmentId,
-    labTests,
-    patientPhoto,
-    type,
-    isSpouse,
-  } = props?.userInfo
+  const { patientName, appointmentId, labTests, patientPhoto, type, isSpouse } =
+    props?.userInfo
   function handleExpandClicked(id) {
     props.setSelectedId(id)
   }
@@ -554,8 +552,186 @@ function LabTestCards(props) {
   )
 }
 
+const LabReportsSection = ({
+  reportCategory,
+  reportFromDate,
+  reportToDate,
+  reportBranchId,
+  branches,
+  setReportCategory,
+  setReportFromDate,
+  setReportToDate,
+  setReportBranchId,
+}) => {
+  const user = useSelector((store) => store.user)
+  const [exportFormat, setExportFormat] = useState('excel')
+  const branchOptions = [
+    { id: null, name: 'All Branches', branchCode: 'ALL' },
+  ].concat(branches || [])
+  const exportFormatOptions = [
+    { label: 'CSV', value: 'csv' },
+    { label: 'Excel', value: 'excel' },
+    { label: 'PDF', value: 'pdf' },
+  ]
+
+  const { data: reportRows, isLoading } = useQuery({
+    queryKey: [
+      'labReports',
+      reportCategory,
+      reportFromDate,
+      reportToDate,
+      reportBranchId,
+    ],
+    enabled: !!reportFromDate && !!reportToDate,
+    queryFn: async () => {
+      const response = await getLabReports(
+        user.accessToken,
+        `${reportFromDate.$y}-${reportFromDate.$M + 1}-${reportFromDate.$D}`,
+        `${reportToDate.$y}-${reportToDate.$M + 1}-${reportToDate.$D}`,
+        reportBranchId,
+        reportCategory,
+      )
+
+      if (response.status === 200) {
+        return response.data || []
+      }
+      throw new Error('Error while fetching lab reports')
+    },
+  })
+
+  const reportColumns = [
+    {
+      field: 'patientName',
+      headerName: 'Patient Name',
+      flex: 1.2,
+      minWidth: 200,
+    },
+    {
+      field: 'reportDate',
+      headerName: 'Date',
+      flex: 0.8,
+      minWidth: 140,
+      renderCell: (params) => {
+        const reportDate = params?.row?.reportDate
+        if (!reportDate) return ''
+        const formatted = dayjs(reportDate).format('DD-MM-YYYY')
+        return formatted === 'Invalid Date' ? '' : formatted
+      },
+    },
+    {
+      field: 'labTestName',
+      headerName: 'Lab Test Name',
+      flex: 1,
+      minWidth: 200,
+    },
+    {
+      field: 'amountPaid',
+      headerName: 'Amount Paid',
+      flex: 0.8,
+      minWidth: 140,
+      valueGetter: (params) =>
+        Number(params?.row?.amountPaid ?? params?.value ?? 0).toFixed(2),
+    },
+  ]
+
+  const handleExport = () => {
+    exportReport(reportRows || [], reportColumns, exportFormat, {
+      reportName:
+        reportCategory === '0' ? 'In_House_Lab_Report' : 'Out_House_Lab_Report',
+      branchName:
+        branchOptions.find((branch) => branch.id === reportBranchId)
+          ?.branchCode || 'ALL',
+    })
+  }
+
+  return (
+    <div className="p-4 flex flex-col gap-4">
+      <div className="flex justify-between items-center flex-wrap gap-3">
+        <div className="flex gap-3 flex-wrap">
+          <DatePicker
+            label="From Date"
+            value={reportFromDate}
+            format="DD/MM/YYYY"
+            onChange={setReportFromDate}
+          />
+          <DatePicker
+            label="To Date"
+            value={reportToDate}
+            format="DD/MM/YYYY"
+            onChange={setReportToDate}
+          />
+          <Autocomplete
+            className="w-56"
+            options={branchOptions}
+            getOptionLabel={(option) => option?.branchCode || option?.name}
+            value={
+              branchOptions.find((branch) => branch.id === reportBranchId) ||
+              null
+            }
+            onChange={(_, value) => setReportBranchId(value?.id ?? null)}
+            renderInput={(params) => <TextField {...params} label="Branch" />}
+            clearIcon={null}
+          />
+        </div>
+        <div className="flex gap-2 items-center">
+          <Autocomplete
+            className="w-40"
+            options={exportFormatOptions}
+            getOptionLabel={(option) => option?.label}
+            value={
+              exportFormatOptions.find(
+                (format) => format.value === exportFormat,
+              ) || exportFormatOptions[1]
+            }
+            onChange={(_, value) => setExportFormat(value?.value || 'excel')}
+            renderInput={(params) => <TextField {...params} label="Format" />}
+            disableClearable
+          />
+          <Button
+            variant="contained"
+            className="text-white"
+            onClick={handleExport}
+            disabled={!reportRows?.length}
+          >
+            Export
+          </Button>
+        </div>
+      </div>
+
+      <Tabs
+        value={reportCategory}
+        onChange={(e, value) => setReportCategory(value)}
+      >
+        <Tab value={'0'} label="In-House Reports" />
+        <Tab value={'1'} label="Out-House Reports" />
+      </Tabs>
+
+      <div
+        style={{ height: '68vh', width: '100%' }}
+        className="bg-white rounded"
+      >
+        <DataGrid
+          rows={reportRows || []}
+          columns={reportColumns}
+          getRowId={(row) =>
+            `${row.appointmentId}-${row.type}-${row.reportDate}-${row.labTestName}`
+          }
+          loading={isLoading}
+          disableRowSelectionOnClick
+          pageSizeOptions={[10, 25, 50]}
+          initialState={{
+            pagination: {
+              paginationModel: { pageSize: 25, page: 0 },
+            },
+          }}
+        />
+      </div>
+    </div>
+  )
+}
+
 const Index = () => {
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const branches = user?.branchDetails
   const [branchId, setBranchId] = useState(branches[0]?.id || null)
   const [selectedPatientId, setSelectedPatientId] = useState()
@@ -563,17 +739,26 @@ const Index = () => {
   const [ButtonFilter, setButtonFilterClicked] = useState()
   const [date, setDate] = useState(dayjs(new Date()))
   const [category, setCategory] = useState('0')
+  const [mainTab, setMainTab] = useState('0')
+  const [reportCategory, setReportCategory] = useState('0')
+  const [reportFromDate, setReportFromDate] = useState(
+    dayjs(new Date()).subtract(7, 'day'),
+  )
+  const [reportToDate, setReportToDate] = useState(dayjs(new Date()))
+  const [reportBranchId, setReportBranchId] = useState(null)
   const router = useRouter()
   useEffect(() => {
-    const dateStr = `${date.$y}-${date.$M + 1}-${date.$D}`
-    router.push(
-      `/laboratory?date=${dateStr}&category=${category}&branchId=${branchId}`,
-      undefined,
-      {
-        shallow: true,
-      },
-    )
-  }, [date, category, branchId])
+    if (mainTab !== 'report') {
+      const dateStr = `${date.$y}-${date.$M + 1}-${date.$D}`
+      router.push(
+        `/laboratory?date=${dateStr}&category=${category}&branchId=${branchId}`,
+        undefined,
+        {
+          shallow: true,
+        },
+      )
+    }
+  }, [date, category, branchId, mainTab])
   useEffect(() => {
     const { date: urlDate, category: urlCategory } = router.query
     if (urlDate) {
@@ -594,7 +779,7 @@ const Index = () => {
   const dispatch = useDispatch()
   const { data: labTestInfo, isLoading: isAppointmentsLoading } = useQuery({
     queryKey: ['LabtestsByDate', date, category, branchId],
-    enabled: !!date,
+    enabled: !!date && mainTab !== 'report',
     queryFn: async () => {
       const responsejson = await getAllLabTestsByDate(
         user.accessToken,
@@ -609,7 +794,7 @@ const Index = () => {
       }
     },
   })
-  const handleDateChange = value => {
+  const handleDateChange = (value) => {
     setDate(value)
   }
   function filterPatientInfo(color, id) {
@@ -618,9 +803,9 @@ const Index = () => {
     } else {
       if (labTestInfo && labTestInfo.length != 0) {
         let labTestInfoCopy = JSON.parse(JSON.stringify(labTestInfo))
-        let filteredPatientDetails = labTestInfoCopy.filter(patientInfo => {
+        let filteredPatientDetails = labTestInfoCopy.filter((patientInfo) => {
           if (patientInfo && patientInfo.labTests.length != 0) {
-            let labtestdata = patientInfo.labTests.filter(testsinfo => {
+            let labtestdata = patientInfo.labTests.filter((testsinfo) => {
               if (testsinfo.status == color) return testsinfo
             })
             if (labtestdata && labtestdata.length > 0) {
@@ -635,8 +820,8 @@ const Index = () => {
     }
     setSelectedPatientId(0)
   }
-  const filterButtonClicked = id => {
-    let filterData = ButtonsInfo.map(buttondata => {
+  const filterButtonClicked = (id) => {
+    let filterData = ButtonsInfo.map((buttondata) => {
       buttondata.clicked = buttondata.id == id ? true : false
       return buttondata
     })
@@ -655,7 +840,7 @@ const Index = () => {
     filterPatientInfo(color, id)
     setButtonFilterClicked(filterData)
   }
-  const getText = id => {
+  const getText = (id) => {
     switch (id) {
       case '1':
         return '#a1a10a' //yellow
@@ -667,7 +852,7 @@ const Index = () => {
         return '#06aee9' //secondary color
     }
   }
-  const getBg = id => {
+  const getBg = (id) => {
     switch (id) {
       case '1':
         return '#fafab0'
@@ -694,65 +879,83 @@ const Index = () => {
 
   return (
     <div className="w-full h-full p-5 flex gap-5">
-      <div className="min-w-56 max-w-56 p-3 h-full flex flex-col gap-3 shadow rounded bg-white overflow-y-auto">
-        <div>
-          <Autocomplete
-            className="w-full text-center"
-            options={branches || []}
-            getOptionLabel={option => option?.branchCode || option?.name}
-            value={branches?.find(branch => branch.id === branchId) || null}
-            onChange={(_, value) => setBranchId(value?.id || null)}
-            renderInput={params => <TextField {...params} fullWidth />}
-            clearIcon={null}
+      {mainTab !== 'report' && (
+        <div className="min-w-56 max-w-56 p-3 h-full flex flex-col gap-3 shadow rounded bg-white overflow-y-auto">
+          <div>
+            <Autocomplete
+              className="w-full text-center"
+              options={branches || []}
+              getOptionLabel={(option) => option?.branchCode || option?.name}
+              value={branches?.find((branch) => branch.id === branchId) || null}
+              onChange={(_, value) => setBranchId(value?.id || null)}
+              renderInput={(params) => <TextField {...params} fullWidth />}
+              clearIcon={null}
+            />
+          </div>
+          <DatePicker
+            className=" bg-white"
+            value={date}
+            format="DD/MM/YYYY"
+            onChange={handleDateChange}
           />
-        </div>
-        <DatePicker
-          className=" bg-white"
-          value={date}
-          format="DD/MM/YYYY"
-          onChange={handleDateChange}
-        />
-        {ButtonFilter &&
-          ButtonFilter.length != 0 &&
-          ButtonFilter.map(buttondata => {
-            return (
-              <span
-                key={buttondata.id + 'filterbutton'}
-                // variant={buttondata.clicked ? 'contained' : 'outlined'}
-                // color="primary"
-                onClick={() => {
-                  filterButtonClicked(buttondata.id)
-                }}
-                className={`rounded cursor-pointer  shadow p-3 transition-all `}
-                style={{
-                  backgroundColor: getBg(buttondata.id),
+          {ButtonFilter &&
+            ButtonFilter.length != 0 &&
+            ButtonFilter.map((buttondata) => {
+              return (
+                <span
+                  key={buttondata.id + 'filterbutton'}
+                  // variant={buttondata.clicked ? 'contained' : 'outlined'}
+                  // color="primary"
+                  onClick={() => {
+                    filterButtonClicked(buttondata.id)
+                  }}
+                  className={`rounded cursor-pointer  shadow p-3 transition-all `}
+                  style={{
+                    backgroundColor: getBg(buttondata.id),
 
-                  color: getText(buttondata?.id),
-                  fontWeight: buttondata.clicked ? 'bold' : 'normal',
-                  border: buttondata.clicked
-                    ? '2px solid' + getText(buttondata?.id)
-                    : '',
-                  cursor: 'pointer',
-                }}
-              >
-                {buttondata.name}
-              </span>
-            )
-          })}
-      </div>
+                    color: getText(buttondata?.id),
+                    fontWeight: buttondata.clicked ? 'bold' : 'normal',
+                    border: buttondata.clicked
+                      ? '2px solid' + getText(buttondata?.id)
+                      : '',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {buttondata.name}
+                </span>
+              )
+            })}
+        </div>
+      )}
       <div className="grow h-full shadow rounded bg-white overflow-y-auto">
         <div className="flex justify-between">
           <Tabs
-            value={category}
+            value={mainTab}
             onChange={(e, value) => {
-              setCategory(value)
+              setMainTab(value)
+              if (value !== 'report') {
+                setCategory(value)
+              }
             }}
           >
             <Tab value={'0'} label="In House" />
             <Tab value={'1'} label="Outsourcing" />
+            <Tab value={'report'} label="Report" />
           </Tabs>
         </div>
-        {patientDetails?.length != 0 ? (
+        {mainTab === 'report' ? (
+          <LabReportsSection
+            reportCategory={reportCategory}
+            reportFromDate={reportFromDate}
+            reportToDate={reportToDate}
+            reportBranchId={reportBranchId}
+            branches={branches}
+            setReportCategory={setReportCategory}
+            setReportFromDate={setReportFromDate}
+            setReportToDate={setReportToDate}
+            setReportBranchId={setReportBranchId}
+          />
+        ) : patientDetails?.length != 0 ? (
           <div className="flex gap-3 w-full p-3">
             <div className=" w-1/2 flex flex-col gap-3">
               {patientDetails &&

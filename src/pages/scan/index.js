@@ -1,6 +1,7 @@
 import {
   downloadPDF,
   downloadScanReport,
+  getScanReports,
   getSavedScanResults,
   getScanByDate,
   SaveScanResult,
@@ -28,7 +29,10 @@ import {
   Autocomplete,
   TextField,
   Tooltip,
+  Tab,
+  Tabs,
 } from '@mui/material'
+import { DataGrid } from '@mui/x-data-grid'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import dayjs from 'dayjs'
 import { useDispatch, useSelector } from 'react-redux'
@@ -40,6 +44,7 @@ import ReviewFormF from '@/components/ReviewFormF'
 import { toastconfig } from '@/utils/toastconfig'
 import { useRouter } from 'next/router'
 import { Close, Download } from '@mui/icons-material'
+import { exportReport } from '@/utils/reportExport'
 
 function TextJoedit({ contents, savedContent, onCloseClick, onSaveClick }) {
   // const [content, setContent] = useState(contents)
@@ -473,6 +478,165 @@ function LabTestCards(props) {
     </div>
   )
 }
+
+const ScanReportsSection = ({
+  branches,
+  reportFromDate,
+  reportToDate,
+  reportBranchId,
+  setReportFromDate,
+  setReportToDate,
+  setReportBranchId,
+}) => {
+  const user = useSelector((store) => store.user)
+  const [exportFormat, setExportFormat] = useState('excel')
+  const branchOptions = [
+    { id: null, name: 'All Centres', branchCode: 'ALL' },
+  ].concat(branches || [])
+  const exportFormatOptions = [
+    { label: 'Excel', value: 'excel' },
+    { label: 'PDF', value: 'pdf' },
+  ]
+
+  const { data: reportRows, isLoading } = useQuery({
+    queryKey: ['scanReports', reportFromDate, reportToDate, reportBranchId],
+    enabled: !!reportFromDate && !!reportToDate,
+    queryFn: async () => {
+      const response = await getScanReports(
+        user.accessToken,
+        `${reportFromDate.$y}-${reportFromDate.$M + 1}-${reportFromDate.$D}`,
+        `${reportToDate.$y}-${reportToDate.$M + 1}-${reportToDate.$D}`,
+        reportBranchId,
+      )
+      if (response.status === 200) {
+        return response.data || []
+      }
+      throw new Error('Error while fetching scan reports')
+    },
+  })
+
+  const reportColumns = [
+    {
+      field: 'patientName',
+      headerName: 'Patient Name',
+      flex: 1.1,
+      minWidth: 200,
+    },
+    {
+      field: 'reportDate',
+      headerName: 'Date',
+      flex: 0.8,
+      minWidth: 130,
+      renderCell: (params) => {
+        const reportDate = params?.row?.reportDate
+        if (!reportDate) return ''
+        const formatted = dayjs(reportDate).format('DD-MM-YYYY')
+        return formatted === 'Invalid Date' ? '' : formatted
+      },
+    },
+    {
+      field: 'centre',
+      headerName: 'Centre',
+      flex: 0.7,
+      minWidth: 120,
+      renderCell: (params) => {
+        const branch = branches?.find(
+          (item) => item.id == params?.row?.branchId,
+        )
+        return branch?.branchCode || branch?.name || '-'
+      },
+    },
+    { field: 'scanName', headerName: 'Scan Name', flex: 1, minWidth: 180 },
+    { field: 'status', headerName: 'Status', flex: 0.7, minWidth: 120 },
+  ]
+
+  const handleExport = () => {
+    exportReport(reportRows || [], reportColumns, exportFormat, {
+      reportName: 'Scan_Report',
+      branchName:
+        branchOptions.find((branch) => branch.id === reportBranchId)
+          ?.branchCode || 'ALL',
+    })
+  }
+
+  return (
+    <div className="p-4 flex flex-col gap-4">
+      <div className="flex justify-between items-center flex-wrap gap-3">
+        <div className="flex gap-3 flex-wrap">
+          <DatePicker
+            label="From Date"
+            value={reportFromDate}
+            format="DD/MM/YYYY"
+            onChange={setReportFromDate}
+          />
+          <DatePicker
+            label="To Date"
+            value={reportToDate}
+            format="DD/MM/YYYY"
+            onChange={setReportToDate}
+          />
+          <Autocomplete
+            className="w-56"
+            options={branchOptions}
+            getOptionLabel={(option) => option?.branchCode || option?.name}
+            value={
+              branchOptions.find((branch) => branch.id === reportBranchId) ||
+              null
+            }
+            onChange={(_, value) => setReportBranchId(value?.id ?? null)}
+            renderInput={(params) => <TextField {...params} label="Centre" />}
+            clearIcon={null}
+          />
+        </div>
+        <div className="flex gap-2 items-center">
+          <Autocomplete
+            className="w-40"
+            options={exportFormatOptions}
+            getOptionLabel={(option) => option?.label}
+            value={
+              exportFormatOptions.find(
+                (format) => format.value === exportFormat,
+              ) || exportFormatOptions[0]
+            }
+            onChange={(_, value) => setExportFormat(value?.value || 'excel')}
+            renderInput={(params) => <TextField {...params} label="Format" />}
+            disableClearable
+          />
+          <Button
+            variant="contained"
+            className="text-white"
+            onClick={handleExport}
+            disabled={!reportRows?.length}
+          >
+            Export
+          </Button>
+        </div>
+      </div>
+
+      <div
+        style={{ height: '70vh', width: '100%' }}
+        className="bg-white rounded"
+      >
+        <DataGrid
+          rows={reportRows || []}
+          columns={reportColumns}
+          getRowId={(row, index) =>
+            `${row.appointmentId}-${row.scanType}-${row.scanName}-${index}`
+          }
+          loading={isLoading}
+          disableRowSelectionOnClick
+          pageSizeOptions={[10, 25, 50]}
+          initialState={{
+            pagination: {
+              paginationModel: { pageSize: 25, page: 0 },
+            },
+          }}
+        />
+      </div>
+    </div>
+  )
+}
+
 const Index = () => {
   const user = useSelector((store) => store.user)
   const branches = user?.branchDetails
@@ -483,6 +647,12 @@ const Index = () => {
   const [ButtonFilter, setButtonFilterClicked] = useState()
   const [ButtonClicked, setButtonClicked] = useState()
   const [date, setDate] = useState()
+  const [mainTab, setMainTab] = useState('list')
+  const [reportFromDate, setReportFromDate] = useState(
+    dayjs(new Date()).subtract(7, 'day'),
+  )
+  const [reportToDate, setReportToDate] = useState(dayjs(new Date()))
+  const [reportBranchId, setReportBranchId] = useState(null)
   const dummy = ['bg-red-400', 'bg-orange-400']
   const ButtonsInfo = [
     // { id: '3', name: 'Collect Sample', clicked: false },
@@ -493,7 +663,7 @@ const Index = () => {
   const dispatch = useDispatch()
   const { data: labTestInfo, isLoading: isAppointmentsLoading } = useQuery({
     queryKey: ['ScanTestsByDate', date, branchId],
-    enabled: !!date,
+    enabled: !!date && mainTab === 'list',
     queryFn: async () => {
       const responsejson = await getScanByDate(
         user.accessToken,
@@ -528,6 +698,12 @@ const Index = () => {
       )
     }
   }, [router.query])
+
+  useEffect(() => {
+    if (reportBranchId === null && branches?.length) {
+      setReportBranchId(branches[0]?.id || null)
+    }
+  }, [branches, reportBranchId])
 
   const handleDateChange = (value) => {
     setDate(value)
@@ -639,54 +815,77 @@ const Index = () => {
   })
   return (
     <div className="w-full h-full p-5 flex gap-5">
-      <div className="min-w-80 p-3 h-full flex flex-col gap-3 shadow rounded bg-white overflow-y-auto">
-        <div>
-          <Autocomplete
-            className="w-full text-center"
-            options={branches || []}
-            getOptionLabel={(option) => option?.branchCode || option?.name}
-            value={branches?.find((branch) => branch.id == branchId) || null}
-            onChange={(_, value) => onBranchChange(value)}
-            renderInput={(params) => <TextField {...params} fullWidth />}
-            clearIcon={null}
+      {mainTab === 'list' && (
+        <div className="min-w-80 p-3 h-full flex flex-col gap-3 shadow rounded bg-white overflow-y-auto">
+          <div>
+            <Autocomplete
+              className="w-full text-center"
+              options={branches || []}
+              getOptionLabel={(option) => option?.branchCode || option?.name}
+              value={branches?.find((branch) => branch.id == branchId) || null}
+              onChange={(_, value) => onBranchChange(value)}
+              renderInput={(params) => <TextField {...params} fullWidth />}
+              clearIcon={null}
+            />
+          </div>
+          <DatePicker
+            className=" bg-white"
+            value={date}
+            format="DD/MM/YYYY"
+            onChange={handleDateChange}
           />
-        </div>
-        <DatePicker
-          className=" bg-white"
-          value={date}
-          format="DD/MM/YYYY"
-          onChange={handleDateChange}
-        />
-        {ButtonFilter &&
-          ButtonFilter.length != 0 &&
-          ButtonFilter.map((buttondata) => {
-            return (
-              <span
-                key={buttondata.id + 'filterbutton'}
-                // variant={buttondata.clicked ? 'contained' : 'outlined'}
-                // color="primary"
-                onClick={() => {
-                  filterButtonClicked(buttondata.id)
-                }}
-                className={`rounded cursor-pointer  shadow p-3 transition-all`}
-                style={{
-                  backgroundColor: getBg(buttondata.id),
+          {ButtonFilter &&
+            ButtonFilter.length != 0 &&
+            ButtonFilter.map((buttondata) => {
+              return (
+                <span
+                  key={buttondata.id + 'filterbutton'}
+                  // variant={buttondata.clicked ? 'contained' : 'outlined'}
+                  // color="primary"
+                  onClick={() => {
+                    filterButtonClicked(buttondata.id)
+                  }}
+                  className={`rounded cursor-pointer  shadow p-3 transition-all`}
+                  style={{
+                    backgroundColor: getBg(buttondata.id),
 
-                  color: getText(buttondata?.id),
-                  fontWeight: buttondata.clicked ? 'bold' : 'normal',
-                  border: buttondata.clicked
-                    ? '2px solid' + getText(buttondata?.id)
-                    : '',
-                  cursor: 'pointer',
-                }}
-              >
-                {buttondata.name}
-              </span>
-            )
-          })}
-      </div>
+                    color: getText(buttondata?.id),
+                    fontWeight: buttondata.clicked ? 'bold' : 'normal',
+                    border: buttondata.clicked
+                      ? '2px solid' + getText(buttondata?.id)
+                      : '',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {buttondata.name}
+                </span>
+              )
+            })}
+        </div>
+      )}
       <div className="grow h-full shadow rounded bg-white overflow-y-auto">
-        {patientDetails?.length != 0 ? (
+        <div className="flex justify-between px-3 pt-2">
+          <Tabs
+            value={mainTab}
+            onChange={(e, value) => {
+              setMainTab(value)
+            }}
+          >
+            <Tab value={'list'} label="Scan List" />
+            <Tab value={'report'} label="Report" />
+          </Tabs>
+        </div>
+        {mainTab === 'report' ? (
+          <ScanReportsSection
+            branches={branches}
+            reportFromDate={reportFromDate}
+            reportToDate={reportToDate}
+            reportBranchId={reportBranchId}
+            setReportFromDate={setReportFromDate}
+            setReportToDate={setReportToDate}
+            setReportBranchId={setReportBranchId}
+          />
+        ) : patientDetails?.length != 0 ? (
           <div className="flex gap-3 w-full p-3">
             <div className=" w-1/2 flex flex-col gap-3">
               {patientDetails &&

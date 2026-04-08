@@ -168,6 +168,7 @@ export const API_ROUTES = {
   RETURN_PHARMACY_ITEMS: '/payment/returnPharmacyItems',
   //Sacn module
   GET_SCAN_BY_DATE: '/scan/getScansByDate/',
+  GET_SCAN_REPORTS: '/scan/getScanReports',
   GET_SCAN_RRESULT: '/scan/getSavedScanResult',
   GET_SCAN_TEMPLATE: '/scan/getScanTemplate',
   SAVE_SCAN_RESULT: '/scan/saveScanResult',
@@ -175,6 +176,8 @@ export const API_ROUTES = {
 
   GRN_SALES_REPORT: '/reports/grnSalesReport',
   GRN_STOCK_REPORT: '/reports/stockReport',
+  GRN_STOCK_REPORT_TAB: '/reports/grnStockReportTab',
+  PHARMACY_SALES_DETAILED_REPORT: '/reports/pharmacySalesDetailedReport',
   UPDATE_GRN_STOCK_REPORT_LINE: '/pharmacy/grnStockReport/line',
   DELETE_GRN_STOCK_REPORT_LINE: '/pharmacy/grnStockReport/line',
   DELETE_GRN_STOCK_REPORT_ITEM: '/pharmacy/grnStockReport/item',
@@ -366,6 +369,7 @@ export const API_ROUTES = {
   APPLY_MARK_AS_SEEN_FOR_DOCTOR_APPOINTMENT:
     '/doctors/setIsCompletedForAppointment',
   GET_ALL_OUTSOURCING_LAB_TESTS: '/labs/getAllOutsourcingLabTests',
+  GET_LAB_REPORTS: '/labs/getLabReports',
   PRINT_PRESCRIPTION: '/printPrescription',
   GET_PENDING_INFORMATION: '/appointments/getPendingInformation',
   GET_ALL_TASKS: '/taskTracker/getAllTasks',

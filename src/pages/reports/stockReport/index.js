@@ -3,13 +3,22 @@ import Modal from '@/components/Modal'
 import {
   deleteGrnStockReportItem,
   deleteGrnStockReportLine,
+  getGrnStockReportTab,
   grnStockReport,
   updateGrnStockReportItemSummary,
   updateGrnStockReportLine,
 } from '@/constants/apis'
 import { isGrnStockReportAdmin } from '@/constants/grnStockReportAdmins'
 import { closeModal, openModal } from '@/redux/modalSlice'
-import { Autocomplete, Button, Chip, Stack, TextField } from '@mui/material'
+import {
+  Autocomplete,
+  Button,
+  Chip,
+  Stack,
+  Tab,
+  Tabs,
+  TextField,
+} from '@mui/material'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import React, { useMemo, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
@@ -17,6 +26,10 @@ import FilteredDataGrid from '@/components/FilteredDataGrid'
 import { stockReportfilterData } from '@/constants/filters'
 import { toast } from 'react-toastify'
 import { toastconfig } from '@/utils/toastconfig'
+import { DatePicker } from '@mui/x-date-pickers/DatePicker'
+import dayjs from 'dayjs'
+import { DataGrid } from '@mui/x-data-grid'
+import { exportReport } from '@/utils/reportExport'
 
 function parseGrnDetails(raw) {
   if (raw == null) return []
@@ -46,6 +59,12 @@ function StockReport({ breadcrumb = true }) {
   const dispatch = useDispatch()
   const queryClient = useQueryClient()
   const [branchId, setBranchId] = useState(branches[0]?.id ?? null)
+  const [activeTab, setActiveTab] = useState('stock')
+  const [reportFromDate, setReportFromDate] = useState(null)
+  const [reportToDate, setReportToDate] = useState(null)
+  const [reportBranchId, setReportBranchId] = useState(ALL_BRANCHES_VALUE)
+  const [reportExportFormat, setReportExportFormat] = useState('excel')
+  const [stockSearchText, setStockSearchText] = useState('')
 
   const branchOptions = useMemo(
     () => [ALL_BRANCHES_OPTION, ...(branches || [])],
@@ -113,6 +132,28 @@ function StockReport({ breadcrumb = true }) {
     },
     enabled: branchIdsForQuery.length > 0,
   })
+
+  const { data: grnStockReportTabData, isLoading: isGrnStockReportTabLoading } =
+    useQuery({
+      queryKey: [
+        'GRN_STOCK_REPORT_TAB',
+        userDetails.accessToken,
+        reportFromDate?.format('YYYY-MM-DD') || null,
+        reportToDate?.format('YYYY-MM-DD') || null,
+        reportBranchId,
+      ],
+      enabled: activeTab === 'report',
+      queryFn: async () => {
+        const res = await getGrnStockReportTab(
+          userDetails.accessToken,
+          reportFromDate ? reportFromDate.format('YYYY-MM-DD') : null,
+          reportToDate ? reportToDate.format('YYYY-MM-DD') : null,
+          reportBranchId === ALL_BRANCHES_VALUE ? null : reportBranchId,
+        )
+        if (res?.status === 200) return res.data || []
+        return []
+      },
+    })
 
   const invalidateStockReport = () => {
     queryClient.invalidateQueries({
@@ -415,6 +456,39 @@ function StockReport({ breadcrumb = true }) {
     },
   ]
 
+  const reportColumns = [
+    {
+      field: 'productName',
+      headerName: 'Product Name',
+      minWidth: 240,
+      flex: 1.2,
+    },
+    {
+      field: 'availableQuantity',
+      headerName: 'Available Quantity',
+      minWidth: 160,
+      flex: 0.8,
+    },
+    {
+      field: 'price',
+      headerName: 'Price',
+      minWidth: 120,
+      flex: 0.7,
+      renderCell: (params) => {
+        const safe = Number(params?.row?.price || 0)
+        return Number.isFinite(safe) ? safe.toFixed(2) : '0.00'
+      },
+    },
+    {
+      field: 'soldQuantity',
+      headerName: 'Sold Quantity',
+      minWidth: 140,
+      flex: 0.8,
+    },
+    { field: 'batchNo', headerName: 'Batch No', minWidth: 140, flex: 0.8 },
+    { field: 'branch', headerName: 'Branch', minWidth: 130, flex: 0.7 },
+  ]
+
   const customFilters = [
     {
       field: 'itemName',
@@ -428,6 +502,23 @@ function StockReport({ breadcrumb = true }) {
     },
   ]
 
+  const filteredStockRows = useMemo(() => {
+    const rows = grnStockData || []
+    const term = stockSearchText.trim().toLowerCase()
+    if (!term) return rows
+
+    return rows.filter((row) => {
+      const itemId = String(row?.itemId ?? '').toLowerCase()
+      const itemName = String(row?.itemName ?? '').toLowerCase()
+      const branchLabel = String(formatRowBranchLabel(row) ?? '').toLowerCase()
+      return (
+        itemId.includes(term) ||
+        itemName.includes(term) ||
+        branchLabel.includes(term)
+      )
+    })
+  }, [grnStockData, stockSearchText, branchId, branches])
+
   const getUniqueValues = (field) => {
     if (!grnStockData) return []
     const values = new Set(grnStockData.map((row) => row[field]))
@@ -435,6 +526,26 @@ function StockReport({ breadcrumb = true }) {
   }
 
   const viewDetailsList = parseGrnDetails(grnDetails)
+  const reportFormatOptions = [
+    { id: 'excel', label: 'Excel' },
+    { id: 'pdf', label: 'PDF' },
+  ]
+
+  const handleExportReport = () => {
+    exportReport(
+      grnStockReportTabData || [],
+      reportColumns,
+      reportExportFormat,
+      {
+        reportName: 'GRN_Stock_Report',
+        branchName:
+          reportBranchId === ALL_BRANCHES_VALUE
+            ? 'ALL'
+            : (branches?.find((b) => b.id === reportBranchId)?.branchCode ??
+              'ALL'),
+      },
+    )
+  }
 
   return (
     <div className="m-5">
@@ -444,44 +555,148 @@ function StockReport({ breadcrumb = true }) {
         }`}
       >
         {breadcrumb && <Breadcrumb />}
-        <Autocomplete
-          className="min-w-[140px] w-[160px]"
-          options={branchOptions}
-          getOptionLabel={(option) =>
-            option?.id === ALL_BRANCHES_VALUE
-              ? 'All'
-              : option?.branchCode || option?.name || ''
-          }
-          isOptionEqualToValue={(option, value) => option?.id === value?.id}
-          value={
-            branchId === ALL_BRANCHES_VALUE
-              ? ALL_BRANCHES_OPTION
-              : (branches?.find((b) => b.id === branchId) ?? null)
-          }
-          onChange={(_, value) => {
-            if (!value) {
-              setBranchId(branches?.[0]?.id ?? null)
-              return
+        {activeTab === 'stock' ? (
+          <Autocomplete
+            className="min-w-[140px] w-[160px]"
+            options={branchOptions}
+            getOptionLabel={(option) =>
+              option?.id === ALL_BRANCHES_VALUE
+                ? 'All'
+                : option?.branchCode || option?.name || ''
             }
-            setBranchId(
-              value.id === ALL_BRANCHES_VALUE ? ALL_BRANCHES_VALUE : value.id,
-            )
-          }}
-          renderInput={(params) => <TextField {...params} fullWidth />}
-          clearIcon={null}
-        />
+            isOptionEqualToValue={(option, value) => option?.id === value?.id}
+            value={
+              branchId === ALL_BRANCHES_VALUE
+                ? ALL_BRANCHES_OPTION
+                : (branches?.find((b) => b.id === branchId) ?? null)
+            }
+            onChange={(_, value) => {
+              if (!value) {
+                setBranchId(branches?.[0]?.id ?? null)
+                return
+              }
+              setBranchId(
+                value.id === ALL_BRANCHES_VALUE ? ALL_BRANCHES_VALUE : value.id,
+              )
+            }}
+            renderInput={(params) => <TextField {...params} fullWidth />}
+            clearIcon={null}
+          />
+        ) : null}
       </div>
-      <div>
-        <FilteredDataGrid
-          key={String(branchId)}
-          rows={grnStockData || []}
-          columns={columns}
-          getRowId={(row) => row.itemId}
-          customFilters={customFilters}
-          filterData={stockReportfilterData}
-          getUniqueValues={getUniqueValues}
-        />
+      <div className="mb-3">
+        <Tabs value={activeTab} onChange={(_, value) => setActiveTab(value)}>
+          <Tab value="stock" label="Stock" />
+          <Tab value="report" label="Report" />
+        </Tabs>
       </div>
+      {activeTab === 'stock' ? (
+        <div>
+          <div className="flex justify-end mb-3">
+            <TextField
+              size="small"
+              placeholder="Search by Item ID, Item Name, Branch"
+              className="w-full max-w-sm"
+              value={stockSearchText}
+              onChange={(e) => setStockSearchText(e.target.value)}
+            />
+          </div>
+          <FilteredDataGrid
+            key={String(branchId)}
+            rows={filteredStockRows}
+            columns={columns}
+            getRowId={(row) => row.itemId}
+            customFilters={customFilters}
+            filterData={stockReportfilterData}
+            getUniqueValues={getUniqueValues}
+          />
+        </div>
+      ) : (
+        <div className="bg-white rounded border p-3">
+          <div className="flex justify-between items-center flex-wrap gap-3 mb-4">
+            <div className="flex gap-3 flex-wrap items-center">
+              <DatePicker
+                label="From Date"
+                value={reportFromDate}
+                format="DD/MM/YYYY"
+                onChange={(value) =>
+                  setReportFromDate(value ? dayjs(value) : null)
+                }
+              />
+              <DatePicker
+                label="To Date"
+                value={reportToDate}
+                format="DD/MM/YYYY"
+                onChange={(value) =>
+                  setReportToDate(value ? dayjs(value) : null)
+                }
+              />
+              <Autocomplete
+                className="min-w-[180px]"
+                options={branchOptions}
+                getOptionLabel={(option) =>
+                  option?.id === ALL_BRANCHES_VALUE
+                    ? 'All Branches'
+                    : option?.branchCode || option?.name || ''
+                }
+                value={
+                  reportBranchId === ALL_BRANCHES_VALUE
+                    ? ALL_BRANCHES_OPTION
+                    : (branches?.find((b) => b.id === reportBranchId) ?? null)
+                }
+                onChange={(_, value) => {
+                  setReportBranchId(value?.id ?? ALL_BRANCHES_VALUE)
+                }}
+                renderInput={(params) => (
+                  <TextField {...params} label="Branch" />
+                )}
+                clearIcon={null}
+              />
+            </div>
+            <div className="flex gap-2 items-center">
+              <Autocomplete
+                className="w-36"
+                options={reportFormatOptions}
+                getOptionLabel={(option) => option.label}
+                value={
+                  reportFormatOptions.find(
+                    (opt) => opt.id === reportExportFormat,
+                  ) || reportFormatOptions[0]
+                }
+                onChange={(_, value) =>
+                  setReportExportFormat(value?.id || reportFormatOptions[0].id)
+                }
+                renderInput={(params) => (
+                  <TextField {...params} label="Format" />
+                )}
+                disableClearable
+              />
+              <Button
+                variant="contained"
+                onClick={handleExportReport}
+                disabled={!grnStockReportTabData?.length}
+              >
+                Export
+              </Button>
+            </div>
+          </div>
+          <div style={{ height: '68vh', width: '100%' }}>
+            <DataGrid
+              rows={grnStockReportTabData || []}
+              columns={reportColumns}
+              loading={isGrnStockReportTabLoading}
+              getRowId={(row) =>
+                `${row.grnId}-${row.itemId}-${row.batchNo}-${row.branchId}`
+              }
+              disableRowSelectionOnClick
+              pageSizeOptions={[10, 25, 50]}
+              initialState={{
+                pagination: { paginationModel: { page: 0, pageSize: 25 } },
+              }}
+            />
+          </div>
+        </div>
+      )}
       <Modal
         uniqueKey={`grnStockDetails-${itemId}`}
         title="GRN Details"

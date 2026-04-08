@@ -69,6 +69,16 @@ const toastconfig = {
 const bloodGroupOptions = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']
 
 export default function Register() {
+  const getSpouseAadhaarPhotoUrl = (uploadedDocuments = []) => {
+    if (!Array.isArray(uploadedDocuments)) return ''
+    const spouseDoc = uploadedDocuments.find((doc) =>
+      String(doc || '')
+        .toLowerCase()
+        .includes('spouse_aadhaar_'),
+    )
+    return spouseDoc || ''
+  }
+
   const router = useRouter()
 
   // Use window.location as the source of truth - most reliable for detecting route changes
@@ -161,6 +171,8 @@ export default function Register() {
     hasGuardianInfo: false,
     referralName: '',
     createActiveVisit: true,
+    spouseAadhaarPhoto: null,
+    spouseAadhaarPhotoUrl: '',
   })
   const [tab, setTab] = useState('patientRecord')
   const [isEdit, setIsEdit] = useState('create')
@@ -351,7 +363,11 @@ export default function Register() {
       if (patientRecord.status == 200) {
         console.log(patientRecord.data)
         let { uploadedDocuments, ...nonUpload } = patientRecord.data
-        setFormData(nonUpload)
+        setFormData({
+          ...nonUpload,
+          spouseAadhaarPhoto: null,
+          spouseAadhaarPhotoUrl: getSpouseAadhaarPhotoUrl(uploadedDocuments),
+        })
         if (
           !!patientRecord.data?.photoPath ||
           patientRecord.data?.photoPath != ''
@@ -396,6 +412,8 @@ export default function Register() {
       email: '',
       patientTypeId: '',
       referralName: '',
+      spouseAadhaarPhoto: null,
+      spouseAadhaarPhotoUrl: '',
       // uploadedDocuments: []
     })
     setIsEdit('create')
@@ -488,6 +506,7 @@ export default function Register() {
       aadhaarCard: formData.aadhaarCard || null,
       marriageCertificate: formData.marriageCertificate || null,
       affidavit: formData.affidavit || null,
+      spouseAadhaarPhoto: formData.spouseAadhaarPhoto || null,
     }
 
     // Log the payload being sent
@@ -543,6 +562,10 @@ export default function Register() {
             affidavit: editPatient.data.affidavit
               ? `${editPatient.data.affidavit}${editPatient.data.affidavit.includes('?') ? '&' : '?'}t=${Date.now()}`
               : null,
+            spouseAadhaarPhoto: null,
+            spouseAadhaarPhotoUrl: getSpouseAadhaarPhotoUrl(
+              editPatient.data.uploadedDocuments || [],
+            ),
           }
 
           console.log(

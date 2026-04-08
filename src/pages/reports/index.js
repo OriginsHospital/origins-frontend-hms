@@ -78,6 +78,13 @@ const subNav = [
     requiresRevenueAccess: false,
   },
   {
+    path: '/reports/pharmacySales',
+    title: 'Pharmacy Sales',
+    relatedModule: 'reportsModule',
+    icon: TbFileAnalytics,
+    requiresRevenueAccess: false,
+  },
+  {
     path: '/reports/vendorManufacturer',
     title: 'Vendor / Manufacturer',
     relatedModule: 'reportsModule',
