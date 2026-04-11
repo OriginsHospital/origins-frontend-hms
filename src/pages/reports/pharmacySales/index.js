@@ -6,8 +6,12 @@ import { DatePicker } from '@mui/x-date-pickers/DatePicker'
 import { DataGrid } from '@mui/x-data-grid'
 import { useQuery } from '@tanstack/react-query'
 import dayjs from 'dayjs'
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { useSelector } from 'react-redux'
+import { useRouter } from 'next/router'
+import { toast } from 'react-toastify'
+import { toastconfig } from '@/utils/toastconfig'
+import { hasPharmacySalesReportAccess } from '@/utils/pharmacySalesReportAccess'
 
 const ALL_BRANCHES_VALUE = 'all'
 const ALL_BRANCHES_OPTION = {
@@ -73,9 +77,20 @@ const columns = [
 ]
 
 function PharmacySalesReport() {
+  const router = useRouter()
   const user = useSelector((store) => store.user)
   const dropdowns = useSelector((store) => store.dropdowns)
   const branches = dropdowns?.branches || []
+
+  useEffect(() => {
+    if (user?.email && !hasPharmacySalesReportAccess(user.email)) {
+      toast.error(
+        'You do not have permission to access Pharmacy Sales Reports.',
+        toastconfig,
+      )
+      router.replace('/home')
+    }
+  }, [user?.email, router])
 
   const [fromDate, setFromDate] = useState(dayjs().startOf('month'))
   const [toDate, setToDate] = useState(dayjs())
@@ -96,7 +111,7 @@ function PharmacySalesReport() {
       toDate?.format('YYYY-MM-DD') || null,
       branchId,
     ],
-    enabled: !!user?.accessToken,
+    enabled: !!user?.accessToken && hasPharmacySalesReportAccess(user?.email),
     queryFn: async () => {
       const res = await getPharmacySalesDetailedReport(
         user.accessToken,
@@ -171,6 +186,10 @@ function PharmacySalesReport() {
             ),
       includeTimestamp: true,
     })
+  }
+
+  if (user?.email && !hasPharmacySalesReportAccess(user.email)) {
+    return null
   }
 
   return (

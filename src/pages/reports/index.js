@@ -11,6 +11,7 @@ import { IoAlertSharp } from 'react-icons/io5'
 import { Announcement } from '@mui/icons-material'
 import { hasRevenueAccess, hasRevenueNewAccess } from '@/utils/revenueAccess'
 import { hasVendorManufacturerReportAccess } from '@/utils/vendorManufacturerReportAccess'
+import { hasPharmacySalesReportAccess } from '@/utils/pharmacySalesReportAccess'
 
 const subNav = [
   {
@@ -83,6 +84,7 @@ const subNav = [
     relatedModule: 'reportsModule',
     icon: TbFileAnalytics,
     requiresRevenueAccess: false,
+    requiresPharmacySalesReportAccess: true,
   },
   {
     path: '/reports/vendorManufacturer',
@@ -188,6 +190,9 @@ function Reports() {
       }
       if (nav.requiresVendorManufacturerAccess) {
         return hasVendorManufacturerReportAccess(user?.email)
+      }
+      if (nav.requiresPharmacySalesReportAccess) {
+        return hasPharmacySalesReportAccess(user?.email)
       }
       // Otherwise, show all other menu items
       return true
