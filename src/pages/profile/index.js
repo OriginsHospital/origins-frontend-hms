@@ -18,11 +18,13 @@ import { getProfileDetails, updateUserProfile } from '@/constants/apis'
 import { toast, ToastContainer } from 'react-toastify'
 import { toastconfig } from '@/utils/toastconfig'
 import { hideLoader, showLoader } from '@/redux/loaderSlice'
+import { setUser } from '@/redux/userSlice'
+import { store } from '@/redux/store'
 import { TabContext, TabList, TabPanel } from '@mui/lab'
 import ShiftChange from '@/components/ShiftChange'
 
 function Profile() {
-  const userDetails = useSelector(state => state.user)
+  const userDetails = useSelector((state) => state.user)
   const [currentPass, setCurrentPass] = useState()
   const [newPass, setNewPass] = useState()
   // usequery for get profile
@@ -35,18 +37,31 @@ function Profile() {
   const queryClient = useQueryClient()
   const { mutateAsync: updateProfile } = useMutation({
     mutationKey: 'updateProfile',
-    mutationFn: async profile => {
+    mutationFn: async (profile) => {
       dispatch(showLoader())
       await updateUserProfile(userDetails?.accessToken, profile)
       queryClient.invalidateQueries(['userprofile', userDetails?.accessToken])
       return profile
     },
-    onSuccess: data => {
-      dispatch(hideLoader()) // setUser(data)
-      // console.log(data)
+    onSuccess: (data) => {
+      dispatch(hideLoader())
+      const current = store.getState().user
+      dispatch(
+        setUser({
+          ...current,
+          fullName:
+            data?.fullName != null && data.fullName !== ''
+              ? data.fullName
+              : current.fullName,
+          userName:
+            data?.userName != null && data.userName !== ''
+              ? data.userName
+              : current.userName,
+        }),
+      )
       toast.success('Profile Updated ', toastconfig)
     },
-    onError: error => {
+    onError: (error) => {
       dispatch(hideLoader())
       toast.error('Error updating profile', toastconfig)
       console.error('Error updating profile:', error)
@@ -58,7 +73,39 @@ function Profile() {
     setUser(userprofile?.data)
   }, [userprofile?.data])
 
-  const updateProfileHandler = profile => {
+  // Keep header / Redux display name in sync with profile API (can differ from logged-user info)
+  useEffect(() => {
+    const pd = userprofile?.data?.profileDetails
+    if (!pd) return
+    const nextFull = pd.fullName
+    const nextUser = pd.userName
+    if (
+      (nextFull == null || nextFull === '') &&
+      (nextUser == null || nextUser === '')
+    ) {
+      return
+    }
+    const u = store.getState().user
+    if (
+      (nextFull == null || nextFull === '' || nextFull === u.fullName) &&
+      (nextUser == null || nextUser === '' || nextUser === u.userName)
+    ) {
+      return
+    }
+    dispatch(
+      setUser({
+        ...u,
+        fullName: nextFull != null && nextFull !== '' ? nextFull : u.fullName,
+        userName: nextUser != null && nextUser !== '' ? nextUser : u.userName,
+      }),
+    )
+  }, [
+    userprofile?.data?.profileDetails?.fullName,
+    userprofile?.data?.profileDetails?.userName,
+    dispatch,
+  ])
+
+  const updateProfileHandler = (profile) => {
     console.log('Updating profile', profile)
     // create a object with email, addresline1,phoneNo, fullName and userName
     const updatedProfile = {
@@ -166,14 +213,14 @@ function Profile() {
                 label="Current Password"
                 type="text"
                 value={currentPass}
-                onChange={e => setCurrentPass(e.target.value)}
+                onChange={(e) => setCurrentPass(e.target.value)}
               />
 
               <TextField
                 label="New Password"
                 type="text"
                 value={newPass}
-                onChange={e => setNewPass(e.target.value)}
+                onChange={(e) => setNewPass(e.target.value)}
               />
 
               <Button onClick={hanldeUpdatePass}>Update Password</Button>

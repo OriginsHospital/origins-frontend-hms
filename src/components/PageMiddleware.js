@@ -6,16 +6,37 @@ import { resetUser, setUser } from '@/redux/userSlice'
 import { setDropdown } from '@/redux/dropdownSlice'
 import {
   getCoupons,
+  getDropdowns,
   getLoggedUserInfo,
   getNewAccessToken,
+  getProfileDetails,
 } from '@/constants/apis'
-import { getDropdowns } from '@/constants/apis'
 import Link from 'next/link'
 import { SideNav } from './SideNav'
 import { requestInterceptor } from '@/utils/requestInterceptor'
 import { setCoupon } from '@/redux/couponSlice'
 import TabBar from './TabBar'
 import TabManager from './TabManager'
+
+/** Prefer profile fullName / userName for header when they differ from users table (getUserInfo). */
+async function mergeUserWithProfileDetails(token, userObject) {
+  try {
+    const res = await getProfileDetails(token)
+    const pd = res?.data?.profileDetails
+    if (!pd) return userObject
+    const nextFull = pd.fullName
+    const nextUser = pd.userName
+    return {
+      ...userObject,
+      fullName:
+        nextFull != null && nextFull !== '' ? nextFull : userObject.fullName,
+      userName:
+        nextUser != null && nextUser !== '' ? nextUser : userObject.userName,
+    }
+  } catch {
+    return userObject
+  }
+}
 
 export default function PageMiddleware(props) {
   const user = useSelector((store) => store.user)
@@ -76,8 +97,9 @@ export default function PageMiddleware(props) {
           accessToken: token,
           isAuthenticated: true,
         }
-        dispatch(setUser(userObject))
-        return userObject
+        const merged = await mergeUserWithProfileDetails(token, userObject)
+        dispatch(setUser(merged))
+        return merged
       } else if (responsejson.status == 401) {
         // api call for refresh token
         const refreshTokenResponseJson = await getNewAccessToken(token)
@@ -124,8 +146,12 @@ export default function PageMiddleware(props) {
               'token',
               refreshTokenResponseJson.data.accessToken,
             )
-            dispatch(setUser(userObject))
-            return userObject
+            const merged = await mergeUserWithProfileDetails(
+              refreshTokenResponseJson.data.accessToken,
+              userObject,
+            )
+            dispatch(setUser(merged))
+            return merged
           }
           throw new Error('failed to fetch user details with new access token')
         }

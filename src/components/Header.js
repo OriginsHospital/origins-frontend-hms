@@ -58,7 +58,7 @@ export default function Header() {
           <NotificationBell />
           <span className="flex flex-col items-end pr-3">
             <span className=" text-slate-700 font-semibold">
-              {userDetails?.fullName}
+              {userDetails?.fullName || userDetails?.userName || ''}
             </span>
             <span className="text-secondary text-xs">
               {userDetails?.roleDetails?.name}
@@ -84,7 +84,7 @@ export default function Header() {
           >
             <Box sx={{ p: '16px 20px ' }}>
               <Typography variant="subtitle1">
-                {userDetails?.fullName}
+                {userDetails?.fullName || userDetails?.userName || ''}
               </Typography>
               <Typography color="text.secondary" variant="body2">
                 {userDetails?.email}
