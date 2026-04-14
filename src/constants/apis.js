@@ -3406,6 +3406,7 @@ export const deleteIuiConsentForm = async (token, id) => {
       credentials: 'include',
     },
   )
+  return response.json()
 }
 
 export const uploadFormFForm = async (
