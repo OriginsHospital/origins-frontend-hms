@@ -12,12 +12,7 @@ import {
   Card,
   CardContent,
   Typography,
-  ImageList,
-  ImageListItem,
   Chip,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
   IconButton,
   Tooltip,
   Table,
@@ -59,10 +54,8 @@ import { useDispatch, useSelector } from 'react-redux'
 import { closeModal, openModal } from '@/redux/modalSlice'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
-import noImage from '@/assets/no-image.png'
 import { toast } from 'react-toastify'
 import {
-  ExpandMore,
   Download,
   CreditCard,
   Money,
@@ -84,136 +77,146 @@ import RichText from './RichText'
 import { ACCESS_TYPES } from '@/constants/constants'
 import { usePermissionCheck, withPermission } from '@/components/withPermission'
 
-// EmbryologyDetails Component
-const EmbryologyDetails = ({ details }) => {
-  const handleOpenTemplate = (template) => {
-    if (!template) return
-    const newWindow = window.open()
-    newWindow.document.write(template)
-    newWindow.document.close()
+const getEmbryologyReportSource = (details = []) => {
+  const templateReport = details.find((detail) => detail?.template)?.template
+  if (templateReport) return templateReport
+
+  const linkedReport = details.find((detail) => detail?.imageLink)?.imageLink
+  return linkedReport || null
+}
+
+const viewEmbryologyReport = (reportSource) => {
+  if (!reportSource) return
+
+  if (
+    typeof reportSource === 'string' &&
+    (reportSource.startsWith('http') || reportSource.includes('.pdf'))
+  ) {
+    window.open(reportSource, '_blank', 'noopener,noreferrer')
+    return
   }
 
-  return (
-    <Card className="bg-gray-50">
-      <CardContent>
-        <Typography variant="h6" className="mb-4">
-          {details.embryologyName}
-        </Typography>
+  const newWindow = window.open()
+  if (!newWindow) return
+  newWindow.document.write(reportSource)
+  newWindow.document.close()
+}
 
-        <ImageList cols={3} gap={16}>
-          {details.details.map((detail, detailIdx) => (
-            <ImageListItem
-              key={detailIdx}
-              className="rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow"
-            >
-              <img
-                src={detail.imageLink || noImage.src}
-                alt={detail.categoryType}
-                loading="lazy"
-                className="w-full h-48 object-cover bg-white border-b-2"
-              />
-              <div className="p-2 bg-white">
-                <div className="flex justify-between items-center">
-                  <Typography variant="subtitle2">
-                    {detail.categoryType}
-                  </Typography>
-                  {detail.template && (
-                    <Button
-                      size="small"
-                      startIcon={<Download />}
-                      onClick={() => handleOpenTemplate(detail.template)}
-                    >
-                      View Report
-                    </Button>
-                  )}
-                </div>
-              </div>
-            </ImageListItem>
-          ))}
-        </ImageList>
-      </CardContent>
-    </Card>
-  )
+const downloadEmbryologyReport = (reportSource, reportName) => {
+  if (!reportSource) return
+
+  const safeName = (reportName || 'embryology-report')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+
+  const link = document.createElement('a')
+
+  if (
+    typeof reportSource === 'string' &&
+    (reportSource.startsWith('http') || reportSource.includes('.pdf'))
+  ) {
+    link.href = reportSource
+    link.target = '_blank'
+    link.rel = 'noopener noreferrer'
+    link.download = `${safeName || 'embryology-report'}.pdf`
+    link.click()
+    return
+  }
+
+  const blob = new Blob([String(reportSource)], {
+    type: 'text/html;charset=utf-8',
+  })
+  const blobUrl = URL.createObjectURL(blob)
+  link.href = blobUrl
+  link.download = `${safeName || 'embryology-report'}.html`
+  link.click()
+  URL.revokeObjectURL(blobUrl)
 }
 
 // EmbryologyTab Component
-const EmbryologyTab = ({
-  data,
-  expandedAccordion,
-  setExpandedAccordion,
-  selectedType,
-  setSelectedType,
-}) => {
+const EmbryologyTab = ({ data }) => {
   return (
     <div className="space-y-4">
       {data.map((item, index) => (
-        <Accordion
-          key={index}
-          className="mb-4 shadow-md"
-          expanded={expandedAccordion === `panel${index}`}
-          onChange={(event, isExpanded) => {
-            setExpandedAccordion(isExpanded ? `panel${index}` : false)
-            setSelectedType(0)
-          }}
-        >
-          <AccordionSummary
-            expandIcon={<ExpandMore />}
-            className="bg-gray-50 hover:bg-gray-100"
-          >
-            <div className="flex w-full items-center gap-4">
-              <Typography className="font-medium">
-                {dayjs(item.appointmentDate).format('DD/MM/YYYY')}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {item.doctorName}
-              </Typography>
-              <Chip
-                label={item.type}
-                className={'bg-secondary text-white'}
-                size="small"
-              />
-            </div>
-          </AccordionSummary>
+        <Card key={index} className="mb-4 shadow-md border border-gray-200">
+          {item.embryologyDetails?.length > 0 ? (
+            <div className="bg-gray-50">
+              {item.embryologyDetails.map((type, typeIdx) => {
+                const reportSource = getEmbryologyReportSource(type?.details)
+                const canAccessReport = !!reportSource
 
-          <AccordionDetails className="p-4">
-            {item.embryologyDetails?.length > 0 ? (
-              <div>
-                <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-                  <Tabs
-                    value={selectedType}
-                    onChange={(e, v) => setSelectedType(v)}
-                    variant="scrollable"
-                    scrollButtons="auto"
-                  >
-                    {item.embryologyDetails.map((type, idx) => (
-                      <Tab
-                        key={idx}
-                        label={type.embryologyName}
-                        className="capitalize"
-                      />
-                    ))}
-                  </Tabs>
-                </Box>
-
-                {item.embryologyDetails.map((type, typeIdx) => (
+                return (
                   <div
                     key={typeIdx}
-                    role="tabpanel"
-                    hidden={selectedType !== typeIdx}
+                    className={`flex w-full items-center gap-3 px-3 py-2 ${
+                      typeIdx !== item.embryologyDetails.length - 1
+                        ? 'border-b border-gray-200'
+                        : ''
+                    }`}
                   >
-                    {selectedType === typeIdx && (
-                      <EmbryologyDetails details={type} />
-                    )}
+                    <Typography className="font-medium min-w-[95px]">
+                      {dayjs(item.appointmentDate).format('DD/MM/YYYY')}
+                    </Typography>
+                    <Typography
+                      variant="body2"
+                      color="text.secondary"
+                      className="min-w-[90px]"
+                    >
+                      {item.doctorName}
+                    </Typography>
+                    <Chip
+                      label={item.type}
+                      className={'bg-secondary text-white shrink-0'}
+                      size="small"
+                    />
+                    <Typography
+                      variant="body2"
+                      className="font-medium flex-1 truncate"
+                    >
+                      {type.embryologyName}
+                    </Typography>
+                    <div className="flex items-center shrink-0">
+                      <Tooltip title="View report">
+                        <span>
+                          <IconButton
+                            size="small"
+                            disabled={!canAccessReport}
+                            onClick={() => viewEmbryologyReport(reportSource)}
+                          >
+                            <Visibility fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                      <Tooltip title="Download report">
+                        <span>
+                          <IconButton
+                            size="small"
+                            disabled={!canAccessReport}
+                            onClick={() =>
+                              downloadEmbryologyReport(
+                                reportSource,
+                                type.embryologyName,
+                              )
+                            }
+                          >
+                            <Download fontSize="small" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    </div>
                   </div>
-                ))}
-              </div>
-            ) : (
+                )
+              })}
+            </div>
+          ) : (
+            <div className="p-4">
               <Typography color="text.secondary" className="text-center py-4">
                 No Embryology details available
               </Typography>
-            )}
-          </AccordionDetails>
-        </Accordion>
+            </div>
+          )}
+        </Card>
       ))}
     </div>
   )
@@ -1097,8 +1100,6 @@ function PatientHistory({ patient, onClose }) {
   const [activeTab, setActiveTab] = useState(0)
   const [selectedVisit, setSelectedVisit] = useState()
   // patient?.activeVisitId
-  const [expandedAccordion, setExpandedAccordion] = useState(false)
-  const [selectedType, setSelectedType] = useState(0)
   const [selectedAppointment, setSelectedAppointment] = useState(null)
   const [showAppointmentDetail, setShowAppointmentDetail] = useState(false)
   const [selectedInvestigationTest, setSelectedInvestigationTest] =
@@ -1323,15 +1324,7 @@ function PatientHistory({ patient, onClose }) {
     if (!embryologyData?.data?.length)
       return <EmptyState message="No embryology records found" />
 
-    return (
-      <EmbryologyTab
-        data={embryologyData.data}
-        expandedAccordion={expandedAccordion}
-        setExpandedAccordion={setExpandedAccordion}
-        selectedType={selectedType}
-        setSelectedType={setSelectedType}
-      />
-    )
+    return <EmbryologyTab data={embryologyData.data} />
   }
 
   const renderConsultationsTab = () => {
