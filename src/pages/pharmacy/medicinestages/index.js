@@ -78,6 +78,37 @@ const toastconfig = {
   theme: 'light',
   transition: Bounce,
 }
+
+const hasActivePackageIndicator = (header) => {
+  if (!header) return false
+
+  return (
+    header.hasActivePackage === 1 ||
+    header.hasActivePackage === true ||
+    header.hasActivePackage === '1'
+  )
+}
+
+const ActivePackageDot = ({ show }) => {
+  if (!show) return null
+
+  return (
+    <span
+      style={{
+        width: '10px',
+        height: '10px',
+        borderRadius: '50%',
+        backgroundColor: '#ff0000',
+        border: '2px solid white',
+        boxShadow: '0 0 0 1px rgba(0,0,0,0.1)',
+        display: 'inline-block',
+        flexShrink: 0,
+      }}
+      title="Active package"
+    />
+  )
+}
+
 function RenderAccordianDetails({
   itemDetails,
   column,
@@ -2487,6 +2518,9 @@ function RenderAccordianComponent({
               const key = Object.keys(patient)[0]
               const appointmentID = patient[key].header?.appointmentId
               const photo = patient[key].header?.photoPath
+              const hasActivePackage = hasActivePackageIndicator(
+                patient[key].header,
+              )
 
               return (
                 <Accordion
@@ -2534,6 +2568,7 @@ function RenderAccordianComponent({
                           >
                             {patient[key].header?.patientName}
                           </Typography>
+                          <ActivePackageDot show={hasActivePackage} />
                         </div>
 
                         <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -2572,6 +2607,9 @@ function RenderAccordianComponent({
             const key = Object.keys(patient)[0]
             const appointmentID = patient[key].header?.appointmentId
             const photo = patient[key].header?.photoPath
+            const hasActivePackage = hasActivePackageIndicator(
+              patient[key].header,
+            )
 
             return (
               <Accordion
@@ -2617,6 +2655,7 @@ function RenderAccordianComponent({
                         >
                           {patient[key].header?.spouseName}
                         </Typography>
+                        <ActivePackageDot show={hasActivePackage} />
                       </div>
 
                       <div className="flex items-center gap-2 text-sm text-gray-600">
