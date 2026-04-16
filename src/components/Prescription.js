@@ -1453,12 +1453,12 @@ function Prescription({
       return
     }
 
-    // Call mutation
+    // Call mutation — send legacy wall-clock + Z string (backend subtracts IST offset)
     updateTreatmentStatusMutation(
       {
         visitId: patientInfo.activeVisitId,
         stage: 'TRIGGER_START',
-        triggerTime: triggerTime,
+        triggerTime: triggerTime.format('YYYY-MM-DDTHH:mm:00[Z]'),
         treatmentType: patientInfo.treatmentDetails.treatmentTypeId,
       },
       {
@@ -1717,11 +1717,11 @@ function Prescription({
                 className="bg-white rounded-lg w-max-content"
                 name="triggerTime"
                 format="DD/MM/YYYY hh:mm A"
-                value={triggerTime ? dayjs(triggerTime) : null}
+                value={triggerTime}
                 onChange={(newValue) =>
                   setTriggerTime(
                     newValue && dayjs(newValue).isValid()
-                      ? dayjs(newValue).format('YYYY-MM-DDTHH:mm:00[Z]')
+                      ? dayjs(newValue)
                       : null,
                   )
                 }
