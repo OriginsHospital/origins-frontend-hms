@@ -572,8 +572,8 @@ function SalesNew() {
             <SummaryCard
               title="Total Sales"
               value={`₹${(
-                filteredData?.salesDashboard?.totalSales ||
-                salesDashboardData?.salesDashboard?.totalSales ||
+                filteredData?.salesDashboard?.totalSales ??
+                salesDashboardData?.salesDashboard?.totalSales ??
                 0
               ).toLocaleString('en-IN')}`}
               isActive={activeView === 'sales'}
@@ -587,8 +587,8 @@ function SalesNew() {
             <SummaryCard
               title={'Total Refunds'}
               value={`₹${(
-                filteredData?.salesDashboard?.totalReturns ||
-                salesDashboardData?.salesDashboard?.totalReturns ||
+                filteredData?.salesDashboard?.totalReturns ??
+                salesDashboardData?.salesDashboard?.totalReturns ??
                 0
               ).toLocaleString('en-IN')}`}
               isActive={activeView === 'refunds'}
