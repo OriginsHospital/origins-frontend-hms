@@ -515,31 +515,45 @@ function RenderAccordianDetails({
         return acc + Number(getItemPrice(obj.id))
       }, 0)
 
-      // Build payment payload for order creation (NO payments field - backend doesn't accept it)
+      // Build payment payload for order creation
       let paymentPayload = {
-        totalOrderAmount: Math.round(totalAmount),
-        paidOrderAmount: Math.round(discountedAmount),
-        discountAmount: Math.round(totalAmount) - Math.round(discountedAmount),
+        totalOrderAmount: Number(totalAmount.toFixed(2)),
+        paidOrderAmount: Number((discountedAmount || 0).toFixed(2)),
+        discountAmount: Number(
+          (totalAmount - (discountedAmount || 0)).toFixed(2),
+        ),
         couponCode: selectedCoupon?.id || null,
         orderDetails: paymentDBFormat,
         productType: 'PHARMACY',
       }
 
-      // Prepare split payments data (will be sent separately after orderId is received)
+      // Prepare split payments data
       let splitPaymentsData = null
       if (isSplitPaymentMode) {
-        // For split payment, use the first payment method as paymentMode for order creation
         const validPayments = splitPayments
           .filter((p) => p.method && p.amount)
           .map((p) => ({
             method: p.method,
-            amount: Math.round(Number(p.amount)),
+            amount: Number(Number(p.amount || 0).toFixed(2)),
           }))
 
-        // Set paymentMode to the first method (CASH, UPI, or ONLINE) for order creation
+        // Keep existing backend contract by using the first method as paymentMode
         paymentPayload.paymentMode = validPayments[0]?.method || null
-        // Store split payments to send separately
         splitPaymentsData = validPayments
+
+        // Persist split metadata in order details so invoice can render exact split values.
+        const splitPaymentSummary = validPayments
+          .map((payment) => `${payment.method}: ₹${payment.amount.toFixed(2)}`)
+          .join(', ')
+
+        paymentPayload.orderDetails = paymentPayload.orderDetails.map(
+          (item) => ({
+            ...item,
+            splitPayment: validPayments,
+            splitPaymentSummary,
+            isSplitPayment: true,
+          }),
+        )
       } else {
         paymentPayload.paymentMode = selectedPaymentMode // CASH, UPI, or ONLINE
       }
@@ -564,19 +578,14 @@ function RenderAccordianDetails({
         return
       }
 
-      // Step 2: For split payments, note that backend doesn't have a separate endpoint
-      // The order is already created and marked as PAID (when paymentMode is CASH/UPI)
-      // We'll proceed with the UI update and store split payment info in frontend state
+      // Step 2: Split metadata is stored in orderDetails and reused in invoice
       const data = orderData
 
-      // Log split payment info for reference (backend doesn't support it yet)
       if (isSplitPaymentMode && splitPaymentsData) {
-        console.log('Split payment details (stored in frontend only):', {
+        console.log('Split payment details saved:', {
           orderId: orderId,
           payments: splitPaymentsData,
         })
-        // Note: Backend currently only stores the first payment method
-        // Split payment breakdown is maintained in frontend state for display
       }
 
       // For CASH/UPI: backend directly processes payment
