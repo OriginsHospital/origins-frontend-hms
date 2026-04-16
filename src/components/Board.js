@@ -2270,6 +2270,73 @@ export function PatientFullDetail({
     // setIsLoading(false)
   }
 
+  const handlePaymentMethodSplit = async (e, bill, splitDetails) => {
+    const cashAmount = Number(splitDetails?.cashAmount || 0)
+    const upiAmount = Number(splitDetails?.upiAmount || 0)
+    const totalSplitAmount = Number((cashAmount + upiAmount).toFixed(2))
+    const billAmount = Number(Number(bill?.discountedAmount || 0).toFixed(2))
+
+    if (cashAmount <= 0 || upiAmount <= 0) {
+      toast.error(
+        'Split payment requires both Cash and UPI amounts greater than 0',
+        toastconfig,
+      )
+      return
+    }
+
+    if (totalSplitAmount !== billAmount) {
+      toast.error(
+        `Split amount should be exactly ₹${billAmount.toFixed(2)}`,
+        toastconfig,
+      )
+      return
+    }
+
+    if (!window.confirm('Are you sure you want to pay with split payment?')) {
+      return
+    }
+
+    const detailsCopy = bill.billTypeValues
+    let paymentDBFormat = []
+    detailsCopy.map((eachInfo) => {
+      paymentDBFormat.push({
+        refId: eachInfo.refId,
+        itemName: eachInfo.name,
+        prescribed: eachInfo.prescribedQuantity,
+        totalCost: eachInfo.amount,
+        type: bill.type,
+        splitPayment: {
+          cashAmount,
+          upiAmount,
+          totalAmount: totalSplitAmount,
+        },
+        splitPaymentSummary: `Cash: ₹${cashAmount.toFixed(2)}, UPI: ₹${upiAmount.toFixed(2)}`,
+      })
+    })
+
+    try {
+      const data = await getOrderId(user?.accessToken, {
+        totalOrderAmount: bill.totalAmount,
+        paidOrderAmount: bill.discountedAmount,
+        discountAmount: bill.totalAmount - bill.discountedAmount,
+        couponCode: bill.couponCode,
+        orderDetails: paymentDBFormat,
+        paymentMode: 'CASH',
+        productType: e.target.name.toUpperCase(),
+      })
+
+      if (data.status == 200) {
+        queryClient.invalidateQueries({
+          queryKey: ['getLineBills', patientDetails?.appointmentId],
+        })
+        toast.success('Split payment saved successfully', toastconfig)
+      }
+    } catch (error) {
+      console.log('Error while saving split payment:', error)
+      toast.error('Failed to save split payment', toastconfig)
+    }
+  }
+
   const handlePaymentMethodOnline = async (e, bill) => {
     console.log(bill, e.target.name)
     const detailsCopy = bill.billTypeValues
@@ -2643,6 +2710,7 @@ export function PatientFullDetail({
                             handlePaymentMethodOffline={
                               handlePaymentMethodOffline
                             }
+                            handlePaymentMethodSplit={handlePaymentMethodSplit}
                             handlePrintInvoice={handlePrintInvoice}
                             appointmentId={bill.appointmentId}
                           />
@@ -2707,6 +2775,7 @@ const BillTypePanel = React.memo(
     coupons,
     handlePaymentMethodOnline,
     handlePaymentMethodOffline,
+    handlePaymentMethodSplit,
     handlePrintInvoice,
     appointmentId,
   }) => {
@@ -2716,6 +2785,10 @@ const BillTypePanel = React.memo(
     const [optOutItems, setOptOutItems] = useState([])
     const [selectedItems, setSelectedItems] = useState([])
     const [activeTab, setActiveTab] = useState('patient') // New state for patient/spouse tabs
+    const [splitPaymentAmounts, setSplitPaymentAmounts] = useState({
+      cashAmount: '',
+      upiAmount: '',
+    })
     const user = useSelector((store) => store.user)
     const queryClient = useQueryClient()
 
@@ -2814,6 +2887,22 @@ const BillTypePanel = React.memo(
         (dueBillTotal * Number(selectedCoupon.discountPercentage)) / 100
       return dueBillTotal - discount
     }, [dueBillTotal, selectedCoupon])
+
+    const splitCashAmount = Number(splitPaymentAmounts.cashAmount || 0)
+    const splitUpiAmount = Number(splitPaymentAmounts.upiAmount || 0)
+    const splitTotalAmount = Number(
+      (splitCashAmount + splitUpiAmount).toFixed(2),
+    )
+    const splitBalanceAmount = Number(
+      (Number(discountedAmount || 0) - splitTotalAmount).toFixed(2),
+    )
+
+    useEffect(() => {
+      setSplitPaymentAmounts({
+        cashAmount: '',
+        upiAmount: '',
+      })
+    }, [discountedAmount, activeTab])
 
     // Handle checkbox changes
     const handleCheckboxChange = (itemId) => {
@@ -2984,7 +3073,7 @@ const BillTypePanel = React.memo(
                 )}
 
                 {/* Payment Buttons */}
-                <div className="flex justify-end gap-3 mt-4">
+                <div className="flex justify-end gap-3 mt-4 flex-wrap">
                   {bill.billType?.id !== 3 && (
                     <>
                       <Button
@@ -3085,6 +3174,83 @@ const BillTypePanel = React.memo(
                     </Button>
                   )}
                 </div>
+
+                {bill.billType?.id !== 3 && (
+                  <div className="mt-4 p-3 border rounded-md bg-white">
+                    <Typography variant="subtitle2" className="mb-2">
+                      Split Payment (Cash + UPI)
+                    </Typography>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-2 items-center">
+                      <TextField
+                        size="small"
+                        label="Cash Amount"
+                        type="number"
+                        value={splitPaymentAmounts.cashAmount}
+                        onChange={(e) =>
+                          setSplitPaymentAmounts((prev) => ({
+                            ...prev,
+                            cashAmount: e.target.value,
+                          }))
+                        }
+                        inputProps={{ min: 0, step: '0.01' }}
+                      />
+                      <TextField
+                        size="small"
+                        label="UPI Amount"
+                        type="number"
+                        value={splitPaymentAmounts.upiAmount}
+                        onChange={(e) =>
+                          setSplitPaymentAmounts((prev) => ({
+                            ...prev,
+                            upiAmount: e.target.value,
+                          }))
+                        }
+                        inputProps={{ min: 0, step: '0.01' }}
+                      />
+                      <Typography variant="body2" className="text-gray-700">
+                        Split Total: ₹{splitTotalAmount.toFixed(2)} | Balance: ₹
+                        {splitBalanceAmount.toFixed(2)}
+                      </Typography>
+                      <Button
+                        variant="contained"
+                        className="capitalize"
+                        name={bill?.billType?.name}
+                        disabled={
+                          selectedItems.length === 0 ||
+                          splitCashAmount <= 0 ||
+                          splitUpiAmount <= 0 ||
+                          splitBalanceAmount !== 0
+                        }
+                        onClick={(e) =>
+                          handlePaymentMethodSplit(
+                            e,
+                            {
+                              ...bill,
+                              billTypeValues: filteredDueItems.filter((item) =>
+                                selectedItems.includes(
+                                  item.id +
+                                    '-' +
+                                    item.name +
+                                    '-' +
+                                    item.isSpouse,
+                                ),
+                              ),
+                              totalAmount: dueBillTotal,
+                              discountedAmount: discountedAmount,
+                              couponCode: selectedCoupon?.id,
+                            },
+                            {
+                              cashAmount: splitCashAmount,
+                              upiAmount: splitUpiAmount,
+                            },
+                          )
+                        }
+                      >
+                        Pay Split (₹{discountedAmount.toFixed(2)})
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
