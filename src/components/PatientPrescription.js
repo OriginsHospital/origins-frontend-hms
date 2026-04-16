@@ -492,28 +492,52 @@ function PatientPrescription({
     copyOfDefaultLineBillValues[billTypeId] = billTypeValues
     setDefaultLineBillValues(copyOfDefaultLineBillValues)
   }
-  const handleDeleteClicked = (pharmacyId, id) => {
+  const handleDeleteClicked = (pharmacyId, rowIndex) => {
     setDefaultLineBillValues((prevState) => {
       if (!prevState) return {}
       const copyOfLineBillValues = { ...prevState }
       if (copyOfLineBillValues?.[pharmacyId]) {
         copyOfLineBillValues[pharmacyId] = copyOfLineBillValues[
           pharmacyId
-        ].filter((lineBill) => lineBill.id !== id)
+        ].filter((_, index) => index !== rowIndex)
       }
       return copyOfLineBillValues
     })
   }
 
-  const handleDaysChange = (prescriptionId, days) => {
+  const handleDuplicateClicked = (pharmacyId, rowIndex) => {
+    setDefaultLineBillValues((prevState) => {
+      if (!prevState) return {}
+      const copyOfLineBillValues = { ...prevState }
+      const rows = copyOfLineBillValues?.[pharmacyId]
+
+      if (!rows || !rows[rowIndex]) return prevState
+
+      const rowToClone = rows[rowIndex]
+      const clonedRow = {
+        ...rowToClone,
+        status: 'UNPAID',
+      }
+
+      copyOfLineBillValues[pharmacyId] = [
+        ...rows.slice(0, rowIndex + 1),
+        clonedRow,
+        ...rows.slice(rowIndex + 1),
+      ]
+
+      return copyOfLineBillValues
+    })
+  }
+
+  const handleDaysChange = (prescriptionRowIndex, days) => {
     const billTypeIdPrescription = '3' //bill type = prescription
     const copyOfDefaultLineBillValues = JSON.parse(
       JSON.stringify(defaultLineBillValues),
     )
     let tempLineBillValues = copyOfDefaultLineBillValues?.[
       billTypeIdPrescription
-    ]?.map((lineBillValues) => {
-      if (lineBillValues.id == prescriptionId) {
+    ]?.map((lineBillValues, index) => {
+      if (index === prescriptionRowIndex) {
         lineBillValues.prescriptionDays = days
         lineBillValues.prescribedQuantity =
           days *
@@ -526,15 +550,15 @@ function PatientPrescription({
       setDefaultLineBillValues(copyOfDefaultLineBillValues)
     }
   }
-  const handleIntakeChange = (prescriptionId, medIntake) => {
+  const handleIntakeChange = (prescriptionRowIndex, medIntake) => {
     const billTypeIdPrescription = '3' //bill type = prescription
     const copyOfDefaultLineBillValues = JSON.parse(
       JSON.stringify(defaultLineBillValues),
     )
     let tempLineBillValues = copyOfDefaultLineBillValues?.[
       billTypeIdPrescription
-    ]?.map((lineBillValues) => {
-      if (lineBillValues.id == prescriptionId) {
+    ]?.map((lineBillValues, index) => {
+      if (index === prescriptionRowIndex) {
         lineBillValues.prescriptionDetails = medIntake
         lineBillValues.prescribedQuantity =
           lineBillValues.prescriptionDays *
@@ -810,16 +834,17 @@ function PatientPrescription({
                   {billType.name === 'Pharmacy' && (
                     <div className="h-48 border flex flex-col items-center p-2 overflow-y-auto gap-2 bg-primary/10 rounded-lg">
                       {defaultLineBillValues?.['3']?.length > 0 ? (
-                        defaultLineBillValues['3'].map((prescription) =>
+                        defaultLineBillValues['3'].map((prescription, index) =>
                           prescription.id && prescription.status !== 'PAID' ? (
                             <RenderPrescriptionPharmacy
-                              key={`prescription-${prescription.id}`}
-                              prescriptionId={prescription.id}
+                              key={`prescription-${prescription.id}-${index}`}
+                              prescriptionRowIndex={index}
                               prescriptionName={prescription.name}
                               prescribedQuantity={
                                 prescription.prescribedQuantity
                               }
                               deleteClicked={handleDeleteClicked}
+                              duplicateClicked={handleDuplicateClicked}
                               daysChange={handleDaysChange}
                               prescriptionIntake={
                                 prescription.prescriptionDetails

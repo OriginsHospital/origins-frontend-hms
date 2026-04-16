@@ -2,18 +2,22 @@ import React from 'react'
 import TextField from '@mui/material/TextField'
 import { Button, FormControlLabel, Checkbox } from '@mui/material'
 
-import { DeleteOutline } from '@mui/icons-material'
+import { Add, DeleteOutline } from '@mui/icons-material'
 
 function RenderPrescriptionPharmacy({
+  prescriptionRowIndex,
   prescriptionId,
   prescriptionName,
   prescribedQuantity,
   deleteClicked,
+  duplicateClicked,
   daysChange,
   prescriptionIntake,
   prescriptionIntakeChange,
   prescriptionDays,
 }) {
+  const rowIdentifier = prescriptionRowIndex ?? prescriptionId
+
   return (
     <div className="w-full border p-2 flex items-center rounded bg-white">
       <span
@@ -42,7 +46,7 @@ function RenderPrescriptionPharmacy({
             value={prescriptionDays}
             // variant="standard"
             // disabled
-            onChange={e => daysChange(prescriptionId, e.target.value)}
+            onChange={(e) => daysChange(rowIdentifier, e.target.value)}
           />
         </div>
 
@@ -73,7 +77,9 @@ function RenderPrescriptionPharmacy({
               control={
                 <Checkbox
                   checked={prescriptionIntake === 'OD'}
-                  onChange={e => prescriptionIntakeChange(prescriptionId, 'OD')}
+                  onChange={(e) =>
+                    prescriptionIntakeChange(rowIdentifier, 'OD')
+                  }
                 />
               }
               label="OD"
@@ -82,8 +88,8 @@ function RenderPrescriptionPharmacy({
               control={
                 <Checkbox
                   checked={prescriptionIntake === 'BID'}
-                  onChange={e =>
-                    prescriptionIntakeChange(prescriptionId, 'BID')
+                  onChange={(e) =>
+                    prescriptionIntakeChange(rowIdentifier, 'BID')
                   }
                 />
               }
@@ -93,8 +99,8 @@ function RenderPrescriptionPharmacy({
               control={
                 <Checkbox
                   checked={prescriptionIntake === 'TID'}
-                  onChange={e =>
-                    prescriptionIntakeChange(prescriptionId, 'TID')
+                  onChange={(e) =>
+                    prescriptionIntakeChange(rowIdentifier, 'TID')
                   }
                 />
               }
@@ -104,8 +110,8 @@ function RenderPrescriptionPharmacy({
               control={
                 <Checkbox
                   checked={prescriptionIntake === 'QID'}
-                  onChange={e =>
-                    prescriptionIntakeChange(prescriptionId, 'QID')
+                  onChange={(e) =>
+                    prescriptionIntakeChange(rowIdentifier, 'QID')
                   }
                 />
               }
@@ -119,8 +125,8 @@ function RenderPrescriptionPharmacy({
               control={
                 <Checkbox
                   checked={prescriptionIntake === '2OD'}
-                  onChange={e =>
-                    prescriptionIntakeChange(prescriptionId, '2OD')
+                  onChange={(e) =>
+                    prescriptionIntakeChange(rowIdentifier, '2OD')
                   }
                 />
               }
@@ -130,8 +136,8 @@ function RenderPrescriptionPharmacy({
               control={
                 <Checkbox
                   checked={prescriptionIntake === '2BID'}
-                  onChange={e =>
-                    prescriptionIntakeChange(prescriptionId, '2BID')
+                  onChange={(e) =>
+                    prescriptionIntakeChange(rowIdentifier, '2BID')
                   }
                 />
               }
@@ -141,8 +147,8 @@ function RenderPrescriptionPharmacy({
               control={
                 <Checkbox
                   checked={prescriptionIntake === '2TID'}
-                  onChange={e =>
-                    prescriptionIntakeChange(prescriptionId, '2TID')
+                  onChange={(e) =>
+                    prescriptionIntakeChange(rowIdentifier, '2TID')
                   }
                 />
               }
@@ -152,8 +158,8 @@ function RenderPrescriptionPharmacy({
               control={
                 <Checkbox
                   checked={prescriptionIntake === '2QID'}
-                  onChange={e =>
-                    prescriptionIntakeChange(prescriptionId, '2QID')
+                  onChange={(e) =>
+                    prescriptionIntakeChange(rowIdentifier, '2QID')
                   }
                 />
               }
@@ -167,7 +173,9 @@ function RenderPrescriptionPharmacy({
               control={
                 <Checkbox
                   checked={prescriptionIntake === 'HS'}
-                  onChange={e => prescriptionIntakeChange(prescriptionId, 'HS')}
+                  onChange={(e) =>
+                    prescriptionIntakeChange(rowIdentifier, 'HS')
+                  }
                 />
               }
               label="HS"
@@ -176,8 +184,8 @@ function RenderPrescriptionPharmacy({
               control={
                 <Checkbox
                   checked={prescriptionIntake === '2HS'}
-                  onChange={e =>
-                    prescriptionIntakeChange(prescriptionId, '2HS')
+                  onChange={(e) =>
+                    prescriptionIntakeChange(rowIdentifier, '2HS')
                   }
                 />
               }
@@ -187,7 +195,9 @@ function RenderPrescriptionPharmacy({
               control={
                 <Checkbox
                   checked={prescriptionIntake === 'WO'}
-                  onChange={e => prescriptionIntakeChange(prescriptionId, 'WO')}
+                  onChange={(e) =>
+                    prescriptionIntakeChange(rowIdentifier, 'WO')
+                  }
                 />
               }
               label="WO"
@@ -196,7 +206,9 @@ function RenderPrescriptionPharmacy({
               control={
                 <Checkbox
                   checked={prescriptionIntake === 'WT'}
-                  onChange={e => prescriptionIntakeChange(prescriptionId, 'WT')}
+                  onChange={(e) =>
+                    prescriptionIntakeChange(rowIdentifier, 'WT')
+                  }
                 />
               }
               label="WT"
@@ -210,8 +222,8 @@ function RenderPrescriptionPharmacy({
                 control={
                   <Checkbox
                     checked={prescriptionIntake?.startsWith('OTHER_')}
-                    onChange={e =>
-                      prescriptionIntakeChange(prescriptionId, 'OTHER_')
+                    onChange={(e) =>
+                      prescriptionIntakeChange(rowIdentifier, 'OTHER_')
                     }
                   />
                 }
@@ -224,9 +236,9 @@ function RenderPrescriptionPharmacy({
                   size="small"
                   type="number"
                   value={parseInt(prescriptionIntake.split('_')[1]) || ''}
-                  onChange={e => {
+                  onChange={(e) => {
                     const value = parseInt(e.target.value) || null
-                    prescriptionIntakeChange(prescriptionId, `OTHER_${value}`)
+                    prescriptionIntakeChange(rowIdentifier, `OTHER_${value}`)
                   }}
                 />
               )}
@@ -234,11 +246,23 @@ function RenderPrescriptionPharmacy({
           </div>
         </div>
       </div>
+      {duplicateClicked && (
+        <Button
+          color="primary"
+          variant="text"
+          size="small"
+          onClick={() => duplicateClicked('3', rowIdentifier)}
+          className="min-w-[32px] h-[32px] p-0"
+          title="Duplicate medicine row"
+        >
+          <Add fontSize="small" />
+        </Button>
+      )}
       <Button
         color="error"
         variant="text"
         size="small"
-        onClick={() => deleteClicked('3', prescriptionId)}
+        onClick={() => deleteClicked('3', rowIdentifier)}
         className="min-w-[32px] h-[32px] p-0"
       >
         <DeleteOutline fontSize="small" />
