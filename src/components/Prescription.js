@@ -88,6 +88,23 @@ function Prescription({
     },
     // enabled: !!user.accessToken,
   })
+  const treatmentTypesWithFETCycle = useMemo(() => {
+    const types = Array.isArray(treatmentTypes) ? treatmentTypes : []
+    const hasFETCycle = types.some((each) =>
+      ['fet cycle', 'fet'].includes((each?.name || '').trim().toLowerCase()),
+    )
+
+    if (hasFETCycle) return types
+
+    return [
+      ...types,
+      {
+        id: 'FET',
+        name: 'FET Cycle',
+        isPackageExists: false,
+      },
+    ]
+  }, [treatmentTypes])
   const [treatmentForm, setTreatmentForm] = useState({
     createType: 'Treatment', //Consultation or  Treatment
     // visitId: activeVisitId,
@@ -2358,35 +2375,34 @@ function Prescription({
             //   setTreatmentForm({ ...treatmentForm, type: e.target.value, isPackageExists: treatmentTypes?.filter(each => each.id == e.target.value)[0]?.isPackageExists })
             // }
           >
-            {treatmentTypes &&
-              treatmentTypes?.map((each, index) => (
-                <FormControlLabel
-                  key={index}
-                  value={each.id}
-                  control={
-                    <div
-                      key={index}
-                      // variant={treatmentForm.type === each ? "contained" : "outlined"}
-                      onClick={() =>
-                        setTreatmentForm({
-                          ...treatmentForm,
-                          type: each.name,
-                          isPackageExists: each.isPackageExists,
-                          treatmentTypeId: each.id,
-                        })
-                      }
-                      className={` normal-case w-full hover:shadow hover:shadow-secondary text-center p-2 rounded-lg ${
-                        treatmentForm.treatmentTypeId === each.id
-                          ? ' shadow shadow-secondary text-secondary  '
-                          : 'border hover:bg-secondary/10 hover:text-secondary '
-                      }`}
-                    >
-                      {each.name}
-                    </div>
-                  }
-                  // label={each}
-                />
-              ))}
+            {treatmentTypesWithFETCycle?.map((each, index) => (
+              <FormControlLabel
+                key={index}
+                value={each.id}
+                control={
+                  <div
+                    key={index}
+                    // variant={treatmentForm.type === each ? "contained" : "outlined"}
+                    onClick={() =>
+                      setTreatmentForm({
+                        ...treatmentForm,
+                        type: each.name,
+                        isPackageExists: each.isPackageExists,
+                        treatmentTypeId: each.id,
+                      })
+                    }
+                    className={` normal-case w-full hover:shadow hover:shadow-secondary text-center p-2 rounded-lg ${
+                      treatmentForm.treatmentTypeId === each.id
+                        ? ' shadow shadow-secondary text-secondary  '
+                        : 'border hover:bg-secondary/10 hover:text-secondary '
+                    }`}
+                  >
+                    {each.name}
+                  </div>
+                }
+                // label={each}
+              />
+            ))}
           </RadioGroup>
 
           {treatmentForm?.isPackageExists && (

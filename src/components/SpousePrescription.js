@@ -124,6 +124,10 @@ function SpousePrescription({
   }
   function ConvertDataToDBFormat() {
     let billTypeStruct = []
+    const toSafePositiveNumber = (value, fallback = 1) => {
+      const parsed = Number(value)
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+    }
     if (defaultLineBillValues) {
       const SelectedTypeIdArray = Object.keys(defaultLineBillValues)
       if (SelectedTypeIdArray.length != 0) {
@@ -137,6 +141,18 @@ function SpousePrescription({
             ).map(({ status, ...item }) => ({
               ...item,
               amount: Number(item.amount),
+              ...(Number(data) === 3
+                ? {
+                    prescriptionDays: toSafePositiveNumber(
+                      item.prescriptionDays,
+                      1,
+                    ),
+                    prescribedQuantity: toSafePositiveNumber(
+                      item.prescribedQuantity,
+                      1,
+                    ),
+                  }
+                : {}),
             }))
 
             if (billTypeValues.length > 0) {
@@ -412,6 +428,7 @@ function SpousePrescription({
       case 'HS':
         return 1
     }
+    return 1
   }
   const handleDaysChange = (prescriptionRowIndex, days) => {
     const billTypeIdPrescription = '3' //bill type = prescription
@@ -422,11 +439,15 @@ function SpousePrescription({
       billTypeIdPrescription
     ]?.map((lineBillValues, index) => {
       if (index === prescriptionRowIndex) {
-        console.log(lineBillValues)
-        lineBillValues.prescriptionDays = days
-        lineBillValues.prescribedQuantity =
-          days *
-          getMultipleForQuatityCalculation(lineBillValues.prescriptionDetails)
+        const numericDays = Number(days)
+        const safeDays =
+          Number.isFinite(numericDays) && numericDays > 0 ? numericDays : 1
+        const multiple =
+          getMultipleForQuatityCalculation(
+            lineBillValues.prescriptionDetails,
+          ) || 1
+        lineBillValues.prescriptionDays = safeDays
+        lineBillValues.prescribedQuantity = safeDays * multiple
       }
       return lineBillValues
     })
@@ -444,12 +465,13 @@ function SpousePrescription({
     let tempLineBillValues = copyOfDefaultLineBillValues?.[
       billTypeIdPrescription
     ]?.map((lineBillValues, index) => {
-      console.log(lineBillValues, medIntake)
       if (index === prescriptionRowIndex) {
+        const currentDays = Number(lineBillValues.prescriptionDays)
+        const safeDays =
+          Number.isFinite(currentDays) && currentDays > 0 ? currentDays : 1
+        const multiple = getMultipleForQuatityCalculation(medIntake) || 1
         lineBillValues.prescriptionDetails = medIntake
-        lineBillValues.prescribedQuantity =
-          lineBillValues.prescriptionDays *
-          getMultipleForQuatityCalculation(medIntake)
+        lineBillValues.prescribedQuantity = safeDays * multiple
       }
       return lineBillValues
     })

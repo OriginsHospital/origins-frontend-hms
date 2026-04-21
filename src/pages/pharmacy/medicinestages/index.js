@@ -1008,6 +1008,8 @@ function RenderAccordianDetails({
   //   },
   // })
   const reportRef = useRef(null)
+  const invoiceModalId =
+    header?.invoiceOrderId || header?.invoiceDbId || header?.appointmentId
   const generateReport = useMutation({
     mutationFn: async (payload) => {
       const res = await Generate_Invoice(user.accessToken, payload)
@@ -1018,12 +1020,14 @@ function RenderAccordianDetails({
   })
 
   const handleInvoicePrint = async () => {
+    const invoiceDbId = Number(header?.invoiceDbId)
     await generateReport.mutate({
       appointmentId: header.appointmentId,
       productType: 'PHARMACY', // same values used in tranasction api
       type: header.type, // Consultation or Treatment
+      ...(Number.isFinite(invoiceDbId) ? { id: invoiceDbId } : {}),
     })
-    dispatch(openModal(header?.appointmentId + 'invoice'))
+    dispatch(openModal(invoiceModalId + 'invoice'))
   }
 
   const Print = async () => {
@@ -1376,11 +1380,11 @@ function RenderAccordianDetails({
       <Modal
         // uniqueKey={'invoice'}
         key="invoice"
-        uniqueKey={header?.appointmentId + 'invoice'}
+        uniqueKey={invoiceModalId + 'invoice'}
         maxWidth={'md'}
         closeOnOutsideClick={false}
         onOutsideClick={() => {
-          dispatch(closeModal(header?.appointmentId + 'invoice'))
+          dispatch(closeModal(invoiceModalId + 'invoice'))
         }}
       >
         <div className="relative flex justify-end">
@@ -1393,9 +1397,7 @@ function RenderAccordianDetails({
             <PrintRounded color="white" />
           </Button>
           <IconButton
-            onClick={() =>
-              dispatch(closeModal(header?.appointmentId + 'invoice'))
-            }
+            onClick={() => dispatch(closeModal(invoiceModalId + 'invoice'))}
           >
             <Close />
           </IconButton>
@@ -2479,7 +2481,7 @@ function RenderAccordianComponent({
           [key]: {
             ...patient[key],
             itemDetails: patient[key].itemDetails.filter((item) =>
-              isSpouse ? item.isSpouse === 1 : item.isSpouse === 0,
+              isSpouse ? item.isSpouse === 1 : item.isSpouse !== 1,
             ),
           },
         }
@@ -2526,6 +2528,7 @@ function RenderAccordianComponent({
             patientItems.map((patient) => {
               const key = Object.keys(patient)[0]
               const appointmentID = patient[key].header?.appointmentId
+              const groupId = key
               const photo = patient[key].header?.photoPath
               const hasActivePackage = hasActivePackageIndicator(
                 patient[key].header,
@@ -2534,11 +2537,9 @@ function RenderAccordianComponent({
               return (
                 <Accordion
                   key={key + column?.label + 'Accordion'}
-                  expanded={appointmentID + column?.label === expandedId}
+                  expanded={groupId + column?.label === expandedId}
                   onChange={(e, isExpanded) => {
-                    setClickeId(
-                      isExpanded ? appointmentID + column?.label : null,
-                    )
+                    setClickeId(isExpanded ? groupId + column?.label : null)
                   }}
                 >
                   <AccordionSummary
@@ -2591,7 +2592,7 @@ function RenderAccordianComponent({
                     {patient &&
                       patient[key] &&
                       patient[key].itemDetails.length != 0 &&
-                      appointmentID + column?.label === expandedId && (
+                      groupId + column?.label === expandedId && (
                         <RenderAccordianDetails
                           type={patient[key].header?.type}
                           itemDetails={patient[key].itemDetails}
@@ -2615,6 +2616,7 @@ function RenderAccordianComponent({
           spouseItems.map((patient) => {
             const key = Object.keys(patient)[0]
             const appointmentID = patient[key].header?.appointmentId
+            const groupId = key
             const photo = patient[key].header?.photoPath
             const hasActivePackage = hasActivePackageIndicator(
               patient[key].header,
@@ -2623,9 +2625,9 @@ function RenderAccordianComponent({
             return (
               <Accordion
                 key={key + column?.label + 'Accordion'}
-                expanded={appointmentID + column?.label === expandedId}
+                expanded={groupId + column?.label === expandedId}
                 onChange={(e, isExpanded) => {
-                  setClickeId(isExpanded ? appointmentID + column?.label : null)
+                  setClickeId(isExpanded ? groupId + column?.label : null)
                 }}
               >
                 <AccordionSummary
@@ -2678,7 +2680,7 @@ function RenderAccordianComponent({
                   {patient &&
                     patient[key] &&
                     patient[key].itemDetails.length != 0 &&
-                    appointmentID + column?.label === expandedId && (
+                    groupId + column?.label === expandedId && (
                       <RenderAccordianDetails
                         type={patient[key].header?.type}
                         itemDetails={patient[key].itemDetails}
@@ -2770,26 +2772,52 @@ function Index() {
         patientHeader?.itemDetails?.forEach((itemDetails) => {
           const stage = itemDetails?.itemStage
           const appointmentId = patientHeader?.appointmentId
+          const orderGroupKey =
+            stage === 'PAID'
+              ? itemDetails?.orderDbId ||
+                itemDetails?.orderId ||
+                `legacy-${appointmentId}`
+              : 'NA'
+          const groupKey =
+            stage === 'PAID'
+              ? `${appointmentId}-${orderGroupKey}`
+              : `${appointmentId}`
 
           if (!obj[stage]) {
             obj[stage] = []
           }
 
           const existingPatientIndex = obj[stage].findIndex(
-            (item) => item[appointmentId],
+            (item) => item[groupKey],
           )
 
           if (existingPatientIndex !== -1) {
             // Add to existing patient's items
-            obj[stage][existingPatientIndex][appointmentId].itemDetails.push(
+            obj[stage][existingPatientIndex][groupKey].itemDetails.push(
               itemDetails,
             )
+            if (stage === 'PAID') {
+              obj[stage][existingPatientIndex][groupKey].header = {
+                ...obj[stage][existingPatientIndex][groupKey].header,
+                invoiceOrderId:
+                  obj[stage][existingPatientIndex][groupKey].header
+                    ?.invoiceOrderId || itemDetails?.orderId,
+                invoiceDbId:
+                  obj[stage][existingPatientIndex][groupKey].header
+                    ?.invoiceDbId || itemDetails?.orderDbId,
+              }
+            }
           } else {
             // Create new patient entry
             const { itemDetails: _, ...headerInfo } = patientHeader
             obj[stage].push({
-              [appointmentId]: {
-                header: headerInfo,
+              [groupKey]: {
+                header: {
+                  ...headerInfo,
+                  invoiceOrderId:
+                    stage === 'PAID' ? itemDetails?.orderId : null,
+                  invoiceDbId: stage === 'PAID' ? itemDetails?.orderDbId : null,
+                },
                 itemDetails: [itemDetails],
               },
             })

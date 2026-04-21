@@ -52,6 +52,35 @@ export default function AppoinmentForm({
         appointmentId !== '',
     ),
   })
+  const appointmentReasonOptions = React.useMemo(() => {
+    const reasons = appointmentReasons ?? []
+    const hasOthers = reasons.some((reason) =>
+      reason?.name?.toString().trim().toLowerCase().includes('other'),
+    )
+    if (hasOthers) {
+      return reasons
+    }
+    return [
+      ...reasons,
+      {
+        id: null,
+        name: 'Others',
+        appointmentCharges: 0,
+        isSpouse: 0,
+      },
+    ]
+  }, [appointmentReasons])
+  const selectedAppointmentReason = appointmentReasonOptions.find(
+    (reason) => reason.id === appointmentForm?.appointmentReasonId,
+  )
+  const isOtherAppointmentReason =
+    appointmentForm?.appointmentReasonIsOther ||
+    (selectedAppointmentReason?.name
+      ?.toString()
+      .trim()
+      .toLowerCase()
+      .includes('other') ??
+      false)
 
   return (
     <div className="flex flex-col gap-5">
@@ -128,7 +157,7 @@ export default function AppoinmentForm({
         </Select>
       </FormControl>
       <Autocomplete
-        options={appointmentReasons ?? []}
+        options={appointmentReasonOptions}
         getOptionLabel={(option) =>
           option.name +
           ' ( Rs.' +
@@ -137,10 +166,15 @@ export default function AppoinmentForm({
           (option.isSpouse === 1 ? ' - Male' : '')
         }
         onChange={(e, v) => {
-          // console.log('on change', v.id, appointmentForm)
+          const isOtherReason =
+            v?.name?.toString().trim().toLowerCase().includes('other') ?? false
           setAppointmentForm({
             ...appointmentForm,
             appointmentReasonId: v?.id,
+            appointmentReasonIsOther: isOtherReason,
+            appointmentReasonComment: isOtherReason
+              ? appointmentForm?.appointmentReasonComment || ''
+              : '',
           })
         }}
         name="appointmentReasonId"
@@ -152,6 +186,19 @@ export default function AppoinmentForm({
           />
         )}
       />
+      {isOtherAppointmentReason && (
+        <TextField
+          fullWidth
+          multiline
+          minRows={3}
+          label="Describe Reason"
+          name="appointmentReasonComment"
+          value={appointmentForm?.appointmentReasonComment || ''}
+          onChange={handleChangeForm}
+          required
+          placeholder="Please provide the specific reason"
+        />
+      )}
       <Button onClick={handleBookAppointment} variant="outlined">
         Book Appointment
       </Button>

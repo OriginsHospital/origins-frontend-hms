@@ -181,6 +181,25 @@ const JoditEditor = dynamic(() => import('jodit-react'), {
   ssr: false,
 })
 
+const RESTRICTED_PATIENT_LAB_TESTS = [
+  'gene andro',
+  'y chromosome micro deletion',
+  'y-chromosome microdeletion test',
+]
+
+const normalizeLabTestName = (testName = '') =>
+  testName
+    .toLowerCase()
+    .replace(/[-\s]+/g, ' ')
+    .trim()
+
+const isRestrictedPatientLabTest = (testName = '') => {
+  const normalizedName = normalizeLabTestName(testName)
+  return RESTRICTED_PATIENT_LAB_TESTS.some((restrictedTest) =>
+    normalizedName.includes(normalizeLabTestName(restrictedTest)),
+  )
+}
+
 function PatientPrescription({
   allBillTypeValues,
   type,
@@ -233,6 +252,16 @@ function PatientPrescription({
         queryClient.invalidateQueries({
           queryKey: ['medicationOptionsFollicular'],
         })
+        queryClient.invalidateQueries({
+          queryKey: ['getLineBills', appointmentId],
+        })
+        queryClient.invalidateQueries({
+          queryKey: [
+            'lineBillsAndNotesForCurrentAppointment',
+            type,
+            appointmentId,
+          ],
+        })
         toast.success('Saved Successfully', toastconfig)
       } else {
         console.log(res)
@@ -253,12 +282,17 @@ function PatientPrescription({
         createType: type,
         appointmentId: appointmentId,
         notes: notesValue,
+        isSpouse: 0,
         lineBillEntries: DBFormatData,
       })
     }
   }
   function ConvertDataToDBFormat() {
     let billTypeStruct = []
+    const toSafePositiveNumber = (value, fallback = 1) => {
+      const parsed = Number(value)
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+    }
     if (defaultLineBillValues) {
       const SelectedTypeIdArray = Object.keys(defaultLineBillValues)
       if (SelectedTypeIdArray.length != 0) {
@@ -271,6 +305,18 @@ function PatientPrescription({
             ).map(({ status, ...item }) => ({
               ...item,
               amount: Number(item.amount),
+              ...(Number(data) === 3
+                ? {
+                    prescriptionDays: toSafePositiveNumber(
+                      item.prescriptionDays,
+                      1,
+                    ),
+                    prescribedQuantity: toSafePositiveNumber(
+                      item.prescribedQuantity,
+                      1,
+                    ),
+                  }
+                : {}),
             })) // Destructure to remove status; coerce amount for API (Joi number)
 
             if (billTypeValues.length > 0) {
@@ -315,56 +361,56 @@ function PatientPrescription({
           if (medicineInPharmacy) {
             // Check if medicine already exists in the prescription (both paid and unpaid)
             const existingMedicineIndex = existingAllItems.findIndex(
-              (item) => item.id === medicineInPharmacy.id,
+              (item) =>
+                item.id === medicineInPharmacy.id && item.status !== 'PAID',
             )
 
             if (existingMedicineIndex >= 0) {
-              // Medicine already exists - update quantity if it's unpaid
+              // Medicine already exists as unpaid - update quantity
               const existingMedicine = existingAllItems[existingMedicineIndex]
 
-              // Only update if it's not paid (can't modify paid items)
-              if (existingMedicine.status !== 'PAID') {
-                const existingBillTypeValuesIndex = billTypeValues.findIndex(
-                  (item) => item.id === medicineInPharmacy.id,
+              const existingBillTypeValuesIndex = billTypeValues.findIndex(
+                (item) =>
+                  item.id === medicineInPharmacy.id && item.status !== 'PAID',
+              )
+
+              if (existingBillTypeValuesIndex >= 0) {
+                // Update quantity by adding the kit quantity
+                billTypeValues[existingBillTypeValuesIndex].prescribedQuantity =
+                  (billTypeValues[existingBillTypeValuesIndex]
+                    .prescribedQuantity || 0) + kitMedicine.quantity
+              } else {
+                // Medicine exists but not in current billTypeValues (shouldn't happen, but handle it)
+                const infoObject = defaultLineBillValues['3']?.find(
+                  (values) =>
+                    values.id === medicineInPharmacy.id &&
+                    values.status !== 'PAID',
                 )
 
-                if (existingBillTypeValuesIndex >= 0) {
-                  // Update quantity by adding the kit quantity
-                  billTypeValues[
-                    existingBillTypeValuesIndex
-                  ].prescribedQuantity =
-                    (billTypeValues[existingBillTypeValuesIndex]
-                      .prescribedQuantity || 0) + kitMedicine.quantity
-                } else {
-                  // Medicine exists but not in current billTypeValues (shouldn't happen, but handle it)
-                  const infoObject = defaultLineBillValues['3']?.find(
-                    (values) => values.id === medicineInPharmacy.id,
-                  )
-
-                  billTypeValues.push({
-                    id: medicineInPharmacy.id,
-                    name: medicineInPharmacy.name,
-                    amount: parseInt(medicineInPharmacy.amount, 10),
-                    prescribedQuantity:
-                      (existingMedicine.prescribedQuantity || 0) +
-                      kitMedicine.quantity,
-                    prescriptionDetails:
-                      infoObject?.prescriptionDetails ??
-                      existingMedicine.prescriptionDetails ??
-                      '',
-                    prescriptionDays:
-                      infoObject?.prescriptionDays ??
-                      existingMedicine.prescriptionDays ??
-                      1,
-                    status: 'UNPAID',
-                  })
-                }
+                billTypeValues.push({
+                  id: medicineInPharmacy.id,
+                  name: medicineInPharmacy.name,
+                  amount: parseInt(medicineInPharmacy.amount, 10),
+                  prescribedQuantity:
+                    (existingMedicine.prescribedQuantity || 0) +
+                    kitMedicine.quantity,
+                  prescriptionDetails:
+                    infoObject?.prescriptionDetails ??
+                    existingMedicine.prescriptionDetails ??
+                    '',
+                  prescriptionDays:
+                    infoObject?.prescriptionDays ??
+                    existingMedicine.prescriptionDays ??
+                    1,
+                  status: 'UNPAID',
+                })
               }
-              // If medicine is paid, skip it (can't modify paid items)
             } else {
               // Add new medicine with predefined quantity
               const infoObject = defaultLineBillValues['3']?.find(
-                (values) => values.id === medicineInPharmacy.id,
+                (values) =>
+                  values.id === medicineInPharmacy.id &&
+                  values.status !== 'PAID',
               )
 
               billTypeValues.push({
@@ -415,48 +461,53 @@ function PatientPrescription({
 
         // Continue with remaining selected items (non-kit items selected along with kits)
         filteredOptions?.forEach((element) => {
-          if (!currentPaidItems.some((paid) => paid.id === element.value)) {
-            const BillTypeValuesArray = allBillTypeValues[name]
-            const BillTYpeValueObject = BillTypeValuesArray.find((values) => {
-              return values.id === element.value
+          const BillTypeValuesArray = allBillTypeValues[name]
+          const BillTYpeValueObject = BillTypeValuesArray.find((values) => {
+            return values.id === element.value
+          })
+
+          // Check if unpaid medicine is already added (from kit or previous selection)
+          const alreadyAdded = billTypeValues.some(
+            (item) => item.id === element.value && item.status !== 'PAID',
+          )
+
+          if (!alreadyAdded) {
+            const infoObject = defaultLineBillValues['3']?.find((values) => {
+              return (
+                values.id === BillTYpeValueObject.id && values.status !== 'PAID'
+              )
             })
 
-            // Check if medicine is already added (from kit or previous selection)
-            const alreadyAdded = billTypeValues.some(
-              (item) => item.id === element.value,
-            )
-
-            if (!alreadyAdded) {
-              const infoObject = defaultLineBillValues['3']?.find((values) => {
-                return values.id === BillTYpeValueObject.id
-              })
-
-              billTypeValues.push({
-                id: element.value,
-                name: element.label,
-                amount: parseInt(BillTYpeValueObject.amount, 10),
-                prescribedQuantity: infoObject?.prescribedQuantity ?? 1,
-                prescriptionDetails: infoObject?.prescriptionDetails ?? '',
-                prescriptionDays: infoObject?.prescriptionDays ?? 1,
-                status: 'UNPAID',
-              })
-            }
+            billTypeValues.push({
+              id: element.value,
+              name: element.label,
+              amount: parseInt(BillTYpeValueObject.amount, 10),
+              prescribedQuantity: infoObject?.prescribedQuantity ?? 1,
+              prescriptionDetails: infoObject?.prescriptionDetails ?? '',
+              prescriptionDays: infoObject?.prescriptionDays ?? 1,
+              status: 'UNPAID',
+            })
           }
         })
       } else {
         // Normal flow for non-kit selections
         selectedOptions?.forEach((element) => {
-          // Skip if it's already in paid items
-          if (!currentPaidItems.some((paid) => paid.id === element.value)) {
-            const BillTypeValuesArray = allBillTypeValues[name]
-            const BillTYpeValueObject = BillTypeValuesArray.find((values) => {
-              return values.id === element.value
-            })
+          const BillTypeValuesArray = allBillTypeValues[name]
+          const BillTYpeValueObject = BillTypeValuesArray.find((values) => {
+            return values.id === element.value
+          })
 
-            const infoObject = defaultLineBillValues['3']?.find((values) => {
-              return values.id === BillTYpeValueObject.id
-            })
+          const infoObject = defaultLineBillValues['3']?.find((values) => {
+            return (
+              values.id === BillTYpeValueObject.id && values.status !== 'PAID'
+            )
+          })
 
+          // Keep one unpaid row selected; paid row is shown separately.
+          const hasUnpaidRow = billTypeValues.some(
+            (item) => item.id === element.value && item.status !== 'PAID',
+          )
+          if (!hasUnpaidRow) {
             billTypeValues.push({
               id: element.value,
               name: element.label,
@@ -538,10 +589,15 @@ function PatientPrescription({
       billTypeIdPrescription
     ]?.map((lineBillValues, index) => {
       if (index === prescriptionRowIndex) {
-        lineBillValues.prescriptionDays = days
-        lineBillValues.prescribedQuantity =
-          days *
-          getMultipleForQuatityCalculation(lineBillValues.prescriptionDetails)
+        const numericDays = Number(days)
+        const safeDays =
+          Number.isFinite(numericDays) && numericDays > 0 ? numericDays : 1
+        const multiple =
+          getMultipleForQuatityCalculation(
+            lineBillValues.prescriptionDetails,
+          ) || 1
+        lineBillValues.prescriptionDays = safeDays
+        lineBillValues.prescribedQuantity = safeDays * multiple
       }
       return lineBillValues
     })
@@ -559,10 +615,12 @@ function PatientPrescription({
       billTypeIdPrescription
     ]?.map((lineBillValues, index) => {
       if (index === prescriptionRowIndex) {
+        const currentDays = Number(lineBillValues.prescriptionDays)
+        const safeDays =
+          Number.isFinite(currentDays) && currentDays > 0 ? currentDays : 1
+        const multiple = getMultipleForQuatityCalculation(medIntake) || 1
         lineBillValues.prescriptionDetails = medIntake
-        lineBillValues.prescribedQuantity =
-          lineBillValues.prescriptionDays *
-          getMultipleForQuatityCalculation(medIntake)
+        lineBillValues.prescribedQuantity = safeDays * multiple
       }
       return lineBillValues
     })
@@ -603,7 +661,13 @@ function PatientPrescription({
                 isSpouse,
               }),
             )
-            .filter((item) => item.isSpouse === 0)
+            .filter((item) => {
+              const isPatientItem = item.isSpouse === 0
+              const isLabTestBillType = data?.billType?.name === 'Lab Test'
+              const isRestrictedLabTest =
+                isLabTestBillType && isRestrictedPatientLabTest(item.name)
+              return isPatientItem && !isRestrictedLabTest
+            })
           tempdefaultData[data.billType.id] = updatedArray
         },
       )
@@ -659,6 +723,13 @@ function PatientPrescription({
               const billTypeId = billTypeData.billType.id
               const updatedArray = billTypeData.billTypeValues
                 .filter((item) => !item.isSpouse) // Filter out spouse items
+                .filter((item) => {
+                  const isLabTestBillType =
+                    billTypeData?.billType?.name === 'Lab Test'
+                  return !(
+                    isLabTestBillType && isRestrictedPatientLabTest(item.name)
+                  )
+                })
                 .map((item) => ({
                   id: item.id,
                   name: item.name,
@@ -786,6 +857,12 @@ function PatientPrescription({
                   value: data.id,
                   label: data.name,
                 })) ?? []
+
+              if (billType.name === 'Lab Test') {
+                selectOptions = selectOptions.filter(
+                  (option) => !isRestrictedPatientLabTest(option.label),
+                )
+              }
 
               // Add all medicine kit options for Pharmacy
               if (billType.name === 'Pharmacy') {

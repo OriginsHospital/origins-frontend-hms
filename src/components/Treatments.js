@@ -1,4 +1,5 @@
 import {
+  createOtherAppointmentReason,
   createConsultationOrTreatment,
   getAppointmentsById,
   getDoctorsForAvailabilityTreatment,
@@ -29,6 +30,8 @@ import { SideDrawer } from './SideDrawer'
 import { FaPlusCircle } from 'react-icons/fa'
 import { closeSideDrawer, openSideDrawer } from '@/redux/sideDrawerSlice'
 import dayjs from 'dayjs'
+import { toast } from 'react-toastify'
+import { toastconfig } from '@/utils/toastconfig'
 // import VerticalTabs from './VerticalConsultationTabs';
 
 export default function Treatments({
@@ -77,16 +80,16 @@ export default function Treatments({
       type: '', // Intial Consultation , FollowUp Consultation , Treatment Type1
     })
   }, [selectedVisit])
-  const userDetails = useSelector(state => state.user)
-  const dropdowns = useSelector(store => store.dropdowns)
+  const userDetails = useSelector((state) => state.user)
+  const dropdowns = useSelector((store) => store.dropdowns)
 
-  const handleNewTreatment = e => {
+  const handleNewTreatment = (e) => {
     console.log(e.target.name)
     setViewForm(true)
     dispatch(openModal('treatment'))
   }
   const createTreatment = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const res = await createConsultationOrTreatment(
         userDetails.accessToken,
         payload,
@@ -108,11 +111,11 @@ export default function Treatments({
       )
     },
   })
-  const handleForm = e => {
+  const handleForm = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value })
     console.log(form)
   }
-  const handleChangeForm = event => {
+  const handleChangeForm = (event) => {
     console.log(appointmentForm)
     setAppointmentForm({
       ...appointmentForm,
@@ -134,7 +137,7 @@ export default function Treatments({
     enabled: !!selectedTab?.id,
   })
   const bookingAppointment = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const res = await bookTreatmentAppointment(
         userDetails.accessToken,
         payload,
@@ -148,14 +151,54 @@ export default function Treatments({
       }
     },
   })
-  const handleBookAppointment = () => {
+  const handleBookAppointment = async () => {
+    let appointmentReasonId = appointmentForm?.appointmentReasonId
+    if (appointmentForm?.appointmentReasonIsOther) {
+      const customReason = appointmentForm?.appointmentReasonComment?.trim()
+      if (!customReason) {
+        toast.error('Please describe the reason for Others', toastconfig)
+        return
+      }
+      const patientId =
+        selectedVisit?.patientId ||
+        selectedVisit?.patientID ||
+        selectedVisit?.patient?.id
+      if (!patientId) {
+        toast.error(
+          'Patient details are missing for this appointment',
+          toastconfig,
+        )
+        return
+      }
+      try {
+        const response = await createOtherAppointmentReason(
+          userDetails?.accessToken,
+          {
+            appointmentReasonName: customReason,
+            patientId,
+            isSpouse: 0,
+          },
+        )
+        if (response?.status !== 200 || !response?.data?.appointmentReasonId) {
+          toast.error(
+            response?.message || 'Could not save the custom appointment reason',
+            toastconfig,
+          )
+          return
+        }
+        appointmentReasonId = response.data.appointmentReasonId
+      } catch (error) {
+        toast.error('Could not save the custom appointment reason', toastconfig)
+        return
+      }
+    }
     const payload = {
       date: appointmentForm?.date,
       doctorId: appointmentForm?.doctorId,
       treatmentCycleId: selectedTab?.id,
       timeStart: appointmentForm?.timeslot?.split('-')[0].trim(),
       timeEnd: appointmentForm?.timeslot?.split('-')[1].trim(),
-      appointmentReasonId: appointmentForm?.appointmentReasonId,
+      appointmentReasonId,
       branchId: appointmentForm?.branchId,
     }
     console.log(payload)
@@ -193,7 +236,7 @@ export default function Treatments({
           <Button
             className="flex gap-2 items-center"
             name={clickedConsultationOrTreatmentId}
-            onClick={e => {
+            onClick={(e) => {
               dispatch(openSideDrawer(`new_appoitments_drawer`))
 
               setSelectedTab({

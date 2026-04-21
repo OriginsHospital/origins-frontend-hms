@@ -1,5 +1,6 @@
 import {
   bookConsultationAppointment,
+  createOtherAppointmentReason,
   createConsultationOrTreatment,
   getAppointmentsById,
   getAvailableConsultationSlots,
@@ -30,6 +31,8 @@ import { SideDrawer } from './SideDrawer'
 import { CalendarIcon } from '@mui/x-date-pickers'
 import { FaPlusCircle } from 'react-icons/fa'
 import dayjs from 'dayjs'
+import { toast } from 'react-toastify'
+import { toastconfig } from '@/utils/toastconfig'
 
 export default function Consultations({
   Consultations,
@@ -45,16 +48,16 @@ export default function Consultations({
     type: '', // Intial Consultation , FollowUp Consultation , Treatment Type1
   })
   const [appointmentForm, setAppointmentForm] = useState({})
-  const userDetails = useSelector(state => state.user)
-  const dropdowns = useSelector(store => store.dropdowns)
+  const userDetails = useSelector((state) => state.user)
+  const dropdowns = useSelector((store) => store.dropdowns)
   const dispatch = useDispatch()
-  const handleNewConsulation = e => {
+  const handleNewConsulation = (e) => {
     console.log(e.target.name)
     // setViewForm(true)
     dispatch(openModal('consultation'))
   }
   const createConsultation = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const res = await createConsultationOrTreatment(
         userDetails.accessToken,
         payload,
@@ -76,7 +79,7 @@ export default function Consultations({
       )
     },
   })
-  const handleForm = e => {
+  const handleForm = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value })
   }
   const handleCreate = () => {
@@ -90,7 +93,7 @@ export default function Consultations({
       alert('error creating')
     }
   }
-  const handleChangeForm = event => {
+  const handleChangeForm = (event) => {
     setAppointmentForm({
       ...appointmentForm,
       [event.target.name]: event.target.value,
@@ -133,7 +136,7 @@ export default function Consultations({
   const queryClient = useQueryClient()
 
   const bookingAppointment = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const res = await bookConsultationAppointment(
         userDetails.accessToken,
         payload,
@@ -147,14 +150,54 @@ export default function Consultations({
       }
     },
   })
-  const handleBookAppointment = () => {
+  const handleBookAppointment = async () => {
+    let appointmentReasonId = appointmentForm?.appointmentReasonId
+    if (appointmentForm?.appointmentReasonIsOther) {
+      const customReason = appointmentForm?.appointmentReasonComment?.trim()
+      if (!customReason) {
+        toast.error('Please describe the reason for Others', toastconfig)
+        return
+      }
+      const patientId =
+        selectedVisit?.patientId ||
+        selectedVisit?.patientID ||
+        selectedVisit?.patient?.id
+      if (!patientId) {
+        toast.error(
+          'Patient details are missing for this appointment',
+          toastconfig,
+        )
+        return
+      }
+      try {
+        const response = await createOtherAppointmentReason(
+          userDetails?.accessToken,
+          {
+            appointmentReasonName: customReason,
+            patientId,
+            isSpouse: 0,
+          },
+        )
+        if (response?.status !== 200 || !response?.data?.appointmentReasonId) {
+          toast.error(
+            response?.message || 'Could not save the custom appointment reason',
+            toastconfig,
+          )
+          return
+        }
+        appointmentReasonId = response.data.appointmentReasonId
+      } catch (error) {
+        toast.error('Could not save the custom appointment reason', toastconfig)
+        return
+      }
+    }
     const payload = {
       date: appointmentForm?.date,
       doctorId: appointmentForm?.doctorId,
       consultationId: selectedTab?.id,
       timeStart: appointmentForm?.timeslot?.split('-')[0].trim(),
       timeEnd: appointmentForm?.timeslot?.split('-')[1].trim(),
-      appointmentReasonId: appointmentForm?.appointmentReasonId,
+      appointmentReasonId,
       branchId: appointmentForm?.branchId,
     }
     console.log(payload)
@@ -196,7 +239,7 @@ export default function Consultations({
               <Button
                 className="flex gap-2 items-center capitalize text-sm"
                 name={clickedConsultationOrTreatmentId}
-                onClick={e => {
+                onClick={(e) => {
                   dispatch(openSideDrawer(`new_appoitments_drawer`))
 
                   setSelectedTab({
@@ -218,7 +261,7 @@ export default function Consultations({
             <Button
               className="flex gap-2 items-center capitalize text-sm"
               name={clickedConsultationOrTreatmentId}
-              onClick={e => {
+              onClick={(e) => {
                 dispatch(openSideDrawer(`new_appoitments_drawer`))
 
                 setSelectedTab({
@@ -270,7 +313,7 @@ export default function Consultations({
           <Button
             variant="contained"
             className="text-white"
-            onClick={e => handleNewConsulation(e)}
+            onClick={(e) => handleNewConsulation(e)}
             name="Consultation"
           >
             New Consultaion

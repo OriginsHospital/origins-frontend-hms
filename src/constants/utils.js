@@ -1,6 +1,6 @@
-export const getMultipleForQuatityCalculation = intake => {
+export const getMultipleForQuatityCalculation = (intake) => {
   if (intake?.startsWith('OTHER_')) {
-    return parseInt(intake.split('_')[1]) || null
+    return parseInt(intake.split('_')[1], 10) || 1
   }
 
   switch (intake) {
@@ -29,4 +29,6 @@ export const getMultipleForQuatityCalculation = intake => {
     case 'HS':
       return 1
   }
+
+  return 1
 }
