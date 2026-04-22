@@ -528,10 +528,61 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
   const user = useSelector((store) => store.user)
   const modalState = useSelector((store) => store.modal)
   const queryClient = useQueryClient()
+  const userRoleName = user?.roleDetails?.name?.trim()?.toLowerCase() || ''
+  const isReceptionistUser =
+    user?.roleDetails?.id === 6 || userRoleName === 'receptionist'
   const [previewContent, setPreviewContent] = useState(null)
   const [anchorEl, setAnchorEl] = useState(null)
   const open = Boolean(anchorEl)
   const [treatmentPendings, setTreatmentPendings] = useState(null)
+  const [selectedPendingHead, setSelectedPendingHead] = useState(null)
+  const totalPendingAmount = useMemo(() => {
+    return (patientDetails?.pendingAmountDetails || []).reduce((acc, item) => {
+      const pendingAmount = Number(item?.pending_amount) || 0
+      return acc + pendingAmount
+    }, 0)
+  }, [patientDetails?.pendingAmountDetails])
+  const hasPendingAmount = totalPendingAmount > 0
+  const formattedPendingAmount = useMemo(
+    () =>
+      new Intl.NumberFormat('en-IN', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      }).format(totalPendingAmount),
+    [totalPendingAmount],
+  )
+  const pendingAmountBreakdown = useMemo(() => {
+    return (patientDetails?.pendingAmountDetails || [])
+      .filter((item) => (Number(item?.pending_amount) || 0) > 0)
+      .map((item, index) => {
+        const rawLabel =
+          item?.displayName ||
+          item?.productTypeEnum ||
+          item?.productType ||
+          item?.dateColumn ||
+          `Item ${index + 1}`
+
+        const normalizedLabel = String(rawLabel)
+          .replace(/_/g, ' ')
+          .toLowerCase()
+          .replace(/\b\w/g, (char) => char.toUpperCase())
+
+        return {
+          selectionKey:
+            item?.productTypeEnum || item?.productType || item?.displayName,
+          label: normalizedLabel,
+          amount: Number(item?.pending_amount) || 0,
+        }
+      })
+  }, [patientDetails?.pendingAmountDetails])
+  const handlePendingHeadClick = (selectionKey) => {
+    setSelectedPendingHead(selectionKey || null)
+    dispatch(
+      openModal(
+        'pendingAmount' + patientDetails?.appointmentId + patientDetails?.type,
+      ),
+    )
+  }
   const handleStatusClick = (event) => {
     setAnchorEl(event.currentTarget) // Just set the anchor element
   }
@@ -1026,10 +1077,56 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
                   {patientDetails?.appointmentReason}
                 </span>
               </Tooltip>
+              {stage === 'Scan' && hasPendingAmount && (
+                <Tooltip
+                  title={
+                    <div className="py-1">
+                      <div className="font-semibold">
+                        Total Pending: ₹{formattedPendingAmount}
+                      </div>
+                      <div className="mt-1 text-[11px]">
+                        Only Admin can move this patient to Doctor stage.
+                      </div>
+                      {pendingAmountBreakdown.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          {pendingAmountBreakdown.map((item, index) => (
+                            <div
+                              key={`${patientDetails?.appointmentId}-${item.label}-${index}`}
+                              className="flex items-center justify-between gap-4 text-[11px]"
+                            >
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handlePendingHeadClick(item.selectionKey)
+                                }
+                                className="flex w-full items-center justify-between gap-4 text-left hover:underline"
+                              >
+                                <span>{item.label}</span>
+                                <span className="font-semibold">
+                                  ₹
+                                  {new Intl.NumberFormat('en-IN', {
+                                    minimumFractionDigits: 0,
+                                    maximumFractionDigits: 2,
+                                  }).format(item.amount)}
+                                </span>
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  }
+                >
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+                    <PaymentOutlined className="!text-[14px]" />₹
+                    {formattedPendingAmount}
+                  </span>
+                </Tooltip>
+              )}
               {/* <span>•</span> */}
             </div>
           </div>
-          {stage === 'Booked' && (
+          {stage === 'Booked' && !isReceptionistUser && (
             <Tooltip title="Edit Appointment">
               <IconButton
                 size="small"
@@ -1230,15 +1327,7 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
                 size="small"
                 className="flex-1 capitalize"
                 startIcon={<PaymentsOutlined />}
-                onClick={() =>
-                  dispatch(
-                    openModal(
-                      'pendingAmount' +
-                        patientDetails?.appointmentId +
-                        patientDetails?.type,
-                    ),
-                  )
-                }
+                onClick={() => handlePendingHeadClick(null)}
               >
                 Pay
               </Button>
@@ -1298,6 +1387,7 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
           patientDetails={patientDetails}
           treatmentPendings={treatmentPendings}
           allPaymentDetails={patientDetails?.pendingAmountDetails}
+          initialSelectedProductType={selectedPendingHead}
         />
       </Modal>
       <Modal
@@ -1309,14 +1399,16 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
         <NoShow patientDetails={patientDetails} />
       </Modal>
 
-      <Modal
-        maxWidth={'sm'}
-        key="editAppointment"
-        uniqueKey={'editAppointment' + patientDetails?.appointmentId}
-        closeOnOutsideClick={true}
-      >
-        <EditAppointment patientDetails={patientDetails} />
-      </Modal>
+      {!isReceptionistUser && (
+        <Modal
+          maxWidth={'sm'}
+          key="editAppointment"
+          uniqueKey={'editAppointment' + patientDetails?.appointmentId}
+          closeOnOutsideClick={true}
+        >
+          <EditAppointment patientDetails={patientDetails} />
+        </Modal>
+      )}
     </>
   )
 }

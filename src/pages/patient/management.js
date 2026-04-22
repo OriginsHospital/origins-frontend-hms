@@ -36,6 +36,7 @@ import {
   Comment as CommentIcon,
   Send as SendIcon,
   Bolt as BoltIcon,
+  Search as SearchIcon,
 } from '@mui/icons-material'
 import {
   getAllPatients,
@@ -68,12 +69,17 @@ function PatientManagement() {
   const [selectedPatient, setSelectedPatient] = useState(null)
   const [activeTab, setActiveTab] = useState(0)
   const [searchQuery, setSearchQuery] = useState('')
+  const [appliedSearchQuery, setAppliedSearchQuery] = useState('')
   const [followUpComment, setFollowUpComment] = useState('')
+
+  const handleSearch = () => {
+    setAppliedSearchQuery(searchQuery.trim())
+  }
 
   // Fetch all patients
   const { data: patientsData, isLoading: isLoadingPatients } = useQuery({
-    queryKey: ['allPatientsManagement', searchQuery],
-    queryFn: () => getAllPatients(user?.accessToken, searchQuery),
+    queryKey: ['allPatientsManagement', appliedSearchQuery],
+    queryFn: () => getAllPatients(user?.accessToken, appliedSearchQuery),
     enabled: !!user?.accessToken,
   })
 
@@ -440,12 +446,25 @@ function PatientManagement() {
 
             <Box sx={{ mb: 2 }}>
               <TextField
-                placeholder="Search patients..."
+                placeholder="Search by Patient ID / Mobile / Name / Aadhaar"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSearch()
+                  }
+                }}
                 size="small"
                 sx={{ width: 300 }}
               />
+              <Button
+                variant="contained"
+                onClick={handleSearch}
+                startIcon={<SearchIcon />}
+                sx={{ ml: 1, textTransform: 'none' }}
+              >
+                Search
+              </Button>
             </Box>
 
             {isLoadingPatients ? (

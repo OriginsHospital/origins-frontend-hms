@@ -217,6 +217,10 @@ function PatientRegistration() {
   const [buttonSearchValue, setButtonSearchValue] = useState('')
   const [selectedPatient, setSelectedPatient] = useState(null)
 
+  const handleSearch = () => {
+    setButtonSearchValue(searchValue.trim())
+  }
+
   // Check permissions for different access types
   const hasReadAccess = usePermissionCheck('allPatients', [
     ACCESS_TYPES.READ,
@@ -499,27 +503,19 @@ function PatientRegistration() {
         } */}
         <div className="px-3 py-2 flex items-center justify-center gap-5">
           <TextField
-            placeholder="Search by Spouse Name"
+            placeholder="Search by Patient ID / Mobile / Name / Aadhaar"
             className="w-[350px] md:w-[450px] lg:w-[500px] bg-white"
             type="search"
             value={searchValue}
-            onChange={(e) => {
-              // Only allow alphabets and spaces
-              const value = e.target.value.replace(/[^a-zA-Z\s]/g, '')
-              setSearchValue(value)
-            }}
+            onChange={(e) => setSearchValue(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
-                setButtonSearchValue(searchValue)
+                handleSearch()
               }
-            }}
-            inputProps={{
-              pattern: '[a-zA-Z\\s]*',
-              title: 'Only alphabets and spaces are allowed',
             }}
           />
           <Button
-            onClick={() => setButtonSearchValue(searchValue)}
+            onClick={handleSearch}
             variant="contained"
             sx={{ color: 'white' }}
             startIcon={<SearchOutlined />}

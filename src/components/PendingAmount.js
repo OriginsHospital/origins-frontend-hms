@@ -36,8 +36,9 @@ const PendingAmount = ({
   patientDetails,
   treatmentPendings,
   allPaymentDetails,
+  initialSelectedProductType,
 }) => {
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const queryClient = useQueryClient()
   const dispatch = useDispatch()
 
@@ -62,12 +63,40 @@ const PendingAmount = ({
   // Initialize payable amounts when milestones change
   useEffect(() => {
     const initialPayableAmounts = {}
-    treatmentPendings?.forEach(milestone => {
+    treatmentPendings?.forEach((milestone) => {
       initialPayableAmounts[milestone.productTypeEnum] =
         milestone.pending_amount
     })
     setPayableAmounts(initialPayableAmounts)
   }, [treatmentPendings])
+
+  useEffect(() => {
+    const normalizeValue = (value) =>
+      String(value || '')
+        .trim()
+        .toLowerCase()
+    const selectionKey = normalizeValue(initialSelectedProductType)
+
+    if (!selectionKey) {
+      setSelectedMilestones([])
+      return
+    }
+
+    const matchedMilestone = (allPaymentDetails || []).find((item) =>
+      [
+        item?.productTypeEnum,
+        item?.productType,
+        item?.displayName,
+        item?.dateColumn,
+      ].some((value) => normalizeValue(value) === selectionKey),
+    )
+
+    if (matchedMilestone) {
+      setSelectedMilestones([matchedMilestone])
+    } else {
+      setSelectedMilestones([])
+    }
+  }, [initialSelectedProductType, allPaymentDetails])
 
   // Calculate total payable amount based on selected milestones and payable amounts
   const totalPayableAmount = useMemo(() => {
@@ -82,14 +111,14 @@ const PendingAmount = ({
     // Ensure entered amount doesn't exceed pending amount
     const validatedAmount = Math.min(numValue, pendingAmount)
 
-    setPayableAmounts(prev => ({
+    setPayableAmounts((prev) => ({
       ...prev,
       [productTypeEnum]: validatedAmount,
     }))
   }
 
   // Currency formatter
-  const formatCurrency = amount => {
+  const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-IN', {
       style: 'currency',
       currency: 'INR',
@@ -102,7 +131,7 @@ const PendingAmount = ({
   useEffect(() => {
     if (!selectedCoupon || selectedMilestones.length === 0) {
       setDiscountedMilestones(
-        selectedMilestones.map(milestone => ({
+        selectedMilestones.map((milestone) => ({
           ...milestone,
           originalAmount: payableAmounts[milestone.productTypeEnum],
           discountedAmount: payableAmounts[milestone.productTypeEnum],
@@ -117,14 +146,14 @@ const PendingAmount = ({
     const totalDiscount = (totalPayableAmount * discountPercentage) / 100
 
     // Use original order from treatmentPendings for selected milestones
-    const orderedMilestones = treatmentPendings.filter(pending =>
+    const orderedMilestones = treatmentPendings.filter((pending) =>
       selectedMilestones.some(
-        m => m.productTypeEnum === pending.productTypeEnum,
+        (m) => m.productTypeEnum === pending.productTypeEnum,
       ),
     )
 
     let remainingDiscount = totalDiscount
-    const updatedMilestones = orderedMilestones.map(milestone => {
+    const updatedMilestones = orderedMilestones.map((milestone) => {
       const payableAmount = payableAmounts[milestone.productTypeEnum]
       const maxDiscountForMilestone = payableAmount
       const appliedDiscount = Math.min(
@@ -152,30 +181,32 @@ const PendingAmount = ({
   ])
 
   // Handle milestone selection
-  const handleMilestoneSelect = milestone => {
-    setSelectedMilestones(prev => {
+  const handleMilestoneSelect = (milestone) => {
+    setSelectedMilestones((prev) => {
       const isSelected = prev.some(
-        m => m.productTypeEnum === milestone.productTypeEnum,
+        (m) => m.productTypeEnum === milestone.productTypeEnum,
       )
       if (isSelected) {
-        return prev.filter(m => m.productTypeEnum !== milestone.productTypeEnum)
+        return prev.filter(
+          (m) => m.productTypeEnum !== milestone.productTypeEnum,
+        )
       } else {
         return [...prev, milestone]
       }
     })
   }
-  const generatePaymentPayload = paymentMode => {
+  const generatePaymentPayload = (paymentMode) => {
     return {
       packageDetails: null,
       isPackageExists: patientDetails.isPackageExists,
       visitId: patientDetails.visitId,
       paymentMode: paymentMode,
-      orderDetails: selectedMilestones.map(milestone => {
+      orderDetails: selectedMilestones.map((milestone) => {
         const originalAmount = payableAmounts[milestone.productTypeEnum] || 0
         const isDeferred = milestone.pending_amount > originalAmount
         const remainingPending = milestone.pending_amount - originalAmount
         const discountedItem = discountedMilestones.find(
-          m => m.productTypeEnum === milestone.productTypeEnum,
+          (m) => m.productTypeEnum === milestone.productTypeEnum,
         )
 
         return {
@@ -197,7 +228,7 @@ const PendingAmount = ({
       }),
     }
   }
-  const handlePayment = async paymentMode => {
+  const handlePayment = async (paymentMode) => {
     const payload = generatePaymentPayload(paymentMode)
     console.log(payload)
     if (paymentMode === 'CASH') {
@@ -243,7 +274,7 @@ const PendingAmount = ({
           description: 'Test Transaction',
           order_id: order.data.orderId,
           'theme.color': '#FF6C22',
-          handler: async response => {
+          handler: async (response) => {
             const order_details = {
               visitId: order.data.visitId,
               appointmentId: patientDetails.appointmentId,
@@ -274,13 +305,13 @@ const PendingAmount = ({
         const paymentObject = new window.Razorpay(options)
         paymentObject.open()
 
-        paymentObject.on('payment.failed', function(response) {
+        paymentObject.on('payment.failed', function (response) {
           console.log(response.error.code)
           console.log(response.error.description)
           console.log(response.error.source)
         })
 
-        paymentObject.on('payment.success', function(response) {
+        paymentObject.on('payment.success', function (response) {
           console.log('on success ', response)
         })
       }
@@ -351,7 +382,7 @@ const PendingAmount = ({
             onChange={(event, newValue) => {
               setSelectedMilestones(newValue)
             }}
-            getOptionLabel={option => option.displayName}
+            getOptionLabel={(option) => option.displayName}
             renderOption={(props, option) => (
               <li {...props}>
                 <div className="flex justify-between gap-5 items-center">
@@ -373,7 +404,7 @@ const PendingAmount = ({
                 </div>
                 {option.pending_amount > 0 ? (
                   selectedMilestones.some(
-                    m => m.productTypeEnum === option.productTypeEnum,
+                    (m) => m.productTypeEnum === option.productTypeEnum,
                   ) ? (
                     <CheckCircle className="text-secondary ml-auto" />
                   ) : (
@@ -384,7 +415,7 @@ const PendingAmount = ({
                 )}
               </li>
             )}
-            renderInput={params => (
+            renderInput={(params) => (
               <TextField
                 {...params}
                 variant="outlined"
@@ -432,13 +463,13 @@ const PendingAmount = ({
           <div className="space-y-2">
             {selectedMilestones.map((item, index) => {
               const isSelected = selectedMilestones.some(
-                m => m.productTypeEnum === item.productTypeEnum,
+                (m) => m.productTypeEnum === item.productTypeEnum,
               )
               const isDeferred =
                 item.pending_amount > payableAmounts[item.productTypeEnum]
 
               const discountedItem = discountedMilestones.find(
-                m => m.productTypeEnum === item.productTypeEnum,
+                (m) => m.productTypeEnum === item.productTypeEnum,
               )
               const remainingPending =
                 item.pending_amount -
@@ -451,7 +482,7 @@ const PendingAmount = ({
                   className={`flex flex-col justify-between p-3 rounded-lg border 
                       ${
                         selectedMilestones.some(
-                          m => m.productTypeEnum === item.productTypeEnum,
+                          (m) => m.productTypeEnum === item.productTypeEnum,
                         )
                           ? 'bg-primary/20'
                           : ' bg-white'
@@ -525,7 +556,7 @@ const PendingAmount = ({
                           size="small"
                           label="Payable Amount"
                           value={payableAmounts[item.productTypeEnum] || ''}
-                          onChange={e =>
+                          onChange={(e) =>
                             handlePayableAmountChange(
                               item.productTypeEnum,
                               e.target.value,
@@ -555,7 +586,7 @@ const PendingAmount = ({
                             <span className="text-green-600">
                               {formatCurrency(
                                 allPaymentDetails.find(
-                                  m =>
+                                  (m) =>
                                     m.productTypeEnum === item.productTypeEnum,
                                 )?.totalPaid || 0,
                               )}
@@ -640,12 +671,12 @@ const PendingAmount = ({
             <div className="mt-4">
               <Autocomplete
                 options={coupons || []}
-                getOptionLabel={option =>
+                getOptionLabel={(option) =>
                   `${option.couponCode} (${option.discountPercentage}% off)`
                 }
                 value={selectedCoupon}
                 onChange={(event, newValue) => setSelectedCoupon(newValue)}
-                renderInput={params => (
+                renderInput={(params) => (
                   <TextField
                     {...params}
                     label="Apply Coupon"

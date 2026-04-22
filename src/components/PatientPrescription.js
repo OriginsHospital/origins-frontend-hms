@@ -589,15 +589,21 @@ function PatientPrescription({
       billTypeIdPrescription
     ]?.map((lineBillValues, index) => {
       if (index === prescriptionRowIndex) {
-        const numericDays = Number(days)
-        const safeDays =
-          Number.isFinite(numericDays) && numericDays > 0 ? numericDays : 1
         const multiple =
           getMultipleForQuatityCalculation(
             lineBillValues.prescriptionDetails,
           ) || 1
-        lineBillValues.prescriptionDays = safeDays
-        lineBillValues.prescribedQuantity = safeDays * multiple
+        if (days === '') {
+          lineBillValues.prescriptionDays = ''
+          lineBillValues.prescribedQuantity = ''
+          return lineBillValues
+        }
+
+        const numericDays = Number(days)
+        if (Number.isFinite(numericDays) && numericDays > 0) {
+          lineBillValues.prescriptionDays = numericDays
+          lineBillValues.prescribedQuantity = numericDays * multiple
+        }
       }
       return lineBillValues
     })
@@ -616,11 +622,12 @@ function PatientPrescription({
     ]?.map((lineBillValues, index) => {
       if (index === prescriptionRowIndex) {
         const currentDays = Number(lineBillValues.prescriptionDays)
-        const safeDays =
-          Number.isFinite(currentDays) && currentDays > 0 ? currentDays : 1
+        const hasValidDays = Number.isFinite(currentDays) && currentDays > 0
         const multiple = getMultipleForQuatityCalculation(medIntake) || 1
         lineBillValues.prescriptionDetails = medIntake
-        lineBillValues.prescribedQuantity = safeDays * multiple
+        lineBillValues.prescribedQuantity = hasValidDays
+          ? currentDays * multiple
+          : ''
       }
       return lineBillValues
     })
