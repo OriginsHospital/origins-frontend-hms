@@ -515,17 +515,14 @@ function RenderAccordianDetails({
         return acc + Number(getItemPrice(obj.id))
       }, 0)
 
-      const payableAmount = Number((discountedAmount ?? totalAmount).toFixed(2))
-      const normalizedCouponCode = Number.isInteger(Number(selectedCoupon?.id))
-        ? Number(selectedCoupon.id)
-        : null
-
       // Build payment payload for order creation
       let paymentPayload = {
         totalOrderAmount: Number(totalAmount.toFixed(2)),
-        paidOrderAmount: payableAmount,
-        discountAmount: Number((totalAmount - payableAmount).toFixed(2)),
-        couponCode: normalizedCouponCode,
+        paidOrderAmount: Number((discountedAmount || 0).toFixed(2)),
+        discountAmount: Number(
+          (totalAmount - (discountedAmount || 0)).toFixed(2),
+        ),
+        couponCode: selectedCoupon?.id || null,
         orderDetails: paymentDBFormat,
         productType: 'PHARMACY',
       }
