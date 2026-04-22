@@ -44,10 +44,15 @@ function OutPatient() {
   const router = useRouter()
   const [fromDate, setFromDate] = useState(dayjs(new Date()).subtract(7, 'day'))
   const [toDate, setToDate] = useState(null)
-  const user = useSelector(store => store.user)
-  const dispatch = useDispatch()
-  const [modal, setModal] = useState('add')
-  const [formData, setFormData] = useState({
+  const user = useSelector((store) => store.user)
+  const normalizeValue = (value) => (value || '').toLowerCase().trim()
+  const normalizeName = (name) =>
+    (name || '').toLowerCase().replace(/\s+/g, ' ').trim()
+  const currentUserEmail = normalizeValue(
+    user?.email || user?.userDetails?.email,
+  )
+  const isJhansiUser = currentUserEmail === 'jhansi@gmail.com'
+  const createEmptyFormData = () => ({
     branchId: '',
     // consultantId: '',
     patientName: '',
@@ -58,9 +63,11 @@ function OutPatient() {
     anesthetistId: '',
     otStaff: '',
     // surgeons:'',
-
     embryologistId: '',
   })
+  const dispatch = useDispatch()
+  const [modal, setModal] = useState('add')
+  const [formData, setFormData] = useState(createEmptyFormData)
   const OTcolumns = [
     {
       field: 'id',
@@ -99,7 +106,7 @@ function OutPatient() {
       field: 'surgeonList',
       headerName: 'Surgeon',
       width: 150,
-      renderCell: params => (
+      renderCell: (params) => (
         <div className="flex  gap-2 ">
           {params.row.surgeonList?.map((staff, index) => (
             // <Chip label={staff.staffName} key={index} />
@@ -121,7 +128,7 @@ function OutPatient() {
       field: 'staffList',
       headerName: 'Staff List',
       width: 200,
-      renderCell: params => (
+      renderCell: (params) => (
         <div className="flex flex-wrap gap-2 ">
           {params.row.staffList.map((staff, index) => (
             <p key={staff.staffName} className="">
@@ -137,7 +144,7 @@ function OutPatient() {
       field: 'edit',
       headerName: 'Edit',
       width: 100,
-      renderCell: params => (
+      renderCell: (params) => (
         <Button
           onClick={() => {
             dispatch(openModal('addOTModal'))
@@ -166,7 +173,7 @@ function OutPatient() {
       ),
     enabled: !!fromDate,
   })
-  const dropdowns = useSelector(store => store.dropdowns)
+  const dropdowns = useSelector((store) => store.dropdowns)
   const [filteredData, setFilteredData] = useState(null)
 
   // Update URL when dates change
@@ -201,11 +208,11 @@ function OutPatient() {
   }, [])
 
   // Handle date changes
-  const handleFromDateChange = newValue => {
+  const handleFromDateChange = (newValue) => {
     setFromDate(newValue)
   }
 
-  const handleToDateChange = newValue => {
+  const handleToDateChange = (newValue) => {
     setToDate(newValue)
   }
 
@@ -216,33 +223,21 @@ function OutPatient() {
   const handleCreateOT = () => {
     console.log('create clicked')
     setModal('add')
+    setFormData(getAddModalInitialValues())
     dispatch(openModal('addOTModal'))
   }
-  const handleOTFormChange = e => {
+  const handleOTFormChange = (e) => {
     console.log('update clicked', e.target.name, e.target.value)
     setFormData({ ...formData, [e.target.name]: e.target.value })
   }
   const addNewOTMutation = useMutation({
     mutationKey: ['addOT', user?.accessToken],
-    mutationFn: async data => {
+    mutationFn: async (data) => {
       const res = await addNewOT(user?.accessToken, data)
       console.log(res)
       if (res.status == 200) {
         dispatch(closeModal('addOTModal'))
-        setFormData({
-          branchId: '',
-          // consultantId: '',
-          patientName: '',
-          procedureName: '',
-          procedureDate: dayjs(new Date()).format('YYYY-MM-DD'),
-          time: '',
-          surgeonId: '',
-          anesthetistId: '',
-          otStaff: '',
-          // surgeons:'',
-
-          embryologistId: '',
-        })
+        setFormData(createEmptyFormData())
         queryClient.invalidateQueries('getOTList')
       } else {
         console.error('Error adding OT', res.message)
@@ -251,13 +246,13 @@ function OutPatient() {
     onSuccess: () => {
       console.log('OT added successfully')
     },
-    onError: error => {
+    onError: (error) => {
       console.error('Error adding OT', error)
     },
   })
   const saveChangesOTMutation = useMutation({
     mutationKey: ['saveOtChanges', user?.accessToken],
-    mutationFn: async data => {
+    mutationFn: async (data) => {
       const res = await saveOTChanges(user?.accessToken, data)
       console.log(res)
       if (res.status == 200) {
@@ -270,7 +265,7 @@ function OutPatient() {
     onSuccess: () => {
       console.log('OT added successfully')
     },
-    onError: error => {
+    onError: (error) => {
       console.error('Error adding OT', error)
     },
   })
@@ -294,17 +289,33 @@ function OutPatient() {
     saveChangesOTMutation.mutate(payload)
     setModal('')
   }
-  const filterPersonListByDesignationId = designationId => {
+  const filterPersonListByDesignationId = (designationId) => {
     const designation = otDropdowns?.data.find(
-      designation => designation.mappingId === designationId,
+      (designation) => designation.mappingId === designationId,
     )
     return designation?.personList || []
   }
-  const handleChangeMulti = event => {
+  const getPersonIdByDesignationAndName = (designationId, personName) => {
+    const selectedPerson = filterPersonListByDesignationId(designationId)?.find(
+      (person) =>
+        normalizeName(person?.personName) === normalizeName(personName),
+    )
+    return selectedPerson?.id ? String(selectedPerson.id) : ''
+  }
+  const getAddModalInitialValues = () => {
+    const baseFormData = createEmptyFormData()
+    if (!isJhansiUser) return baseFormData
+    return {
+      ...baseFormData,
+      surgeonId: getPersonIdByDesignationAndName(1, 'DR. K. JHANSI RANI'),
+      embryologistId: getPersonIdByDesignationAndName(4, 'Nithya Srinivasan'),
+    }
+  }
+  const handleChangeMulti = (event) => {
     const {
       target: { value },
     } = event
-    const selectedIds = value.map(item => item.id).join(',')
+    const selectedIds = value.map((item) => item.id).join(',')
     setFormData({
       ...formData,
       // On autofill we get a stringified value.
@@ -312,7 +323,7 @@ function OutPatient() {
     })
   }
 
-  const permissionedAddOT = function() {
+  const permissionedAddOT = function () {
     const AddOTButton = () => (
       <Button
         variant="outlined"
@@ -350,7 +361,7 @@ function OutPatient() {
   ]
   const filterData = (data, filters) => {
     if (!data) return []
-    const filtered = data.filter(row => {
+    const filtered = data.filter((row) => {
       return Object.entries(filters).every(([field, filter]) => {
         if (!filter || !filter.value) return true
 
@@ -387,10 +398,10 @@ function OutPatient() {
     setFilteredData(filtered)
     return filtered
   }
-  const getUniqueValues = field => {
+  const getUniqueValues = (field) => {
     if (!getOTList?.data) return []
     const values = new Set(
-      getOTList?.data.map(row => {
+      getOTList?.data.map((row) => {
         if (field === 'branchName') {
           return row.branchName.trim()
         }
@@ -417,7 +428,7 @@ function OutPatient() {
           <IconButton
             onClick={() => {
               dispatch(closeModal())
-              setFormData({})
+              setFormData(createEmptyFormData())
             }}
           >
             <Close />
@@ -428,16 +439,16 @@ function OutPatient() {
             {/* <InputLabel id="demo-simple-select-label">Branch</InputLabel> */}
             <Autocomplete
               options={dropdowns?.branches || []}
-              getOptionLabel={option => option.name}
+              getOptionLabel={(option) => option.name}
               value={
                 dropdowns?.branches?.find(
-                  branch => branch.id === formData?.branchId,
+                  (branch) => branch.id === formData?.branchId,
                 ) || null
               }
               onChange={(event, newValue) => {
                 setFormData({ ...formData, branchId: newValue?.id || '' })
               }}
-              renderInput={params => <TextField {...params} label="Branch" />}
+              renderInput={(params) => <TextField {...params} label="Branch" />}
             />
           </FormControl>
 
@@ -466,7 +477,7 @@ function OutPatient() {
                   ? dayjs(formData?.procedureDate)
                   : dayjs()
               }
-              onChange={date =>
+              onChange={(date) =>
                 setFormData({
                   ...formData,
                   procedureDate: date.format('YYYY-MM-DD'),
@@ -491,7 +502,7 @@ function OutPatient() {
               // value={
               //     dayjs(formData?.time).isValid() ? dayjs(formData?.time) : dayjs()
               // }
-              onChange={date => {
+              onChange={(date) => {
                 setFormData({ ...formData, time: date.format('hh:ss A') })
                 console.log(date)
               }}
@@ -502,24 +513,26 @@ function OutPatient() {
             <Autocomplete
               multiple
               options={filterPersonListByDesignationId(1) || []}
-              getOptionLabel={option => option.personName}
+              getOptionLabel={(option) => option.personName}
               value={
                 formData?.surgeonId
                   ? formData.surgeonId
                       .split(',')
-                      .map(id =>
+                      .map((id) =>
                         filterPersonListByDesignationId(1)?.find(
-                          person => person.id === parseInt(id),
+                          (person) => person.id === parseInt(id),
                         ),
                       )
                       .filter(Boolean)
                   : []
               }
               onChange={(event, newValue) => {
-                const selectedIds = newValue.map(item => item.id).join(',')
+                const selectedIds = newValue.map((item) => item.id).join(',')
                 setFormData({ ...formData, surgeonId: selectedIds })
               }}
-              renderInput={params => <TextField {...params} label="Surgeon" />}
+              renderInput={(params) => (
+                <TextField {...params} label="Surgeon" />
+              )}
             />
           </FormControl>
           {/* //anesthetistId */}
@@ -527,16 +540,16 @@ function OutPatient() {
             {/* <InputLabel id="demo-simple-select-label">Anesthetist</InputLabel> */}
             <Autocomplete
               options={filterPersonListByDesignationId(2) || []}
-              getOptionLabel={option => option.personName}
+              getOptionLabel={(option) => option.personName}
               value={
                 filterPersonListByDesignationId(2)?.find(
-                  person => person.id === parseInt(formData?.anesthetistId),
+                  (person) => person.id === parseInt(formData?.anesthetistId),
                 ) || null
               }
               onChange={(event, newValue) => {
                 setFormData({ ...formData, anesthetistId: newValue?.id || '' })
               }}
-              renderInput={params => (
+              renderInput={(params) => (
                 <TextField {...params} label="Anesthetist" />
               )}
             />
@@ -546,16 +559,16 @@ function OutPatient() {
             {/* <InputLabel id="demo-simple-select-label">Embryologist</InputLabel> */}
             <Autocomplete
               options={filterPersonListByDesignationId(4) || []}
-              getOptionLabel={option => option.personName}
+              getOptionLabel={(option) => option.personName}
               value={
                 filterPersonListByDesignationId(4)?.find(
-                  person => person.id === parseInt(formData?.embryologistId),
+                  (person) => person.id === parseInt(formData?.embryologistId),
                 ) || null
               }
               onChange={(event, newValue) => {
                 setFormData({ ...formData, embryologistId: newValue?.id || '' })
               }}
-              renderInput={params => (
+              renderInput={(params) => (
                 <TextField {...params} label="Embryologist" />
               )}
             />
@@ -565,24 +578,26 @@ function OutPatient() {
             <Autocomplete
               multiple
               options={filterPersonListByDesignationId(3) || []}
-              getOptionLabel={option => option.personName}
+              getOptionLabel={(option) => option.personName}
               value={
                 formData?.otStaff
                   ? formData.otStaff
                       .split(',')
-                      .map(id =>
+                      .map((id) =>
                         filterPersonListByDesignationId(3)?.find(
-                          person => person.id === parseInt(id),
+                          (person) => person.id === parseInt(id),
                         ),
                       )
                       .filter(Boolean)
                   : []
               }
               onChange={(event, newValue) => {
-                const selectedIds = newValue.map(item => item.id).join(',')
+                const selectedIds = newValue.map((item) => item.id).join(',')
                 setFormData({ ...formData, otStaff: selectedIds })
               }}
-              renderInput={params => <TextField {...params} label="OT Staff" />}
+              renderInput={(params) => (
+                <TextField {...params} label="OT Staff" />
+              )}
             />
           </FormControl>
           <div className="flex justify-end gap-3 mt-3">
@@ -646,7 +661,7 @@ function OutPatient() {
             }}
             loading={getOTListLoading}
             columns={OTcolumns}
-            getRowId={row => row.id}
+            getRowId={(row) => row.id}
             disableRowSelectionOnClick
             sx={{
               '& .MuiDataGrid-loadingOverlay': {
