@@ -88,10 +88,11 @@ function Prescription({
     },
     // enabled: !!user.accessToken,
   })
+  const normalizeTreatmentName = (name = '') => name.trim().toLowerCase()
   const treatmentTypesWithFETCycle = useMemo(() => {
     const types = Array.isArray(treatmentTypes) ? treatmentTypes : []
     const hasFETCycle = types.some((each) =>
-      ['fet cycle', 'fet'].includes((each?.name || '').trim().toLowerCase()),
+      normalizeTreatmentName(each?.name).includes('fet'),
     )
 
     if (hasFETCycle) return types
@@ -99,7 +100,7 @@ function Prescription({
     return [
       ...types,
       {
-        id: 'FET',
+        id: '',
         name: 'FET Cycle',
         isPackageExists: false,
       },
@@ -2388,7 +2389,7 @@ function Prescription({
                         ...treatmentForm,
                         type: each.name,
                         isPackageExists: each.isPackageExists,
-                        treatmentTypeId: each.id,
+                        treatmentTypeId: Number(each.id) || '',
                       })
                     }
                     className={` normal-case w-full hover:shadow hover:shadow-secondary text-center p-2 rounded-lg ${
@@ -2422,9 +2423,16 @@ function Prescription({
             <Button
               variant="outlined"
               onClick={() => {
+                const selectedTreatmentTypeId = Number(
+                  treatmentForm.treatmentTypeId,
+                )
                 // console.log(treatmentForm, activeVisitId)
                 if (!treatmentForm.type) {
                   toast.error('Please select a treatment type')
+                } else if (!Number.isFinite(selectedTreatmentTypeId)) {
+                  toast.error(
+                    'Selected treatment type is invalid. Please reselect.',
+                  )
                 } else if (
                   treatmentForm.isPackageExists &&
                   // treatmentForm.packageAmount &&
@@ -2433,7 +2441,7 @@ function Prescription({
                   createTreatment.mutate({
                     createType: 'Treatment',
                     type: treatmentForm.type,
-                    treatmentTypeId: treatmentForm.treatmentTypeId,
+                    treatmentTypeId: selectedTreatmentTypeId,
                     visitId: patientInfo?.activeVisitId,
                     packageAmount: treatmentForm.packageAmount,
                   })
@@ -2444,7 +2452,7 @@ function Prescription({
                   createTreatment.mutate({
                     createType: 'Treatment',
                     type: treatmentForm.type,
-                    treatmentTypeId: treatmentForm.treatmentTypeId,
+                    treatmentTypeId: selectedTreatmentTypeId,
                     visitId: patientInfo?.activeVisitId,
                   })
                 }
