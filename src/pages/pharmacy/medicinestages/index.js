@@ -456,6 +456,16 @@ function RenderAccordianDetails({
       const detailsCopy = details
       // Build orderDetails with complete item structure matching backend format
       let paymentDBFormat = []
+      const parseMaybeJSON = (value) => {
+        if (value === null || value === undefined) return null
+        if (typeof value !== 'string') return value
+        try {
+          return JSON.parse(value)
+        } catch (e) {
+          // Some inventory fields may already be plain text; keep original value.
+          return value
+        }
+      }
       detailsCopy.map((medicineInfo) => {
         // Use discounted price if coupon is applied, otherwise use original totalCost
         const discountedPrice = getItemPrice(medicineInfo.id)
@@ -476,31 +486,15 @@ function RenderAccordianDetails({
         const orderItem = {
           id: fullItemData?.id || null,
           itemName: medicineInfo.itemName,
-          inventoryType: fullItemData?.inventoryType
-            ? typeof fullItemData.inventoryType === 'string'
-              ? JSON.parse(fullItemData.inventoryType)
-              : fullItemData.inventoryType
-            : null,
-          manufacturer: fullItemData?.manufacturer
-            ? typeof fullItemData.manufacturer === 'string'
-              ? JSON.parse(fullItemData.manufacturer)
-              : fullItemData.manufacturer
-            : null,
+          inventoryType: parseMaybeJSON(fullItemData?.inventoryType),
+          manufacturer: parseMaybeJSON(fullItemData?.manufacturer),
           hsnCode: fullItemData?.hsnCode || null,
           categoryName: fullItemData?.categoryName || null,
-          taxCategory: fullItemData?.taxCategory
-            ? typeof fullItemData.taxCategory === 'string'
-              ? JSON.parse(fullItemData.taxCategory)
-              : fullItemData.taxCategory
-            : null,
+          taxCategory: parseMaybeJSON(fullItemData?.taxCategory),
           isActive: fullItemData?.isActive ?? true,
           departmentId: fullItemData?.departmentId || null,
           departmentName: fullItemData?.departmentName || null,
-          createdBy: fullItemData?.createdBy
-            ? typeof fullItemData.createdBy === 'string'
-              ? JSON.parse(fullItemData.createdBy)
-              : fullItemData.createdBy
-            : null,
+          createdBy: parseMaybeJSON(fullItemData?.createdBy),
           createdAt: fullItemData?.createdAt || null,
           updatedAt: fullItemData?.updatedAt || null,
           prescribed: medicineInfo.purchaseQuantity || 0,
@@ -515,13 +509,22 @@ function RenderAccordianDetails({
         return acc + Number(getItemPrice(obj.id))
       }, 0)
 
+      const normalizeCurrency = (value, fallback = 0) => {
+        const numericValue = Number(value)
+        return Number.isFinite(numericValue)
+          ? Number(numericValue.toFixed(2))
+          : Number(fallback.toFixed(2))
+      }
+
+      // Avoid sending 0 accidentally when discountedAmount is not initialized yet.
+      const paidOrderAmount = normalizeCurrency(discountedAmount, totalAmount)
+      const discountAmount = normalizeCurrency(totalAmount - paidOrderAmount, 0)
+
       // Build payment payload for order creation
       let paymentPayload = {
         totalOrderAmount: Number(totalAmount.toFixed(2)),
-        paidOrderAmount: Number((discountedAmount || 0).toFixed(2)),
-        discountAmount: Number(
-          (totalAmount - (discountedAmount || 0)).toFixed(2),
-        ),
+        paidOrderAmount,
+        discountAmount,
         couponCode: selectedCoupon?.id || null,
         orderDetails: paymentDBFormat,
         productType: 'PHARMACY',
@@ -565,16 +568,30 @@ function RenderAccordianDetails({
 
       console.log('Pharmacy order creation response:', orderData)
 
-      // Extract orderId from response
+      // Extract orderId from response (different backends shape this differently)
       const orderId =
         orderData?.data?.orderId ||
         orderData?.orderId ||
-        orderData?.data?.dataValues?.orderId
+        orderData?.data?.dataValues?.orderId ||
+        orderData?.data?.id ||
+        orderData?.id
 
-      if (!orderId) {
+      const orderCreatedSuccessfully =
+        orderData?.status === 200 ||
+        orderData?.success === true ||
+        orderData?.data?.success === true ||
+        orderData?.message === 'Payment Successful' ||
+        orderData?.data?.message === 'Payment Successful'
+
+      if (!orderId && !orderCreatedSuccessfully) {
         dispatch(hideLoader())
         setIsProcessingPayment(false)
-        toast.error('Failed to create order. Please try again.', toastconfig)
+        const createOrderErrorMessage =
+          orderData?.message ||
+          orderData?.error?.message ||
+          orderData?.error ||
+          'Failed to create order. Please try again.'
+        toast.error(createOrderErrorMessage, toastconfig)
         return
       }
 
