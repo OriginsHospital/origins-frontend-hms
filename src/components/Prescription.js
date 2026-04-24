@@ -88,23 +88,12 @@ function Prescription({
     },
     // enabled: !!user.accessToken,
   })
-  const normalizeTreatmentName = (name = '') => name.trim().toLowerCase()
-  const treatmentTypesWithFETCycle = useMemo(() => {
+  const treatmentTypesWithoutFETCycle = useMemo(() => {
     const types = Array.isArray(treatmentTypes) ? treatmentTypes : []
-    const hasFETCycle = types.some((each) =>
-      normalizeTreatmentName(each?.name).includes('fet'),
+    return types.filter(
+      (each) =>
+        !['fet cycle', 'fet'].includes((each?.name || '').trim().toLowerCase()),
     )
-
-    if (hasFETCycle) return types
-
-    return [
-      ...types,
-      {
-        id: '',
-        name: 'FET Cycle',
-        isPackageExists: false,
-      },
-    ]
   }, [treatmentTypes])
   const [treatmentForm, setTreatmentForm] = useState({
     createType: 'Treatment', //Consultation or  Treatment
@@ -2376,7 +2365,7 @@ function Prescription({
             //   setTreatmentForm({ ...treatmentForm, type: e.target.value, isPackageExists: treatmentTypes?.filter(each => each.id == e.target.value)[0]?.isPackageExists })
             // }
           >
-            {treatmentTypesWithFETCycle?.map((each, index) => (
+            {treatmentTypesWithoutFETCycle?.map((each, index) => (
               <FormControlLabel
                 key={index}
                 value={each.id}
@@ -2389,7 +2378,7 @@ function Prescription({
                         ...treatmentForm,
                         type: each.name,
                         isPackageExists: each.isPackageExists,
-                        treatmentTypeId: Number(each.id) || '',
+                        treatmentTypeId: each.id,
                       })
                     }
                     className={` normal-case w-full hover:shadow hover:shadow-secondary text-center p-2 rounded-lg ${
@@ -2423,16 +2412,9 @@ function Prescription({
             <Button
               variant="outlined"
               onClick={() => {
-                const selectedTreatmentTypeId = Number(
-                  treatmentForm.treatmentTypeId,
-                )
                 // console.log(treatmentForm, activeVisitId)
                 if (!treatmentForm.type) {
                   toast.error('Please select a treatment type')
-                } else if (!Number.isFinite(selectedTreatmentTypeId)) {
-                  toast.error(
-                    'Selected treatment type is invalid. Please reselect.',
-                  )
                 } else if (
                   treatmentForm.isPackageExists &&
                   // treatmentForm.packageAmount &&
@@ -2441,7 +2423,7 @@ function Prescription({
                   createTreatment.mutate({
                     createType: 'Treatment',
                     type: treatmentForm.type,
-                    treatmentTypeId: selectedTreatmentTypeId,
+                    treatmentTypeId: treatmentForm.treatmentTypeId,
                     visitId: patientInfo?.activeVisitId,
                     packageAmount: treatmentForm.packageAmount,
                   })
@@ -2452,7 +2434,7 @@ function Prescription({
                   createTreatment.mutate({
                     createType: 'Treatment',
                     type: treatmentForm.type,
-                    treatmentTypeId: selectedTreatmentTypeId,
+                    treatmentTypeId: treatmentForm.treatmentTypeId,
                     visitId: patientInfo?.activeVisitId,
                   })
                 }

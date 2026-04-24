@@ -461,10 +461,11 @@ function PatientPrescription({
 
         // Continue with remaining selected items (non-kit items selected along with kits)
         filteredOptions?.forEach((element) => {
-          const BillTypeValuesArray = allBillTypeValues[name]
+          const BillTypeValuesArray = allBillTypeValues[name] || []
           const BillTYpeValueObject = BillTypeValuesArray.find((values) => {
             return values.id === element.value
           })
+          if (!BillTYpeValueObject) return
 
           // Check if unpaid medicine is already added (from kit or previous selection)
           const alreadyAdded = billTypeValues.some(
@@ -492,10 +493,11 @@ function PatientPrescription({
       } else {
         // Normal flow for non-kit selections
         selectedOptions?.forEach((element) => {
-          const BillTypeValuesArray = allBillTypeValues[name]
+          const BillTypeValuesArray = allBillTypeValues[name] || []
           const BillTYpeValueObject = BillTypeValuesArray.find((values) => {
             return values.id === element.value
           })
+          if (!BillTYpeValueObject) return
 
           const infoObject = defaultLineBillValues['3']?.find((values) => {
             return (
@@ -525,10 +527,11 @@ function PatientPrescription({
       selectedOptions?.forEach((element) => {
         // Skip if it's already in paid items
         if (!currentPaidItems.some((paid) => paid.id === element.value)) {
-          const BillTypeValuesArray = allBillTypeValues[name]
+          const BillTypeValuesArray = allBillTypeValues[name] || []
           const BillTYpeValueObject = BillTypeValuesArray.find((values) => {
             return values.id === element.value
           })
+          if (!BillTYpeValueObject) return
 
           billTypeValues.push({
             id: element.value,
