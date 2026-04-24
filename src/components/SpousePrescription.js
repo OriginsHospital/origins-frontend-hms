@@ -45,6 +45,15 @@ const NAPO_SHOT_KIT = {
   ],
 }
 
+const pharmacyStartsWithFilter = (option, inputValue) => {
+  const normalizedInput = (inputValue || '').trim().toLowerCase()
+  if (!normalizedInput) {
+    return true
+  }
+
+  return (option?.label || '').toLowerCase().startsWith(normalizedInput)
+}
+
 // Only the NAPO kit is allowed in SpousePrescription Pharmacy.
 const ALL_MEDICINE_KITS = [NAPO_SHOT_KIT]
 
@@ -730,6 +739,11 @@ function SpousePrescription({
                     options={selectOptions}
                     onChange={setSelectedValues(billType.name)}
                     classNamePrefix={`select-${billType.name.toLowerCase()}`}
+                    filterOption={
+                      billType.name === 'Pharmacy'
+                        ? pharmacyStartsWithFilter
+                        : undefined
+                    }
                   />
 
                   {/* Pharmacy Section */}

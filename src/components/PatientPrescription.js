@@ -200,6 +200,15 @@ const isRestrictedPatientLabTest = (testName = '') => {
   )
 }
 
+const pharmacyStartsWithFilter = (option, inputValue) => {
+  const normalizedInput = (inputValue || '').trim().toLowerCase()
+  if (!normalizedInput) {
+    return true
+  }
+
+  return (option?.label || '').toLowerCase().startsWith(normalizedInput)
+}
+
 function PatientPrescription({
   allBillTypeValues,
   type,
@@ -917,6 +926,11 @@ function PatientPrescription({
                     options={selectOptions}
                     onChange={setSelectedValues(billType.name)}
                     classNamePrefix={`select-${billType.name.toLowerCase()}`}
+                    filterOption={
+                      billType.name === 'Pharmacy'
+                        ? pharmacyStartsWithFilter
+                        : undefined
+                    }
                   />
                   {billType.name === 'Pharmacy' && (
                     <div className="h-48 border flex flex-col items-center p-2 overflow-y-auto gap-2 bg-primary/10 rounded-lg">
