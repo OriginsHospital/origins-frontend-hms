@@ -27,6 +27,102 @@ import {
   hasRevenueNewRowActionsAccess,
 } from '@/utils/revenueAccess'
 
+const getReportBranchId = (item) => {
+  if (!item) return null
+
+  // Prefer actual transaction/billing branch over patient registration branch.
+  return (
+    item.billingBranchId ??
+    item.billedAtBranchId ??
+    item.transactionBranchId ??
+    item.paymentBranchId ??
+    item.orderBranchId ??
+    item.visitBranchId ??
+    item.branchDetails?.id ??
+    item.branch?.id ??
+    item.branchId ??
+    null
+  )
+}
+
+const normalizeBranchValue = (value) => {
+  if (value === null || value === undefined) return ''
+  return String(value).trim().toUpperCase()
+}
+
+const getRowBranchCandidates = (item) => {
+  if (!item) return []
+  return [
+    item.billingBranchId,
+    item.billedAtBranchId,
+    item.transactionBranchId,
+    item.paymentBranchId,
+    item.orderBranchId,
+    item.visitBranchId,
+    item.billingBranchCode,
+    item.transactionBranchCode,
+    item.paymentBranchCode,
+    item.orderBranchCode,
+    item.visitBranchCode,
+    item.billingBranchName,
+    item.transactionBranchName,
+    item.paymentBranchName,
+    item.orderBranchName,
+    item.visitBranchName,
+    item.branchDetails?.id,
+    item.branchDetails?.name,
+    item.branch?.id,
+    item.branch?.name,
+    item.branchId,
+    item.branchName,
+    item.branchCode,
+  ]
+    .map(normalizeBranchValue)
+    .filter(Boolean)
+}
+
+const getSelectedBranchCandidates = (selectedBranch) => {
+  if (!selectedBranch) return []
+  return [selectedBranch.id, selectedBranch.name, selectedBranch.code]
+    .map(normalizeBranchValue)
+    .filter(Boolean)
+}
+
+const rowBelongsToSelectedBranch = (item, selectedBranch) => {
+  if (!item || !selectedBranch) return false
+  const rowCandidates = getRowBranchCandidates(item)
+  const branchCandidates = getSelectedBranchCandidates(selectedBranch)
+  if (rowCandidates.length === 0 || branchCandidates.length === 0) return false
+
+  const selectedIdNum = Number(selectedBranch.id)
+  if (Number.isFinite(selectedIdNum)) {
+    const idAligned = rowCandidates.some((rv) => {
+      const n = Number(rv)
+      return !Number.isNaN(n) && n === selectedIdNum
+    })
+    if (idAligned) return true
+  }
+
+  return rowCandidates.some((rowValue) => branchCandidates.includes(rowValue))
+}
+
+const dedupeRevenueRows = (rows = []) => {
+  const seen = new Set()
+  return rows.filter((row) => {
+    const key = [
+      row?.revenueSource || '',
+      row?.paymentMasterId || '',
+      row?.orderId || '',
+      row?.date || '',
+      row?.amount || '',
+      row?.productType || '',
+    ].join('|')
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
 function SalesNew() {
   const router = useRouter()
   const userDetails = useSelector((store) => store.user)
@@ -134,169 +230,84 @@ function SalesNew() {
             ? appliedPaymentMode
             : undefined
 
-        // When "ALL" is selected, fetch data for all branches and combine
-        if (appliedBranchId === 'ALL') {
-          console.log('Fetching data for ALL branches (HNK + HYD + KMM + SPL)')
+        // Always fetch all report branches, then apply robust billing-branch
+        // filtering on client-side. This avoids API-side branch attribution drift.
+        if (!dropdowns?.branches || dropdowns.branches.length === 0) {
+          throw new Error('No branches available')
+        }
 
-          if (!dropdowns?.branches || dropdowns.branches.length === 0) {
-            throw new Error('No branches available')
-          }
+        // Filter out excluded branches (OBH, 02, kmm03, HYD-KKT)
+        const filteredBranches = dropdowns.branches.filter(
+          (branch) =>
+            branch.name !== 'OBH' &&
+            branch.name !== '02' &&
+            branch.name !== 'kmm03' &&
+            branch.name !== 'HYD-KKT',
+        )
 
-          // Filter out excluded branches (OBH, 02, kmm03, HYD-KKT)
-          const filteredBranches = dropdowns.branches.filter(
-            (branch) =>
-              branch.name !== 'OBH' &&
-              branch.name !== '02' &&
-              branch.name !== 'kmm03' &&
-              branch.name !== 'HYD-KKT',
+        const branchNames = filteredBranches.map((b) => b.name).join(', ')
+        console.log(`Revenue New fetching branches: ${branchNames}`)
+
+        const branchPromises = filteredBranches.map((branch) =>
+          SalesReportDashboard(
+            userDetails.accessToken,
+            fromDateStr,
+            toDateStr,
+            branch.id,
+            paymentModeParam,
           )
-
-          // Log which branches will be fetched
-          const branchNames = filteredBranches.map((b) => b.name).join(', ')
-          console.log(`Fetching data for branches: ${branchNames}`)
-
-          // Fetch data for all branches in parallel with error handling
-          const branchPromises = filteredBranches.map((branch) =>
-            SalesReportDashboard(
-              userDetails.accessToken,
-              fromDateStr,
-              toDateStr,
-              branch.id,
-              paymentModeParam,
-            )
-              .then((response) => {
-                if (!response || !response.data) {
-                  console.warn(
-                    `No data returned for branch: ${branch.name} (${branch.id})`,
-                  )
-                  return {
-                    branchId: branch.id,
-                    branchName: branch.name,
-                    data: null,
-                    success: false,
-                  }
-                }
-                return {
-                  branchId: branch.id,
-                  branchName: branch.name,
-                  data: response.data,
-                  success: true,
-                }
-              })
-              .catch((error) => {
-                console.error(
-                  `Error fetching data for branch ${branch.name} (${branch.id}):`,
-                  error,
-                )
+            .then((response) => {
+              if (!response || !response.data) {
                 return {
                   branchId: branch.id,
                   branchName: branch.name,
                   data: null,
                   success: false,
-                  error: error.message,
                 }
-              }),
-          )
-
-          const branchResults = await Promise.all(branchPromises)
-
-          // Combine all branch data
-          const combinedSalesData = []
-          const combinedReturnData = []
-          let totalSales = 0
-          let totalReturns = 0
-          const successfulBranches = []
-          const failedBranches = []
-
-          branchResults.forEach((result) => {
-            if (result.success && result.data) {
-              successfulBranches.push(result.branchName)
-
-              // Combine sales data
-              if (
-                result.data.salesData &&
-                Array.isArray(result.data.salesData)
-              ) {
-                combinedSalesData.push(...result.data.salesData)
               }
-
-              // Combine return data
-              if (
-                result.data.returnData &&
-                Array.isArray(result.data.returnData)
-              ) {
-                combinedReturnData.push(...result.data.returnData)
+              return {
+                branchId: branch.id,
+                branchName: branch.name,
+                data: response.data,
+                success: true,
               }
+            })
+            .catch((error) => ({
+              branchId: branch.id,
+              branchName: branch.name,
+              data: null,
+              success: false,
+              error: error.message,
+            })),
+        )
 
-              // Sum totals
-              if (result.data.salesDashboard?.totalSales) {
-                totalSales += Number(result.data.salesDashboard.totalSales) || 0
-              }
-              if (result.data.salesDashboard?.totalReturns) {
-                totalReturns +=
-                  Number(result.data.salesDashboard.totalReturns) || 0
-              }
-            } else {
-              failedBranches.push({
-                name: result.branchName,
-                error: result.error || 'No data returned',
-              })
-            }
-          })
+        const branchResults = await Promise.all(branchPromises)
 
-          // Log results
-          console.log('Combined data for ALL branches:', {
-            successfulBranches: successfulBranches.join(', '),
-            failedBranches:
-              failedBranches.length > 0
-                ? failedBranches.map((b) => b.name).join(', ')
-                : 'None',
-            salesCount: combinedSalesData.length,
-            returnsCount: combinedReturnData.length,
+        const combinedSalesData = []
+        const combinedReturnData = []
+        let totalSales = 0
+        let totalReturns = 0
+
+        branchResults.forEach((result) => {
+          if (!result.success || !result.data) return
+
+          if (Array.isArray(result.data.salesData)) {
+            combinedSalesData.push(...result.data.salesData)
+          }
+          if (Array.isArray(result.data.returnData)) {
+            combinedReturnData.push(...result.data.returnData)
+          }
+          totalSales += Number(result.data.salesDashboard?.totalSales) || 0
+          totalReturns += Number(result.data.salesDashboard?.totalReturns) || 0
+        })
+
+        return {
+          salesData: dedupeRevenueRows(combinedSalesData),
+          returnData: dedupeRevenueRows(combinedReturnData),
+          salesDashboard: {
             totalSales,
             totalReturns,
-          })
-
-          if (failedBranches.length > 0) {
-            console.warn('Some branches failed to load:', failedBranches)
-          }
-
-          // Return combined data structure matching the API response format
-          const combinedData = {
-            salesData: combinedSalesData,
-            returnData: combinedReturnData,
-            salesDashboard: {
-              totalSales,
-              totalReturns,
-            },
-          }
-
-          return combinedData
-        } else {
-          // Single branch fetch
-          console.log('Revenue New API Call:', {
-            token: 'Present',
-            fromDate: fromDateStr,
-            toDate: toDateStr,
-            branchId: appliedBranchId,
-          })
-
-          // Make API call
-          const response = await SalesReportDashboard(
-            userDetails.accessToken,
-            fromDateStr,
-            toDateStr,
-            appliedBranchId,
-            paymentModeParam,
-          )
-
-          // Validate API response
-          if (!response || !response.data) {
-            throw new Error('Invalid API response format')
-          }
-
-          console.log('Revenue New API Response:', response)
-          return response.data
+          },
         }
       } catch (error) {
         console.error('Revenue API Error:', error)
@@ -364,32 +375,26 @@ function SalesNew() {
       // When branchId === 'ALL': Show all branches (HNK + HYD + KMM + SPL) - NO filtering
       if (branchId && branchId !== 'ALL') {
         console.log('Applying branch filter for specific branch:', branchId)
+        const selectedBranch = dropdowns?.branches?.find(
+          (item) => String(item.id) === String(branchId),
+        )
 
         const beforeSalesCount = filteredSalesData.length
         const beforeReturnsCount = filteredReturnData.length
 
         filteredSalesData = filteredSalesData.filter((item) => {
           if (!item) return false
-          // Check branchId field - match by branchId or branch.id
-          const itemBranchId = item.branchId || item.branch?.id
-          return (
-            itemBranchId === branchId ||
-            String(itemBranchId) === String(branchId)
-          )
+          return rowBelongsToSelectedBranch(item, selectedBranch)
         })
 
         filteredReturnData = filteredReturnData.filter((item) => {
           if (!item) return false
-          // Check branchId field - match by branchId or branch.id
-          const itemBranchId = item.branchId || item.branch?.id
-          return (
-            itemBranchId === branchId ||
-            String(itemBranchId) === String(branchId)
-          )
+          return rowBelongsToSelectedBranch(item, selectedBranch)
         })
 
         console.log('Branch filter results:', {
           branchId,
+          selectedBranchName: selectedBranch?.name,
           beforeSalesCount,
           afterSalesCount: filteredSalesData.length,
           beforeReturnsCount,
@@ -518,7 +523,7 @@ function SalesNew() {
     } catch (error) {
       console.error('Error processing sales dashboard data:', error)
     }
-  }, [salesDashboardData, paymentMode, service, branchId])
+  }, [salesDashboardData, paymentMode, service, branchId, dropdowns?.branches])
 
   const handleApplyFilters = () => {
     setAppliedFromDate(fromDate)
@@ -761,7 +766,7 @@ function SalesNew() {
       )}
       <SalesDashboard
         data={filteredData || salesDashboardData}
-        branchId={branchId === 'ALL' ? 'ALL' : appliedBranchId}
+        branchId="ALL"
         reportName="Revenue_New_Report"
         reportType="revenue"
         branchName={

@@ -46,6 +46,22 @@ const FALLBACK_COLORS = [
   '#7f8c8d',
 ]
 
+const getReportBranchId = (row) => {
+  if (!row) return null
+  return (
+    row.billingBranchId ??
+    row.billedAtBranchId ??
+    row.transactionBranchId ??
+    row.paymentBranchId ??
+    row.orderBranchId ??
+    row.visitBranchId ??
+    row.branchDetails?.id ??
+    row.branch?.id ??
+    row.branchId ??
+    null
+  )
+}
+
 // Map service names (productType) to advance payment categories
 const getCategoryFromServiceName = (serviceName) => {
   if (!serviceName) return 'Others'
@@ -256,7 +272,11 @@ const SalesDashboard = ({
 
   const getRevenueRowId = useCallback((row) => {
     if (row?.paymentMasterId != null && row?.revenueSource) {
-      return `${row.revenueSource}-${row.paymentMasterId}`
+      const splitSuffix =
+        row.splitPaymentLineIndex != null && row.splitPaymentLineIndex !== ''
+          ? `-split-${row.splitPaymentLineIndex}`
+          : ''
+      return `${row.revenueSource}-${row.paymentMasterId}${splitSuffix}`
     }
     return `${row?.orderId}-${row?.productType || ''}`
   }, [])
@@ -302,6 +322,7 @@ const SalesDashboard = ({
       lastName: lastName || '',
       firstName: firstName || '',
       patientName: combinedPatientName,
+      reportBranchId: getReportBranchId(row),
     }
   }
 
@@ -316,7 +337,8 @@ const SalesDashboard = ({
     // Otherwise, filter by branchId
     return (dataNormalizedSales || []).filter(
       (row) =>
-        row.branchId === branchId || String(row.branchId) === String(branchId),
+        row.reportBranchId === branchId ||
+        String(row.reportBranchId) === String(branchId),
     )
   }, [dataNormalizedSales, branchId])
 
@@ -328,7 +350,8 @@ const SalesDashboard = ({
     // Otherwise, filter by branchId
     return (dataNormalizedReturns || []).filter(
       (row) =>
-        row.branchId === branchId || String(row.branchId) === String(branchId),
+        row.reportBranchId === branchId ||
+        String(row.reportBranchId) === String(branchId),
     )
   }, [dataNormalizedReturns, branchId])
 

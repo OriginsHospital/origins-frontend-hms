@@ -1430,6 +1430,10 @@ const ConsultationFee = ({ patientDetails }) => {
   const [discountedAmount, setDiscountedAmount] = useState(
     patientDetails?.amountToBePaid,
   )
+  const [splitPaymentAmounts, setSplitPaymentAmounts] = useState({
+    cashAmount: '',
+    upiAmount: '',
+  })
   // const coupons = [
   //   { id: 1, code: 'FIRST50', discount: 50 },
   //   { id: 2, code: 'SAVE20', discount: 20 },
@@ -1451,6 +1455,9 @@ const ConsultationFee = ({ patientDetails }) => {
   useEffect(() => {
     setDiscountedAmount(calculateDiscountedAmount(selectedCoupon))
   }, [selectedCoupon])
+  useEffect(() => {
+    setSplitPaymentAmounts({ cashAmount: '', upiAmount: '' })
+  }, [discountedAmount])
   const handlePayment = async (type, patientDetails) => {
     console.log(type, patientDetails)
 
@@ -1543,6 +1550,74 @@ const ConsultationFee = ({ patientDetails }) => {
       }
     }
   }
+
+  const handleConsultationSplitPayment = async () => {
+    const cashAmount = Number(splitPaymentAmounts.cashAmount || 0)
+    const upiAmount = Number(splitPaymentAmounts.upiAmount || 0)
+    const totalSplitAmount = Number((cashAmount + upiAmount).toFixed(2))
+    const billAmount = Number(Number(discountedAmount || 0).toFixed(2))
+
+    if (cashAmount <= 0 || upiAmount <= 0) {
+      toast.error(
+        'Split payment requires both Cash and UPI amounts greater than 0',
+        toastconfig,
+      )
+      return
+    }
+
+    if (totalSplitAmount !== billAmount) {
+      toast.error(
+        `Split amount should be exactly ₹${billAmount.toFixed(2)}`,
+        toastconfig,
+      )
+      return
+    }
+
+    if (!window.confirm('Are you sure you want to pay with split payment?')) {
+      return
+    }
+
+    const payload = {
+      totalOrderAmount: patientDetails?.amountToBePaid,
+      paidOrderAmount: discountedAmount,
+      discountAmount: patientDetails?.amountToBePaid - discountedAmount,
+      couponCode: selectedCoupon?.id,
+      orderDetails: [
+        {
+          appointmentId: patientDetails?.appointmentId,
+          type: patientDetails?.type,
+          totalCost: patientDetails?.amountToBePaid,
+          splitPayment: {
+            cashAmount,
+            upiAmount,
+            totalAmount: totalSplitAmount,
+          },
+          splitPaymentSummary: `Cash: ₹${cashAmount.toFixed(2)}, UPI: ₹${upiAmount.toFixed(2)}`,
+        },
+      ],
+      paymentMode: 'CASH',
+      productType: 'CONSULTATION FEE',
+    }
+
+    try {
+      const order = await getOrderId(user?.accessToken, payload)
+      if (order.status == 200) {
+        toast.success('Split payment saved successfully', toastconfig)
+        queryClient.invalidateQueries('allAppointments')
+        dispatch(closeModal('consultationFee' + patientDetails?.appointmentId))
+      }
+    } catch (error) {
+      console.log('Error while saving split payment:', error)
+      toast.error('Failed to save split payment', toastconfig)
+    }
+  }
+
+  const splitCashAmount = Number(splitPaymentAmounts.cashAmount || 0)
+  const splitUpiAmount = Number(splitPaymentAmounts.upiAmount || 0)
+  const splitTotalAmount = Number((splitCashAmount + splitUpiAmount).toFixed(2))
+  const splitBalanceAmount = Number(
+    (Number(discountedAmount || 0) - splitTotalAmount).toFixed(2),
+  )
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-lg max-w-md mx-auto">
@@ -1660,6 +1735,59 @@ const ConsultationFee = ({ patientDetails }) => {
           startIcon={<Money />}
         >
           Pay Cash
+        </Button>
+      </div>
+
+      <div className="mt-4 p-3 border rounded-md bg-gray-50">
+        <Typography variant="subtitle2" className="mb-2 text-gray-800">
+          Split payment (expert)
+        </Typography>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 items-end">
+          <TextField
+            size="small"
+            label="Cash amount"
+            type="number"
+            value={splitPaymentAmounts.cashAmount}
+            onChange={(e) =>
+              setSplitPaymentAmounts((prev) => ({
+                ...prev,
+                cashAmount: e.target.value,
+              }))
+            }
+            inputProps={{ min: 0, step: '0.01' }}
+            fullWidth
+          />
+          <TextField
+            size="small"
+            label="UPI amount"
+            type="number"
+            value={splitPaymentAmounts.upiAmount}
+            onChange={(e) =>
+              setSplitPaymentAmounts((prev) => ({
+                ...prev,
+                upiAmount: e.target.value,
+              }))
+            }
+            inputProps={{ min: 0, step: '0.01' }}
+            fullWidth
+          />
+        </div>
+        <Typography variant="body2" className="text-gray-700 mt-2 mb-2">
+          Split total: ₹{splitTotalAmount.toFixed(2)} | Balance: ₹
+          {splitBalanceAmount.toFixed(2)}
+        </Typography>
+        <Button
+          color="success"
+          variant="contained"
+          className="capitalize w-full sm:w-auto"
+          disabled={
+            splitCashAmount <= 0 ||
+            splitUpiAmount <= 0 ||
+            splitBalanceAmount !== 0
+          }
+          onClick={handleConsultationSplitPayment}
+        >
+          Pay split (₹{Number(discountedAmount || 0).toFixed(2)})
         </Button>
       </div>
     </div>
