@@ -166,6 +166,7 @@ export const API_ROUTES = {
   REVENUE_NEW_ENTRY: '/reports/revenueNew/entry',
   GET_DAILY_REPORT_SUMMARY: '/reports/dailyReportSummary',
   RETURN_PHARMACY_ITEMS: '/payment/returnPharmacyItems',
+  GET_PHARMACY_REFUND_LOGS: '/payment/getPharmacyRefundLogs',
   //Sacn module
   GET_SCAN_BY_DATE: '/scan/getScansByDate/',
   GET_SCAN_REPORTS: '/scan/getScanReports',

@@ -3,6 +3,7 @@ import { useRouter } from 'next/router'
 import {
   ReturnItems,
   SaleReturnInfo,
+  getPharmacyRefundLogs,
   getPurchaseReturnInfo,
   returnPurchasedItems,
 } from '@/constants/apis'
@@ -47,6 +48,7 @@ function SaleReturnPage() {
   const [id, setId] = useState(urlOrderId)
   const [saleDetails, setSaleDetails] = useState(null)
   const [flattenedPurchaseDetails, setFlattenedPurchaseDetails] = useState([])
+  const [itemReturnHistory, setItemReturnHistory] = useState([])
   const [nonPharmacyDetails, setNonPharmacyDetails] = useState(null)
   const user = useSelector((store) => store.user)
   const dispatch = useDispatch()
@@ -72,6 +74,7 @@ function SaleReturnPage() {
     setId('')
     setSaleDetails(null)
     setFlattenedPurchaseDetails([])
+    setItemReturnHistory([])
     setNonPharmacyDetails(null)
   }
 
@@ -91,6 +94,7 @@ function SaleReturnPage() {
         setId('')
         setSaleDetails(null)
         setFlattenedPurchaseDetails([])
+        setItemReturnHistory([])
         setNonPharmacyDetails(null)
       }
     }
@@ -125,7 +129,7 @@ function SaleReturnPage() {
     error: salesError,
   } = useQuery({
     queryKey: ['fetchSalesReturnInfoData', id, activeTab],
-    enabled: !!id && activeTab === 0,
+    enabled: !!id && (activeTab === 0 || activeTab === 2),
     queryFn: async () => {
       const responsejson = await SaleReturnInfo(user?.accessToken, id)
       console.log('Full API Response:', responsejson)
@@ -143,6 +147,7 @@ function SaleReturnPage() {
 
         console.log('Sale Return Data:', responsejson.data)
         console.log('Order Information:', responsejson.data.orderInformation)
+        setItemReturnHistory(responsejson.data?.itemReturnHistory || [])
 
         // Check if orderInformation is an object or array
         const orderInfo = responsejson.data.orderInformation
@@ -158,12 +163,34 @@ function SaleReturnPage() {
           console.error('Invalid orderInformation structure:', orderInfo)
           setSaleDetails(null)
           setFlattenedPurchaseDetails([])
+          setItemReturnHistory(responsejson.data?.itemReturnHistory || [])
           throw new Error('Invalid order information structure')
         }
 
         // Map the purchased items structure to match invoice format
         // Each item should be one row with aggregated purchase details
         const flattened = []
+        let orderSummary = orderInfoData.orderSummary || {}
+        if (typeof orderSummary === 'string') {
+          try {
+            orderSummary = JSON.parse(orderSummary)
+          } catch (err) {
+            orderSummary = {}
+          }
+        }
+        const totalOrderAmount = Number(orderSummary.totalOrderAmount || 0)
+        const paidOrderAmount = Number(orderSummary.paidOrderAmount || 0)
+        const discountAmount = Number(orderSummary.discountAmount || 0)
+        let discountMultiplier = 1
+
+        if (totalOrderAmount > 0) {
+          if (paidOrderAmount > 0 && paidOrderAmount <= totalOrderAmount) {
+            discountMultiplier = paidOrderAmount / totalOrderAmount
+          } else if (discountAmount > 0 && discountAmount < totalOrderAmount) {
+            discountMultiplier =
+              (totalOrderAmount - discountAmount) / totalOrderAmount
+          }
+        }
 
         // Check if purchasedItems exists and is an array
         if (!orderInfoData?.purchasedItems) {
@@ -174,6 +201,7 @@ function SaleReturnPage() {
           )
           // If purchasedItems is null/undefined, try to handle it gracefully
           setFlattenedPurchaseDetails([])
+          setItemReturnHistory(responsejson.data?.itemReturnHistory || [])
           // Still set saleDetails so patient info shows
           // This might happen if the SQL query failed to parse orderDetails JSON
           toast.warning(
@@ -198,6 +226,7 @@ function SaleReturnPage() {
               'Order exists but no items were parsed from orderDetails JSON',
             )
             setFlattenedPurchaseDetails([])
+            setItemReturnHistory(responsejson.data?.itemReturnHistory || [])
             toast.warning(
               'Order found but no purchase items were retrieved. This may indicate the order details structure needs to be verified.',
               toastconfig,
@@ -208,7 +237,7 @@ function SaleReturnPage() {
           orderInfoData.purchasedItems.forEach((item) => {
             // Calculate rate per unit (matching invoice structure)
             const purchaseQty = item.purchaseQuantity || 0
-            const totalCost = item.totalCost || 0
+            const totalCost = Number(item.totalCost || 0) * discountMultiplier
             const ratePerUnit = purchaseQty > 0 ? totalCost / purchaseQty : 0
 
             // Aggregate purchase details if available
@@ -288,6 +317,7 @@ function SaleReturnPage() {
             orderInfoData.purchasedItems,
           )
           setFlattenedPurchaseDetails([])
+          setItemReturnHistory(responsejson.data?.itemReturnHistory || [])
         }
 
         return responsejson.data
@@ -300,6 +330,7 @@ function SaleReturnPage() {
         console.error('API Error Response:', responsejson)
         setSaleDetails(null)
         setFlattenedPurchaseDetails([])
+        setItemReturnHistory([])
         throw new Error(errorMessage)
       }
     },
@@ -309,6 +340,31 @@ function SaleReturnPage() {
       toast.error(errorMessage, toastconfig)
       setSaleDetails(null)
       setFlattenedPurchaseDetails([])
+      setItemReturnHistory([])
+    },
+  })
+
+  useQuery({
+    queryKey: ['fetchPharmacyRefundLogs', id, activeTab],
+    enabled: activeTab === 2,
+    queryFn: async () => {
+      const responsejson = await getPharmacyRefundLogs(
+        user?.accessToken,
+        id || '',
+      )
+      if (responsejson.status === 200) {
+        setItemReturnHistory(
+          Array.isArray(responsejson.data) ? responsejson.data : [],
+        )
+      } else {
+        setItemReturnHistory([])
+        throw new Error(responsejson.message || 'Failed to fetch refund logs')
+      }
+      return responsejson.data
+    },
+    onError: (err) => {
+      setItemReturnHistory([])
+      toast.error(err.message || 'Failed to fetch refund logs', toastconfig)
     },
   })
 
@@ -385,6 +441,7 @@ function SaleReturnPage() {
             <Tabs value={activeTab} onChange={handleTabChange} centered>
               <Tab label="Pharmacy Items" />
               <Tab label="Non-Pharmacy Items" />
+              <Tab label="Refund Logs & Invoices" />
             </Tabs>
           </Box>
           <div className="flex gap-3 items-center justify-between w-2/4">
@@ -468,6 +525,10 @@ function SaleReturnPage() {
             )
           )}
         </>
+      )}
+
+      {activeTab === 2 && (
+        <RefundLogs details={itemReturnHistory} orderId={orderId} />
       )}
     </div>
   )
@@ -569,10 +630,22 @@ const PurchaseDetails = ({ details, headerDetails, type, orderId }) => {
       console.log('Return payload:', payload)
       const res = await ReturnItems(user.accessToken, payload)
       if (res.status === 200) {
-        toast.success('Items returned successfully', toastconfig)
+        const refundId = res?.data?.returnId
+        toast.success(
+          refundId
+            ? `Items returned successfully. Return ID: ${refundId}`
+            : 'Items returned successfully',
+          toastconfig,
+        )
         // Invalidate queries to refresh data
         queryClient.invalidateQueries({
           queryKey: ['fetchSalesReturnInfoData', orderId, 0],
+        })
+        queryClient.invalidateQueries({
+          queryKey: ['fetchSalesReturnInfoData', orderId, 2],
+        })
+        queryClient.invalidateQueries({
+          queryKey: ['fetchPharmacyRefundLogs'],
         })
         // Reset return quantities after successful return
         setReturnQuantities({})
@@ -921,6 +994,139 @@ const PurchaseDetails = ({ details, headerDetails, type, orderId }) => {
             </div>
           </TableContainer>
         </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+const RefundLogs = ({ details, orderId }) => {
+  const printRefundInvoice = (refundLog) => {
+    const lineRows = Array.isArray(refundLog?.returnDetails)
+      ? refundLog.returnDetails
+      : []
+    const tableRows = lineRows
+      .map((line) => {
+        const purchasedQty = Number(line.purchaseQuantity || 0)
+        const returnedQty = Number(line.returnQuantity || 0)
+        return `
+          <tr>
+            <td style="border:1px solid #ccc;padding:6px;">${line.refId || '-'}</td>
+            <td style="border:1px solid #ccc;padding:6px;">${line.itemId || '-'}</td>
+            <td style="border:1px solid #ccc;padding:6px;">${purchasedQty}</td>
+            <td style="border:1px solid #ccc;padding:6px;">${returnedQty}</td>
+          </tr>
+        `
+      })
+      .join('')
+
+    const html = `
+      <html>
+        <head><title>Refund Invoice ${refundLog?.returnId || ''}</title></head>
+        <body style="font-family:Arial,sans-serif;padding:16px;">
+          <h2>Refund Invoice</h2>
+          <p><strong>Order ID:</strong> ${refundLog?.orderId || orderId || '-'}</p>
+          <p><strong>Return ID:</strong> ${refundLog?.returnId || '-'}</p>
+          <p><strong>Returned Date:</strong> ${dayjs(refundLog?.returnedDate).format('DD-MM-YYYY hh:mm A')}</p>
+          <p><strong>Refund Method:</strong> ${refundLog?.refundMethod || '-'}</p>
+          <p><strong>Returned By:</strong> ${refundLog?.returnedBy || '-'}</p>
+          <p><strong>Total Refund Amount:</strong> INR ${Number(refundLog?.totalAmount || 0).toFixed(2)}</p>
+          <table style="border-collapse:collapse;width:100%;margin-top:12px;">
+            <thead>
+              <tr>
+                <th style="border:1px solid #ccc;padding:6px;">Ref ID</th>
+                <th style="border:1px solid #ccc;padding:6px;">Item ID</th>
+                <th style="border:1px solid #ccc;padding:6px;">Purchased Qty</th>
+                <th style="border:1px solid #ccc;padding:6px;">Returned Qty</th>
+              </tr>
+            </thead>
+            <tbody>${tableRows}</tbody>
+          </table>
+        </body>
+      </html>
+    `
+    const win = window.open('', '_blank')
+    if (!win) return
+    win.document.write(html)
+    win.document.close()
+    win.focus()
+    win.print()
+  }
+
+  return (
+    <Card>
+      <CardContent>
+        <Typography variant="h6" className="mb-3">
+          Refund Logs & Invoices
+        </Typography>
+        <TableContainer component={Paper}>
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Return ID</TableCell>
+                <TableCell>Order ID</TableCell>
+                <TableCell>Total Purchased Qty</TableCell>
+                <TableCell>Total Returned Qty</TableCell>
+                <TableCell>Refund Method</TableCell>
+                <TableCell>Returned By</TableCell>
+                <TableCell>Refund Amount</TableCell>
+                <TableCell>Date</TableCell>
+                <TableCell>Invoice</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {details?.length > 0 ? (
+                details.map((log) => {
+                  const lineRows = Array.isArray(log.returnDetails)
+                    ? log.returnDetails
+                    : []
+                  const purchasedQty = lineRows.reduce(
+                    (sum, line) => sum + Number(line.purchaseQuantity || 0),
+                    0,
+                  )
+                  const returnedQty = lineRows.reduce(
+                    (sum, line) =>
+                      sum +
+                      Number(line.returnQuantity || line.returnedQuantity || 0),
+                    0,
+                  )
+                  return (
+                    <TableRow key={log.returnId}>
+                      <TableCell>{log.returnId}</TableCell>
+                      <TableCell>{log.orderId || orderId}</TableCell>
+                      <TableCell>{purchasedQty}</TableCell>
+                      <TableCell>{returnedQty}</TableCell>
+                      <TableCell>{log.refundMethod || 'N/A'}</TableCell>
+                      <TableCell>{log.returnedBy || 'N/A'}</TableCell>
+                      <TableCell>
+                        ₹{Number(log.totalAmount || 0).toFixed(2)}
+                      </TableCell>
+                      <TableCell>
+                        {dayjs(log.returnedDate).format('DD-MM-YYYY hh:mm A')}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          onClick={() => printRefundInvoice(log)}
+                        >
+                          Print Invoice
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center py-4">
+                    <Typography variant="body2" color="textSecondary">
+                      No refund logs available for this order ID.
+                    </Typography>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
       </CardContent>
     </Card>
   )
