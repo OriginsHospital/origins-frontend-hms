@@ -533,6 +533,11 @@ function SideNav(props) {
             relatedModule: 'pharmacy',
             name: 'Pending Sales',
           },
+          {
+            path: '/pharmacy/refund',
+            relatedModule: 'pharmacy',
+            name: 'Refund',
+          },
         ],
       },
 

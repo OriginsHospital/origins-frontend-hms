@@ -525,14 +525,6 @@ const PatientDetails = ({ details }) => {
 }
 
 const PurchaseDetails = ({ details, headerDetails, type, orderId }) => {
-  const [returnValue, setReturnValue] = useState({
-    patientId: headerDetails?.patientId,
-    type: type,
-    returnDetails: [],
-    orderId: orderId,
-    totalAmount: 0,
-  })
-
   // State to track return quantities by refId and grnId
   const [returnQuantities, setReturnQuantities] = useState({})
   const [refundMethod, setRefundMethod] = useState('CASH') // Default refund method
@@ -647,28 +639,39 @@ const PurchaseDetails = ({ details, headerDetails, type, orderId }) => {
           }
 
           // If item has multiple purchaseDetails (multiple GRNs), distribute return quantity
-          // For now, we'll use the first grnId or distribute proportionally
+          // in a deterministic way so payload always contains at least one returnInfo row.
           if (item.allPurchaseDetails && item.allPurchaseDetails.length > 0) {
-            // Distribute return quantity across purchase details
-            const totalPurchaseQty = item.purchaseQuantity
-            item.allPurchaseDetails.forEach((purchaseDetail) => {
-              const detailQty =
-                purchaseDetail.initialUsedQuantity ||
-                purchaseDetail.usedQuantity ||
-                0
-              const proportion =
-                totalPurchaseQty > 0 ? detailQty / totalPurchaseQty : 0
-              const returnQtyForDetail = Math.floor(returnQty * proportion)
+            let remainingQty = returnQty
+            item.allPurchaseDetails.forEach((purchaseDetail, detailIndex) => {
+              if (remainingQty <= 0) return
+              const detailQty = Math.max(
+                0,
+                Number(
+                  purchaseDetail.initialUsedQuantity ??
+                    purchaseDetail.usedQuantity ??
+                    0,
+                ),
+              )
+              const alreadyReturned = Math.max(
+                0,
+                Number(purchaseDetail.returnedQuantity || 0),
+              )
+              const availableQty = Math.max(0, detailQty - alreadyReturned)
+              const qtyForThisDetail =
+                detailIndex === item.allPurchaseDetails.length - 1
+                  ? Math.min(remainingQty, availableQty)
+                  : Math.min(remainingQty, availableQty)
 
-              if (returnQtyForDetail > 0 && purchaseDetail.grnId) {
+              if (qtyForThisDetail > 0 && purchaseDetail.grnId) {
                 returnDetailsByRefId[refId].returnInfo.push({
                   grnId: purchaseDetail.grnId,
-                  returnQuantity: returnQtyForDetail,
+                  returnQuantity: qtyForThisDetail,
                 })
+                remainingQty -= qtyForThisDetail
               }
             })
 
-            // If no distribution was made, use the first grnId
+            // Fallback: if distribution could not map to detailed rows, map full qty to primary GRN.
             if (
               returnDetailsByRefId[refId].returnInfo.length === 0 &&
               item.grnId
@@ -702,12 +705,17 @@ const PurchaseDetails = ({ details, headerDetails, type, orderId }) => {
     } else if (!atleastOneObjFound) {
       toast.error('Please add at least one return quantity', toastconfig)
     } else {
+      const resolvedType = type || headerDetails?.purchaseType || 'Consultation'
       const payload = {
-        orderId: returnValue?.orderId,
-        patientId: returnValue?.patientId,
+        orderId: orderId,
+        patientId: headerDetails?.patientId,
         totalAmount: Math.round(totAmount * 100) / 100, // Round to 2 decimal places
-        type: returnValue?.type || 'Consultation',
-        returnDetails: Object.values(returnDetailsByRefId),
+        type: resolvedType,
+        returnDetails: Object.values(returnDetailsByRefId).map((row) => ({
+          ...row,
+          // Always send the user-entered quantity; backend can derive GRN split.
+          returnQuantity: Number(returnQuantities[row.refId] || 0),
+        })),
         refundMethod: refundMethod, // Add refund method to payload
       }
 

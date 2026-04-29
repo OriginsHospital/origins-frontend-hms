@@ -133,6 +133,11 @@ const HoverDevCards = () => {
             path: '/pharmacy/dashboard',
             name: 'Dashboard',
           },
+          {
+            path: '/pharmacy/refund',
+            name: 'Refund',
+            relatedModule: 'pharmacy',
+          },
         ],
       },
 
