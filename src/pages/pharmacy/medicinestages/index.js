@@ -130,6 +130,26 @@ function RenderAccordianDetails({
   // State for coupon menu anchor (which item's coupon menu is open)
   const [couponMenuAnchor, setCouponMenuAnchor] = useState(null)
   const [selectedItemForCoupon, setSelectedItemForCoupon] = useState(null)
+  const [nonPurchaseReasons, setNonPurchaseReasons] = useState({})
+
+  const shouldShowNonPurchaseReason = (prescribedQuantity, purchaseQuantity) =>
+    Number(purchaseQuantity || 0) < Number(prescribedQuantity || 0)
+
+  const updateNonPurchaseReason = (itemId, value) => {
+    setNonPurchaseReasons((prev) => ({
+      ...prev,
+      [itemId]: value,
+    }))
+    setSaveEnabled(true)
+  }
+
+  const reasonForItem = (itemId, prescribedQuantity, purchaseQuantity) => {
+    if (!shouldShowNonPurchaseReason(prescribedQuantity, purchaseQuantity)) {
+      return null
+    }
+    const reason = nonPurchaseReasons[itemId]
+    return typeof reason === 'string' ? reason.trim() : ''
+  }
 
   const addGrnRow = (medicineId) => {
     console.log(grnRows)
@@ -192,6 +212,15 @@ function RenderAccordianDetails({
       })
       .map((itemInfo) => {
         const itemGrnRows = grnRows[itemInfo.id]
+        const purchaseQuantity = itemGrnRows.reduce(
+          (sum, row) => sum + Number(row.usedQuantity || 0),
+          0,
+        )
+        const nonPurchaseReason = reasonForItem(
+          itemInfo.id,
+          itemInfo.prescribedQuantity,
+          purchaseQuantity,
+        )
         const itemPurchaseInformation = itemGrnRows
           .filter((row) => row.grnId && row.usedQuantity > 0)
           .map((row) => ({
@@ -202,15 +231,13 @@ function RenderAccordianDetails({
             usedQuantity: Number(row.usedQuantity || 0),
             returnedQuantity: 0, // Initialize return quantity as 0
             batchNo: row.grnId.batchNo,
+            nonPurchaseReason,
           }))
 
         return {
           id: itemInfo.id,
           type: type,
-          purchaseQuantity: itemGrnRows.reduce(
-            (sum, row) => sum + Number(row.usedQuantity || 0),
-            0,
-          ),
+          purchaseQuantity,
           itemPurchaseInformation,
         }
       })
@@ -295,6 +322,7 @@ function RenderAccordianDetails({
                 usedQuantity: detail.usedQuantity,
                 returnedQuantity: detail.returnedQuantity,
                 batchNo: detail.batchNo,
+                nonPurchaseReason: detail.nonPurchaseReason || null,
                 initialUsedQuantity:
                   detail.initialUsedQuantity || detail.usedQuantity,
               }))
@@ -302,6 +330,16 @@ function RenderAccordianDetails({
           return medicineDetails
         })
         setDetails(detailsCopy)
+        const reasonSnapshot = {}
+        detailsCopy.forEach((medicineInfo) => {
+          const parsedInfo = Array.isArray(medicineInfo.itemPurchaseInformation)
+            ? medicineInfo.itemPurchaseInformation
+            : []
+          reasonSnapshot[medicineInfo.id] =
+            parsedInfo.find((detail) => detail?.nonPurchaseReason)
+              ?.nonPurchaseReason || ''
+        })
+        setNonPurchaseReasons(reasonSnapshot)
 
         // Recalculate prices with the new data (preserving coupon discounts)
         const newItemPrices = {}
@@ -501,6 +539,21 @@ function RenderAccordianDetails({
           totalCost: discountedPrice,
           refId: medicineInfo.refId, // Reference ID for line bill association
           type: header?.type || 'Treatment', // Required: "Treatment" or "Consultation"
+          purchaseDetails: Array.isArray(medicineInfo?.itemPurchaseInformation)
+            ? medicineInfo.itemPurchaseInformation.map((row) => ({
+                grnId: row?.grnId,
+                expiryDate: row?.expiryDate,
+                mrpPerTablet: row?.mrpPerTablet,
+                usedQuantity: row?.usedQuantity,
+                returnedQuantity: row?.returnedQuantity,
+                initialUsedQuantity: row?.initialUsedQuantity,
+                batchNo: row?.batchNo,
+                nonPurchaseReason:
+                  row?.nonPurchaseReason ||
+                  nonPurchaseReasons[medicineInfo.id] ||
+                  null,
+              }))
+            : [],
         }
 
         paymentDBFormat.push(orderItem)
@@ -887,6 +940,11 @@ function RenderAccordianDetails({
               totalReturnedQuantity,
             )
             const finalQuantity = totalUsedQuantity - totalReturnedQuantity
+            const nonPurchaseReason = reasonForItem(
+              itemInfo.id,
+              itemInfo.prescribedQuantity,
+              finalQuantity,
+            )
 
             // Format GRN information for modified items
             const itemPurchaseInformation = itemGrnRows
@@ -906,6 +964,7 @@ function RenderAccordianDetails({
                 initialUsedQuantity:
                   Number(row.initialUsedQuantity) || Number(row.usedQuantity),
                 batchNo: row.grnId.batchNo,
+                nonPurchaseReason,
               }))
 
             dbFormat.push({
@@ -920,11 +979,19 @@ function RenderAccordianDetails({
               id: itemInfo.id,
               type: type,
               purchaseQuantity: itemInfo.purchaseQuantity || 0,
-              itemPurchaseInformation: itemInfo.itemPurchaseInformation
+              itemPurchaseInformation: (itemInfo.itemPurchaseInformation
                 ? typeof itemInfo.itemPurchaseInformation === 'string'
                   ? JSON.parse(itemInfo.itemPurchaseInformation)
                   : itemInfo.itemPurchaseInformation
-                : [],
+                : []
+              ).map((detail) => ({
+                ...detail,
+                nonPurchaseReason: reasonForItem(
+                  itemInfo.id,
+                  itemInfo.prescribedQuantity,
+                  itemInfo.purchaseQuantity || 0,
+                ),
+              })),
             })
           }
         })
@@ -984,6 +1051,16 @@ function RenderAccordianDetails({
         saveEnabled: false,
       }
     })
+    const initialReasons = {}
+    data.forEach((itemInfo) => {
+      initialReasons[itemInfo.id] =
+        itemInfo?.nonPurchaseReason ||
+        itemInfo?.itemPurchaseInformation?.find(
+          (detail) => detail?.nonPurchaseReason,
+        )?.nonPurchaseReason ||
+        ''
+    })
+    setNonPurchaseReasons(initialReasons)
 
     const dbFormat = data.map((itemInfo) => {
       return {
@@ -1825,21 +1902,57 @@ function RenderAccordianDetails({
         </div>
       )}
       {column.label == 'PACKED' && (
-        <div className="flex justify-between items-center">
-          <span className=" font-medium">
-            Tot. Amount: ₹{calculateAmount().toFixed(2)}
-          </span>
-          {/* <Button variant="contained" className="self-end h-10 text-white"
-            onClick={(e) => handlePayment(e)}
-          >
-            Pay */}
-          <Button
-            variant="contained"
-            className="self-end h-10 text-white"
-            onClick={() => handleButtonAction(saveEnabled)}
-          >
-            {saveEnabled ? 'Save' : 'Pay'}
-          </Button>
+        <div className="flex flex-col gap-3">
+          {details
+            ?.filter((med) => {
+              const packedQty = Number(
+                med?.purchaseQuantity ??
+                  med?.itemPurchaseInformation?.reduce(
+                    (sum, detail) => sum + Number(detail.usedQuantity),
+                    0,
+                  ) ??
+                  0,
+              )
+              const prescribedQty = Number(med?.prescribedQuantity || 0)
+              return shouldShowNonPurchaseReason(prescribedQty, packedQty)
+            })
+            .map((med) => (
+              <div
+                key={`packed-reason-${med.id}`}
+                className="flex flex-col gap-1"
+              >
+                <Typography
+                  variant="caption"
+                  className="font-medium text-gray-700"
+                >
+                  Reason (Optional) - {med?.itemName}
+                </Typography>
+                <TextField
+                  value={nonPurchaseReasons[med.id] || ''}
+                  onChange={(e) =>
+                    updateNonPurchaseReason(med.id, e.target.value)
+                  }
+                  placeholder="Reason for partial / not purchased"
+                  size="small"
+                  fullWidth
+                  multiline
+                  minRows={2}
+                />
+              </div>
+            ))}
+
+          <div className="flex justify-between items-center">
+            <span className=" font-medium">
+              Tot. Amount: ₹{calculateAmount().toFixed(2)}
+            </span>
+            <Button
+              variant="contained"
+              className="self-end h-10 text-white"
+              onClick={() => handleButtonAction(saveEnabled)}
+            >
+              {saveEnabled ? 'Save' : 'Pay'}
+            </Button>
+          </div>
         </div>
       )}
       {/* {payClicked && ( */}
@@ -2189,7 +2302,7 @@ function RenderAccordianDetails({
             <span className="text-lg font-bold">{med.itemName}</span>
             <div className="mb-4 p-3 bg-gray-50 rounded-lg">
               {column.label === 'PACKED' ? (
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Typography variant="subtitle2" color="textSecondary">
                       Initial Packed
@@ -2214,17 +2327,6 @@ function RenderAccordianDetails({
                             row.initialUsedQuantity || row.usedQuantity || 0,
                           ) -
                           Number(row.returnedQuantity || 0),
-                        0,
-                      ) || 0}
-                    </Typography>
-                  </div>
-                  <div>
-                    <Typography variant="subtitle2" color="textSecondary">
-                      Returned
-                    </Typography>
-                    <Typography variant="h6" className="text-orange-500">
-                      {grnRows[med.id]?.reduce(
-                        (sum, row) => sum + Number(row.returnedQuantity || 0),
                         0,
                       ) || 0}
                     </Typography>
@@ -2268,7 +2370,10 @@ function RenderAccordianDetails({
 
             {/* GRN Selection Rows */}
             {(grnRows[med.id] || []).map((row, index) => (
-              <div key={index + 'grn' + row.grnId} className="flex gap-4 mb-3">
+              <div
+                key={index + 'grn' + row.grnId}
+                className="flex items-start gap-4 mb-3"
+              >
                 {column.label === 'PRESCRIBED' && (
                   <Autocomplete
                     className="flex-1"
@@ -2363,45 +2468,9 @@ function RenderAccordianDetails({
                   <>
                     <TextField
                       type="number"
-                      label="Return Qty"
-                      size="small"
-                      value={row.returnedQuantity || 0}
-                      onChange={(e) =>
-                        handleGrnRowChange(
-                          med.id,
-                          index,
-                          'returnedQuantity',
-                          e.target.value,
-                        )
-                      }
-                      error={
-                        row.grnId &&
-                        Number(row.returnedQuantity) >
-                          Number(row.initialUsedQuantity || row.usedQuantity)
-                      }
-                      helperText={
-                        row.grnId &&
-                        Number(row.returnedQuantity) >
-                          Number(row.initialUsedQuantity || row.usedQuantity)
-                          ? 'Cannot exceed used quantity'
-                          : ''
-                      }
-                      sx={{ width: 120 }}
-                      InputProps={{
-                        inputProps: {
-                          min: 0,
-                          max: row.initialUsedQuantity || 0,
-                        },
-                      }}
-                    />
-                    <TextField
-                      type="number"
                       label="Final Qty"
                       size="small"
-                      value={
-                        (row.initialUsedQuantity || row.usedQuantity) -
-                          (row.returnedQuantity || 0) || 0
-                      }
+                      value={row.initialUsedQuantity || row.usedQuantity || 0}
                       disabled
                       sx={{ width: 120 }}
                     />

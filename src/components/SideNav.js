@@ -585,6 +585,18 @@ function SideNav(props) {
         Iconn: TbChecklist,
         relatedModule: 'scanModule',
         icon: <ScannerOutlined className="text-secondary" />,
+        subRoutes: [
+          {
+            path: '/scan',
+            name: 'Scan List',
+            relatedModule: 'scanModule',
+          },
+          {
+            path: '/scan/prescription',
+            name: 'Prescription',
+            relatedModule: 'scanModule',
+          },
+        ],
       },
 
       {

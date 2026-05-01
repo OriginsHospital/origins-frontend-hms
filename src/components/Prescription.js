@@ -1539,6 +1539,7 @@ function Prescription({
         type={type}
         appointmentId={appointmentId}
         activeVisitAppointments={activeVisitAppointments}
+        patientId={patientInfo?.patientId}
       />
 
       <SpousePrescription

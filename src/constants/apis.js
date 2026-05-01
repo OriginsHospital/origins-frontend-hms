@@ -2249,6 +2249,24 @@ export const getScanByDate = async (token, date, branchId) => {
   )
   return response.json()
 }
+
+export const getPrescriptionsByDate = async (token, date, branchId) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const branchParam =
+    branchId === null || branchId === undefined ? '' : branchId
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_PRESCRIPTIONS_BY_DATE}${date}?branchId=${branchParam}`,
+    {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
 export const getScanReports = async (token, fromDate, toDate, branchId) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
@@ -3888,6 +3906,22 @@ export const getPatientVisits = async (token, patientId) => {
   myHeaders.append('Content-Type', 'application/json')
   const response = await fetch(
     `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_PATIENT_VISITS}/${patientId}`,
+    {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const getPatientPharmacyHistory = async (token, patientId) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_PHARMACY_HISTORY_BY_PATIENT_ID}/${patientId}`,
     {
       method: 'GET',
       headers: myHeaders,

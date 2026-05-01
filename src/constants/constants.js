@@ -169,6 +169,7 @@ export const API_ROUTES = {
   GET_PHARMACY_REFUND_LOGS: '/payment/getPharmacyRefundLogs',
   //Sacn module
   GET_SCAN_BY_DATE: '/scan/getScansByDate/',
+  GET_PRESCRIPTIONS_BY_DATE: '/scan/getPrescriptionsByDate/',
   GET_SCAN_REPORTS: '/scan/getScanReports',
   GET_SCAN_RRESULT: '/scan/getSavedScanResult',
   GET_SCAN_TEMPLATE: '/scan/getScanTemplate',
@@ -272,6 +273,7 @@ export const API_ROUTES = {
   GET_EMBRYOLOGY_HISTORY_BY_PATIENT_ID:
     '/doctors/getEmbryologyHistoryByPatientId',
   GET_PATIENT_VISITS: '/patientHistory/visits',
+  GET_PHARMACY_HISTORY_BY_PATIENT_ID: '/patientHistory/pharmacyHistory',
   GET_EMBRYOLOGY_HISTORY_BY_VISIT_ID: '/patientHistory/embryology',
   GET_CONSULTATIONS_HISTORY_BY_VISIT_ID: '/patientHistory/consultations',
   GET_TREATMENTS_HISTORY_BY_VISIT_ID: '/patientHistory/treatments',

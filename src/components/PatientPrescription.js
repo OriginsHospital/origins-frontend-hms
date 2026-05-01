@@ -5,13 +5,28 @@ import dynamic from 'next/dynamic'
 import RichText from '@/components/RichText'
 import { useDispatch, useSelector } from 'react-redux'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Button, IconButton } from '@mui/material'
+import {
+  Button,
+  IconButton,
+  Tabs,
+  Tab,
+  Chip,
+  CircularProgress,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Paper,
+} from '@mui/material'
 import Select from 'react-select'
 import Modal from './Modal'
 import { FaPrescriptionBottleMedical } from 'react-icons/fa6'
 import { closeModal, openModal } from '@/redux/modalSlice'
 import {
   getLineBillsAndNotesForAppointment,
+  getPatientPharmacyHistory,
   saveLineBillsAndNotes,
   printPrescription,
 } from '@/constants/apis'
@@ -209,11 +224,143 @@ const pharmacyStartsWithFilter = (option, inputValue) => {
   return (option?.label || '').toLowerCase().startsWith(normalizedInput)
 }
 
+function purchaseSummary(row) {
+  const rx = Number(row.prescribedQuantity) || 0
+  const bought = Number(row.purchasedQuantity) || 0
+  if (rx <= 0) {
+    return { label: '—', color: 'default' }
+  }
+  if (bought <= 0) {
+    return { label: 'Not purchased', color: 'error' }
+  }
+  if (bought >= rx) {
+    return { label: 'Fully purchased', color: 'success' }
+  }
+  return { label: 'Partially purchased', color: 'warning' }
+}
+
+function PharmacyHistoryContent({
+  patientId,
+  pharmacyHistoryLoading,
+  pharmacyHistoryError,
+  pharmacyHistoryErrorObj,
+  pharmacyHistoryByVisit,
+}) {
+  return (
+    <div className="flex flex-col gap-3 pt-1">
+      {!patientId && (
+        <p className="text-sm text-gray-600">
+          Patient context is missing; pharmacy history cannot be loaded.
+        </p>
+      )}
+      {patientId && pharmacyHistoryLoading && (
+        <div className="flex justify-center py-8">
+          <CircularProgress size={32} />
+        </div>
+      )}
+      {patientId && pharmacyHistoryError && (
+        <p className="text-sm text-red-600">
+          {pharmacyHistoryErrorObj?.message ||
+            'Could not load pharmacy history.'}
+        </p>
+      )}
+      {patientId &&
+        !pharmacyHistoryLoading &&
+        !pharmacyHistoryError &&
+        pharmacyHistoryByVisit.length === 0 && (
+          <p className="text-sm text-gray-600">
+            No pharmacy records found for this patient across visits.
+          </p>
+        )}
+      {patientId &&
+        !pharmacyHistoryLoading &&
+        !pharmacyHistoryError &&
+        pharmacyHistoryByVisit.length > 0 &&
+        pharmacyHistoryByVisit.map((visitGroup) => (
+          <Paper
+            key={visitGroup.visitId}
+            variant="outlined"
+            className="overflow-hidden"
+            sx={{ bgcolor: 'grey.50' }}
+          >
+            <div className="bg-gray-100 px-3 py-2 text-sm font-semibold text-gray-800">
+              Visit {visitGroup.visitDate}
+              <span className="ml-2 font-normal text-gray-600">
+                (Visit #{visitGroup.visitId})
+              </span>
+            </div>
+            <TableContainer sx={{ maxHeight: 280 }}>
+              <Table size="small" stickyHeader>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Medicine</TableCell>
+                    <TableCell>Appointment date</TableCell>
+                    <TableCell>Type</TableCell>
+                    <TableCell>Doctor</TableCell>
+                    <TableCell align="right">Prescribed qty</TableCell>
+                    <TableCell align="right">Purchased qty</TableCell>
+                    <TableCell>Bill status</TableCell>
+                    <TableCell>Reason</TableCell>
+                    <TableCell>Fulfillment</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {visitGroup.items.map((row) => {
+                    const summary = purchaseSummary(row)
+                    return (
+                      <TableRow key={row.lineBillId}>
+                        <TableCell sx={{ maxWidth: 200 }}>
+                          {row.medicineName || '—'}
+                        </TableCell>
+                        <TableCell>
+                          {row.appointmentDate
+                            ? dayjs(row.appointmentDate).format('DD-MM-YYYY')
+                            : '—'}
+                        </TableCell>
+                        <TableCell>{row.appointmentType}</TableCell>
+                        <TableCell>{row.doctorName || '—'}</TableCell>
+                        <TableCell align="right">
+                          {row.prescribedQuantity ?? '—'}
+                        </TableCell>
+                        <TableCell align="right">
+                          {row.purchasedQuantity ?? 0}
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={row.paymentStatus || '—'}
+                            size="small"
+                            variant="outlined"
+                          />
+                        </TableCell>
+                        <TableCell sx={{ maxWidth: 260 }}>
+                          {row.nonPurchaseReason?.trim() || '—'}
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={summary.label}
+                            color={summary.color}
+                            size="small"
+                            variant="outlined"
+                          />
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+        ))}
+    </div>
+  )
+}
+
 function PatientPrescription({
   allBillTypeValues,
   type,
   appointmentId,
   activeVisitAppointments,
+  patientId,
 }) {
   const user = useSelector((store) => store.user)
   const { billTypes } = useSelector((store) => store.dropdowns)
@@ -224,6 +371,12 @@ function PatientPrescription({
   const editor = useRef(null)
   const modal = useSelector((store) => store.modal)
   const queryClient = useQueryClient()
+  const [pharmacyPanelTab, setPharmacyPanelTab] = useState('current')
+  useEffect(() => {
+    if (modal.key !== 'addPrescription') {
+      setPharmacyPanelTab('current')
+    }
+  }, [modal.key])
   const billTypesMap = useMemo(() => {
     const map = {}
     billTypes.map((eachBillType) => {
@@ -253,6 +406,56 @@ function PatientPrescription({
       enabled: !!appointmentId && !!type && modal.key === 'addPrescription',
     })
 
+  const {
+    data: pharmacyHistoryRows = [],
+    isLoading: pharmacyHistoryLoading,
+    isError: pharmacyHistoryError,
+    error: pharmacyHistoryErrorObj,
+  } = useQuery({
+    queryKey: ['patientPharmacyHistory', patientId],
+    queryFn: async () => {
+      const res = await getPatientPharmacyHistory(user.accessToken, patientId)
+      if (res.status === 200) {
+        return Array.isArray(res.data) ? res.data : []
+      }
+      throw new Error(res.message || 'Failed to load pharmacy history')
+    },
+    enabled:
+      !!patientId &&
+      modal.key === 'addPrescription' &&
+      pharmacyPanelTab === 'history',
+  })
+
+  const pharmacyHistoryByVisit = useMemo(() => {
+    if (!pharmacyHistoryRows?.length) {
+      return []
+    }
+    const byVisit = new Map()
+    for (const row of pharmacyHistoryRows) {
+      const key = row.visitId
+      if (!byVisit.has(key)) {
+        byVisit.set(key, {
+          visitId: row.visitId,
+          visitDate: row.visitDate,
+          items: [],
+        })
+      }
+      byVisit.get(key).items.push(row)
+    }
+    return [...byVisit.values()]
+      .map((g) => ({
+        ...g,
+        items: [...g.items].sort(
+          (a, b) =>
+            dayjs(b.appointmentDate).valueOf() -
+            dayjs(a.appointmentDate).valueOf(),
+        ),
+      }))
+      .sort(
+        (a, b) => dayjs(b.visitDate).valueOf() - dayjs(a.visitDate).valueOf(),
+      )
+  }, [pharmacyHistoryRows])
+
   const { mutate, isPending } = useMutation({
     mutationFn: async (payload) => {
       const res = await saveLineBillsAndNotes(user.accessToken, payload)
@@ -270,6 +473,9 @@ function PatientPrescription({
             type,
             appointmentId,
           ],
+        })
+        queryClient.invalidateQueries({
+          queryKey: ['patientPharmacyHistory'],
         })
         toast.success('Saved Successfully', toastconfig)
       } else {
@@ -812,249 +1018,319 @@ function PatientPrescription({
       <Modal
         uniqueKey="addPrescription"
         closeOnOutsideClick={true}
-        maxWidth="md"
+        maxWidth="lg"
+        paperSx={{
+          maxHeight: 'min(92vh, 960px)',
+          width: '100%',
+          borderRadius: 2,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
       >
-        <div className="flex justify-between">
-          <span className="text-xl font-semibold text-secondary flex items-center py-5 gap-4">
-            Patient Prescription
-          </span>
+        <div className="flex max-h-[min(92vh,960px)] min-h-0 flex-col overflow-hidden">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-7 pt-4 sm:px-8">
+            <div className="flex items-start justify-between gap-4 border-b border-gray-100 pb-3">
+              <span className="text-xl font-semibold text-secondary">
+                Patient Prescription
+              </span>
 
-          <IconButton onClick={() => dispatch(closeModal())}>
-            <Close />
-          </IconButton>
-        </div>
-        <div className="flex flex-col gap-3">
-          {activeVisitAppointments && (
-            <div className="flex flex-col gap-2">
-              <span className="font-semibold">Previous Prescriptions</span>
-              <Select
-                options={activeVisitAppointments.map((appointment) => ({
-                  value: `${appointment.type}-${appointment.appointmentId}`,
-                  label: `${dayjs(appointment.appointmentDate).format(
-                    'DD-MM-YYYY',
-                  )} | ${appointment.type} | ${appointment.doctorName}`,
-                  appointment: appointment,
-                }))}
-                onChange={(selected) => {
-                  if (
-                    selected &&
-                    confirm('Are you sure you want to copy this prescription?')
-                  ) {
-                    const [type, appointmentId] = selected.value.split('-')
-                    console.log('Fetching line bills for:', type, appointmentId)
-                    fetchAndSetLineBills(type, appointmentId)
-                  } else {
-                    // Clear the form when no option is selected
-                    setDefaultLineBillValues(null)
-                    setNotesValue('')
-                  }
-                }}
-                placeholder="Select appointment to copy prescription"
-                isClearable
-              />
+              <IconButton
+                onClick={() => dispatch(closeModal())}
+                size="small"
+                sx={{ mt: -0.5 }}
+                aria-label="Close prescription"
+              >
+                <Close />
+              </IconButton>
             </div>
-          )}
-          {/* Notes Section */}
-          <div className="flex flex-col gap-2">
-            <span className="font-semibold">Notes</span>
-            <RichText value={notesValue} setValue={setNotesValue} />
-          </div>
-
-          {/* Bill Types Section */}
-          {allBillTypeValues ? (
-            billTypes.map((billType) => {
-              const defaultValues =
-                defaultLineBillValues?.[billType.id]?.map((billData) => ({
-                  value: billData.id,
-                  label: billData.name,
-                  status: billData.status,
-                })) ?? []
-
-              // Add medicine kits as special options for Pharmacy
-              let selectOptions =
-                allBillTypeValues?.[billType.name]?.map((data) => ({
-                  value: data.id,
-                  label: data.name,
-                })) ?? []
-
-              if (billType.name === 'Lab Test') {
-                selectOptions = selectOptions.filter(
-                  (option) => !isRestrictedPatientLabTest(option.label),
-                )
-              }
-
-              // Add all medicine kit options for Pharmacy
-              if (billType.name === 'Pharmacy') {
-                // Pharmacy in "Prescription" should allow CLEO SHOT,
-                // but not NAPO SHOT (spouse will handle NAPO).
-                const kitOptions = ALL_MEDICINE_KITS.filter(
-                  (kit) => kit.kitValue !== NAPO_SHOT_KIT.kitValue,
-                ).map((kit) => ({
-                  value: kit.kitValue,
-                  label: kit.kitName,
-                  isKit: true, // Flag to identify it's a kit
-                }))
-                selectOptions = [...kitOptions, ...selectOptions]
-              }
-              return (
-                <React.Fragment key={`${billType.name}-multiselect`}>
-                  <p className="font-semibold">{billType.name}</p>
-
-                  {/* Paid Items Display */}
-                  <div className="flex flex-wrap gap-2">
-                    {defaultValues.map(
-                      (item) =>
-                        item.status === 'PAID' && (
-                          <span
-                            key={`paid-${item.value}`}
-                            className="text-success-content bg-success p-1 px-2 rounded-md"
-                          >
-                            {item.label}
-                          </span>
-                        ),
-                    )}
-                  </div>
-
-                  {/* Selection Component */}
-                  {/* <span>{selectOptions.map(item => item.value)}</span> */}
+            <div className="mt-4 flex flex-col gap-4">
+              {activeVisitAppointments && (
+                <div className="flex flex-col gap-2">
+                  <span className="font-semibold">Previous Prescriptions</span>
                   <Select
-                    isMulti
-                    name={billType.name}
-                    value={defaultValues.filter(
-                      (item) => item.status !== 'PAID',
-                    )}
-                    options={selectOptions}
-                    onChange={setSelectedValues(billType.name)}
-                    classNamePrefix={`select-${billType.name.toLowerCase()}`}
-                    filterOption={
-                      billType.name === 'Pharmacy'
-                        ? pharmacyStartsWithFilter
-                        : undefined
-                    }
+                    options={activeVisitAppointments.map((appointment) => ({
+                      value: `${appointment.type}-${appointment.appointmentId}`,
+                      label: `${dayjs(appointment.appointmentDate).format(
+                        'DD-MM-YYYY',
+                      )} | ${appointment.type} | ${appointment.doctorName}`,
+                      appointment: appointment,
+                    }))}
+                    onChange={(selected) => {
+                      if (
+                        selected &&
+                        confirm(
+                          'Are you sure you want to copy this prescription?',
+                        )
+                      ) {
+                        const [type, appointmentId] = selected.value.split('-')
+                        console.log(
+                          'Fetching line bills for:',
+                          type,
+                          appointmentId,
+                        )
+                        fetchAndSetLineBills(type, appointmentId)
+                      } else {
+                        // Clear the form when no option is selected
+                        setDefaultLineBillValues(null)
+                        setNotesValue('')
+                      }
+                    }}
+                    placeholder="Select appointment to copy prescription"
+                    isClearable
                   />
-                  {billType.name === 'Pharmacy' && (
-                    <div className="h-48 border flex flex-col items-center p-2 overflow-y-auto gap-2 bg-primary/10 rounded-lg">
-                      {defaultLineBillValues?.['3']?.length > 0 ? (
-                        defaultLineBillValues['3'].map((prescription, index) =>
-                          prescription.id && prescription.status !== 'PAID' ? (
-                            <RenderPrescriptionPharmacy
-                              key={`prescription-${prescription.id}-${index}`}
-                              prescriptionRowIndex={index}
-                              prescriptionName={prescription.name}
-                              prescribedQuantity={
-                                prescription.prescribedQuantity
-                              }
-                              deleteClicked={handleDeleteClicked}
-                              duplicateClicked={handleDuplicateClicked}
-                              daysChange={handleDaysChange}
-                              prescriptionIntake={
-                                prescription.prescriptionDetails
-                              }
-                              prescriptionIntakeChange={handleIntakeChange}
-                              prescriptionDays={prescription.prescriptionDays}
-                              // status={prescription.status}
-                            />
-                          ) : null,
-                        )
-                      ) : (
-                        <div className="flex justify-center h-full items-center">
-                          <span>No medicine selected</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {billType.name === 'Pharmacy' && (
-                    <div className=" border flex flex-col  p-2 overflow-y-auto gap-2 rounded-lg">
-                      {defaultLineBillValues?.['3']?.length > 0 ? (
-                        defaultLineBillValues['3'].map((prescription) =>
-                          prescription.id && prescription.status == 'PAID' ? (
-                            <div
-                              className="w-full border p-2 flex items-center justify-between rounded bg-gray-100"
-                              key={`paid-${prescription.id}`}
-                            >
-                              <div className="w-full flex items-center justify-between gap-4">
-                                <span
-                                  className="text-sm font-medium w-40 min-w-0 overflow-hidden whitespace-nowrap text-ellipsis"
-                                  title={prescription.name}
-                                >
-                                  {prescription.name}
-                                </span>
-                                <div className="flex flex-col">
-                                  <span className="text-xs text-gray-500">
-                                    Quantity
-                                  </span>
-                                  <span className="text-sm">
-                                    {prescription.prescribedQuantity}
-                                  </span>
-                                </div>
-                                <div className="flex flex-col">
-                                  <span className="text-xs text-gray-500">
-                                    Days
-                                  </span>
-                                  <span className="text-sm">
-                                    {prescription.prescriptionDays}
-                                  </span>
-                                </div>
-                                <div className="flex flex-col">
-                                  <span className="text-xs text-gray-500">
-                                    Intake
-                                  </span>
-                                  <span className="text-sm">
-                                    {prescription?.prescriptionDetails.startsWith(
-                                      'OTHER_',
-                                    )
-                                      ? prescription?.prescriptionDetails?.split(
-                                          '_',
-                                        )[1]
-                                      : prescription?.prescriptionDetails}
-                                  </span>
-                                </div>
-                                <span className="px-2 py-1 text-xs font-medium text-green-700 bg-green-100 rounded-full">
-                                  Paid
-                                </span>
-                              </div>
-                            </div>
-                          ) : null,
-                        )
-                      ) : (
-                        <div className="flex justify-center h-full items-center">
-                          <span>No medicine selected</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </React.Fragment>
-              )
-            })
-          ) : (
-            <p>No details available</p>
-          )}
+                </div>
+              )}
+              {/* Notes Section */}
+              <div className="flex flex-col gap-2">
+                <span className="font-semibold">Notes</span>
+                <RichText value={notesValue} setValue={setNotesValue} />
+              </div>
 
-          {/* Action Buttons */}
-          <div className="flex justify-end">
-            {/* <Button
+              {/* Bill Types Section */}
+              {allBillTypeValues ? (
+                billTypes.map((billType) => {
+                  const defaultValues =
+                    defaultLineBillValues?.[billType.id]?.map((billData) => ({
+                      value: billData.id,
+                      label: billData.name,
+                      status: billData.status,
+                    })) ?? []
+
+                  // Add medicine kits as special options for Pharmacy
+                  let selectOptions =
+                    allBillTypeValues?.[billType.name]?.map((data) => ({
+                      value: data.id,
+                      label: data.name,
+                    })) ?? []
+
+                  if (billType.name === 'Lab Test') {
+                    selectOptions = selectOptions.filter(
+                      (option) => !isRestrictedPatientLabTest(option.label),
+                    )
+                  }
+
+                  // Add all medicine kit options for Pharmacy
+                  if (billType.name === 'Pharmacy') {
+                    // Pharmacy in "Prescription" should allow CLEO SHOT,
+                    // but not NAPO SHOT (spouse will handle NAPO).
+                    const kitOptions = ALL_MEDICINE_KITS.filter(
+                      (kit) => kit.kitValue !== NAPO_SHOT_KIT.kitValue,
+                    ).map((kit) => ({
+                      value: kit.kitValue,
+                      label: kit.kitName,
+                      isKit: true, // Flag to identify it's a kit
+                    }))
+                    selectOptions = [...kitOptions, ...selectOptions]
+                  }
+                  const paidItemsBlock = (
+                    <div className="flex flex-wrap gap-2">
+                      {defaultValues.map(
+                        (item) =>
+                          item.status === 'PAID' && (
+                            <span
+                              key={`paid-${item.value}`}
+                              className="text-success-content bg-success p-1 px-2 rounded-md"
+                            >
+                              {item.label}
+                            </span>
+                          ),
+                      )}
+                    </div>
+                  )
+
+                  const selectBlock = (
+                    <Select
+                      isMulti
+                      name={billType.name}
+                      value={defaultValues.filter(
+                        (item) => item.status !== 'PAID',
+                      )}
+                      options={selectOptions}
+                      onChange={setSelectedValues(billType.name)}
+                      classNamePrefix={`select-${billType.name.toLowerCase()}`}
+                      filterOption={
+                        billType.name === 'Pharmacy'
+                          ? pharmacyStartsWithFilter
+                          : undefined
+                      }
+                    />
+                  )
+
+                  if (billType.name === 'Pharmacy') {
+                    const pharmacyCurrentBlocks = (
+                      <>
+                        {paidItemsBlock}
+                        {selectBlock}
+                        <div className="h-48 border flex flex-col items-center p-2 overflow-y-auto gap-2 bg-primary/10 rounded-lg">
+                          {defaultLineBillValues?.['3']?.length > 0 ? (
+                            defaultLineBillValues['3'].map(
+                              (prescription, index) =>
+                                prescription.id &&
+                                prescription.status !== 'PAID' ? (
+                                  <RenderPrescriptionPharmacy
+                                    key={`prescription-${prescription.id}-${index}`}
+                                    prescriptionRowIndex={index}
+                                    prescriptionName={prescription.name}
+                                    prescribedQuantity={
+                                      prescription.prescribedQuantity
+                                    }
+                                    deleteClicked={handleDeleteClicked}
+                                    duplicateClicked={handleDuplicateClicked}
+                                    daysChange={handleDaysChange}
+                                    prescriptionIntake={
+                                      prescription.prescriptionDetails
+                                    }
+                                    prescriptionIntakeChange={
+                                      handleIntakeChange
+                                    }
+                                    prescriptionDays={
+                                      prescription.prescriptionDays
+                                    }
+                                  />
+                                ) : null,
+                            )
+                          ) : (
+                            <div className="flex justify-center h-full items-center">
+                              <span>No medicine selected</span>
+                            </div>
+                          )}
+                        </div>
+                        <div className=" border flex flex-col  p-2 overflow-y-auto gap-2 rounded-lg">
+                          {defaultLineBillValues?.['3']?.length > 0 ? (
+                            defaultLineBillValues['3'].map((prescription) =>
+                              prescription.id &&
+                              prescription.status == 'PAID' ? (
+                                <div
+                                  className="w-full border p-2 flex items-center justify-between rounded bg-gray-100"
+                                  key={`paid-${prescription.id}`}
+                                >
+                                  <div className="w-full flex items-center justify-between gap-4">
+                                    <span
+                                      className="text-sm font-medium w-40 min-w-0 overflow-hidden whitespace-nowrap text-ellipsis"
+                                      title={prescription.name}
+                                    >
+                                      {prescription.name}
+                                    </span>
+                                    <div className="flex flex-col">
+                                      <span className="text-xs text-gray-500">
+                                        Quantity
+                                      </span>
+                                      <span className="text-sm">
+                                        {prescription.prescribedQuantity}
+                                      </span>
+                                    </div>
+                                    <div className="flex flex-col">
+                                      <span className="text-xs text-gray-500">
+                                        Days
+                                      </span>
+                                      <span className="text-sm">
+                                        {prescription.prescriptionDays}
+                                      </span>
+                                    </div>
+                                    <div className="flex flex-col">
+                                      <span className="text-xs text-gray-500">
+                                        Intake
+                                      </span>
+                                      <span className="text-sm">
+                                        {prescription?.prescriptionDetails.startsWith(
+                                          'OTHER_',
+                                        )
+                                          ? prescription?.prescriptionDetails?.split(
+                                              '_',
+                                            )[1]
+                                          : prescription?.prescriptionDetails}
+                                      </span>
+                                    </div>
+                                    <span className="px-2 py-1 text-xs font-medium text-green-700 bg-green-100 rounded-full">
+                                      Paid
+                                    </span>
+                                  </div>
+                                </div>
+                              ) : null,
+                            )
+                          ) : (
+                            <div className="flex justify-center h-full items-center">
+                              <span>No medicine selected</span>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )
+
+                    return (
+                      <React.Fragment key={`${billType.name}-multiselect`}>
+                        <div className="flex flex-col gap-2 border-b border-gray-100 pb-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="font-semibold">
+                              {billType.name}
+                            </span>
+                            <Tabs
+                              value={pharmacyPanelTab}
+                              onChange={(_, v) => setPharmacyPanelTab(v)}
+                              variant="scrollable"
+                              scrollButtons="auto"
+                              sx={{ minHeight: 40 }}
+                            >
+                              <Tab label="Pharmacy" value="current" />
+                              <Tab label="Pharmacy History" value="history" />
+                            </Tabs>
+                          </div>
+                        </div>
+                        {pharmacyPanelTab === 'history' && (
+                          <PharmacyHistoryContent
+                            patientId={patientId}
+                            pharmacyHistoryLoading={pharmacyHistoryLoading}
+                            pharmacyHistoryError={pharmacyHistoryError}
+                            pharmacyHistoryErrorObj={pharmacyHistoryErrorObj}
+                            pharmacyHistoryByVisit={pharmacyHistoryByVisit}
+                          />
+                        )}
+                        {pharmacyPanelTab === 'current' &&
+                          pharmacyCurrentBlocks}
+                      </React.Fragment>
+                    )
+                  }
+
+                  return (
+                    <React.Fragment key={`${billType.name}-multiselect`}>
+                      <p className="font-semibold">{billType.name}</p>
+                      {paidItemsBlock}
+                      {selectBlock}
+                    </React.Fragment>
+                  )
+                })
+              ) : (
+                <p>No details available</p>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex justify-end">
+                {/* <Button
               className="capitalize"
               variant="outlined"
               onClick={() => dispatch(closeModal())}
             >
               Close
             </Button> */}
-            <div className="flex gap-2">
-              <Button
-                className="capitalize"
-                variant="outlined"
-                onClick={handlePrintPrescription}
-              >
-                Print
-              </Button>
-              <Button
-                className="text-white capitalize"
-                variant="contained"
-                onClick={onSaveClick}
-                disabled={isPending}
-              >
-                {isPending ? 'Saving...' : 'Save'}
-              </Button>
+                <div className="flex gap-2">
+                  <Button
+                    className="capitalize"
+                    variant="outlined"
+                    onClick={handlePrintPrescription}
+                  >
+                    Print
+                  </Button>
+                  <Button
+                    className="text-white capitalize"
+                    variant="contained"
+                    onClick={onSaveClick}
+                    disabled={isPending}
+                  >
+                    {isPending ? 'Saving...' : 'Save'}
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

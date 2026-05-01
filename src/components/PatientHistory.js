@@ -1644,7 +1644,7 @@ function PatientHistory({ patient, onClose }) {
           </div>
 
           {/* Slide transition between patient history and appointment details */}
-          <div className="relative overflow-hidden h-[70vh]">
+          <div className="relative h-[70vh] max-h-[70vh] min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain">
             <div
               className={`transition-all duration-300 ${
                 showAppointmentDetail

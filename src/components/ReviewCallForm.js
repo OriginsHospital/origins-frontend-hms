@@ -9,7 +9,7 @@ import {
   TextField,
 } from '@mui/material'
 import { DatePicker } from '@mui/x-date-pickers'
-import React, { useEffect } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import dayjs from 'dayjs'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 // import { getAllAppointmentsReasons } from '@/constants/apis'
@@ -17,11 +17,13 @@ import { useDispatch, useSelector } from 'react-redux'
 import { closeModal } from '@/redux/modalSlice'
 import {
   bookReviewCallConsultationAppointment,
+  createOtherAppointmentReason,
   getAppointmentReasonsByPatientType,
   getAvailableConsultationSlots,
 } from '@/constants/apis'
 import { toast } from 'react-toastify'
 import { toastconfig } from '@/utils/toastconfig'
+const OTHERS_REASON_VALUE = '__others__'
 
 function ReviewCallForm({
   appointmentId,
@@ -32,8 +34,9 @@ function ReviewCallForm({
   // selectedPatient,
   // setSelectedPatient,
 }) {
-  const userDetails = useSelector(state => state.user)
-  const { branches } = useSelector(store => store.dropdowns)
+  const [appointmentReasonComment, setAppointmentReasonComment] = useState('')
+  const userDetails = useSelector((state) => state.user)
+  const { branches } = useSelector((store) => store.dropdowns)
   const dispatch = useDispatch()
   const queryClient = useQueryClient()
   const { data: availableSlots, isLoading: isLoadingAvailableSlots } = useQuery(
@@ -67,8 +70,31 @@ function ReviewCallForm({
     enabled: !!patientInfo?.patientTypeId && !!userDetails?.accessToken,
   })
 
+  const appointmentReasonOptions = useMemo(() => {
+    const reasons = appointmentReasons || []
+    const hasOthers = reasons.some(
+      (each) => each?.name?.trim()?.toLowerCase() === 'others',
+    )
+    if (hasOthers) {
+      return reasons
+    }
+    return [...reasons, { id: OTHERS_REASON_VALUE, name: 'Others' }]
+  }, [appointmentReasons])
+
+  const selectedAppointmentReason = useMemo(() => {
+    if (!reviewAppointmentForm?.appointmentReasonId) return null
+    return (
+      appointmentReasonOptions.find(
+        (each) => each.id === reviewAppointmentForm?.appointmentReasonId,
+      ) || null
+    )
+  }, [appointmentReasonOptions, reviewAppointmentForm?.appointmentReasonId])
+
+  const isOthersSelected =
+    selectedAppointmentReason?.name?.trim()?.toLowerCase() === 'others'
+
   const bookingAppointment = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const res = await bookReviewCallConsultationAppointment(
         userDetails.accessToken,
         payload,
@@ -83,7 +109,59 @@ function ReviewCallForm({
       }
     },
   })
-  const handleBookAppointment = () => {
+  const createOtherReasonMutation = useMutation({
+    mutationFn: async (comment) => {
+      const response = await createOtherAppointmentReason(
+        userDetails.accessToken,
+        {
+          appointmentReasonName: comment,
+          patientId: patientInfo?.id,
+          isSpouse: 0,
+        },
+      )
+      return response
+    },
+  })
+
+  const handleBookAppointment = async () => {
+    if (
+      !reviewAppointmentForm?.branchId ||
+      !reviewAppointmentForm?.date ||
+      !reviewAppointmentForm?.timeslot ||
+      !reviewAppointmentForm?.appointmentReasonId
+    ) {
+      toast.error('Please fill all required fields', toastconfig)
+      return
+    }
+
+    let appointmentReasonId = reviewAppointmentForm?.appointmentReasonId
+    if (isOthersSelected) {
+      const trimmedComment = appointmentReasonComment.trim()
+      if (!trimmedComment) {
+        toast.error('Please enter comment for Others reason', toastconfig)
+        return
+      }
+
+      const duplicateReason = appointmentReasons?.find(
+        (each) =>
+          each?.name?.trim()?.toLowerCase() === trimmedComment.toLowerCase(),
+      )
+
+      if (duplicateReason?.id) {
+        appointmentReasonId = duplicateReason.id
+      } else {
+        const response =
+          await createOtherReasonMutation.mutateAsync(trimmedComment)
+        if (response?.status !== 200) {
+          toast.error(
+            response?.message || 'Failed to create appointment reason',
+          )
+          return
+        }
+        appointmentReasonId = response?.data?.appointmentReasonId
+      }
+    }
+
     const payload = {
       currentAppointmentId: appointmentId,
       type: type,
@@ -92,7 +170,7 @@ function ReviewCallForm({
       doctorId: userDetails?.id,
       timeStart: reviewAppointmentForm?.timeslot?.split('-')[0].trim(),
       timeEnd: reviewAppointmentForm?.timeslot?.split('-')[1].trim(),
-      appointmentReasonId: reviewAppointmentForm?.appointmentReasonId,
+      appointmentReasonId,
       branchId: reviewAppointmentForm?.branchId,
     }
     console.log(payload)
@@ -103,10 +181,10 @@ function ReviewCallForm({
       <FormControl className="min-w-[30%]">
         <Autocomplete
           options={branches || []}
-          getOptionLabel={option => option.name}
+          getOptionLabel={(option) => option.name}
           value={
             branches?.find(
-              branch => branch.id === reviewAppointmentForm?.branchId,
+              (branch) => branch.id === reviewAppointmentForm?.branchId,
             ) || null
           }
           onChange={(_, value) =>
@@ -115,7 +193,7 @@ function ReviewCallForm({
               branchId: value?.id || null,
             })
           }
-          renderInput={params => (
+          renderInput={(params) => (
             <TextField {...params} label="Branch" fullWidth />
           )}
         />
@@ -131,7 +209,7 @@ function ReviewCallForm({
             : null
         }
         name="date"
-        onChange={newValue =>
+        onChange={(newValue) =>
           setReviewAppointmentForm({
             ...reviewAppointmentForm,
             date: dayjs(newValue).format('YYYY-MM-DD'),
@@ -153,7 +231,7 @@ function ReviewCallForm({
             }
             name="timeslot"
             label="Time Slot"
-            onChange={e =>
+            onChange={(e) =>
               setReviewAppointmentForm({
                 ...reviewAppointmentForm,
                 timeslot: e.target.value,
@@ -164,7 +242,7 @@ function ReviewCallForm({
             {isLoadingAvailableSlots ? (
               <Skeleton />
             ) : (
-              availableSlots?.data?.map(each => (
+              availableSlots?.data?.map((each) => (
                 <MenuItem key={each} value={each}>
                   {each}
                 </MenuItem>
@@ -174,16 +252,20 @@ function ReviewCallForm({
         </FormControl>
       )}
       <Autocomplete
-        options={appointmentReasons || []}
-        getOptionLabel={option => option.name}
+        options={appointmentReasonOptions}
+        getOptionLabel={(option) => option.name}
+        value={selectedAppointmentReason}
         loading={isLoadingReasons}
         onChange={(e, value) => {
           setReviewAppointmentForm({
             ...reviewAppointmentForm,
-            appointmentReasonId: value?.id,
+            appointmentReasonId: value?.id || null,
           })
+          if (value?.name?.trim()?.toLowerCase() !== 'others') {
+            setAppointmentReasonComment('')
+          }
         }}
-        renderInput={params => (
+        renderInput={(params) => (
           <TextField
             {...params}
             label="Appointment Reason"
@@ -191,8 +273,25 @@ function ReviewCallForm({
           />
         )}
       />
+      {isOthersSelected && (
+        <TextField
+          label="Comment"
+          className="bg-white rounded-lg"
+          multiline
+          minRows={3}
+          value={appointmentReasonComment}
+          onChange={(e) => setAppointmentReasonComment(e.target.value)}
+          placeholder="Enter appointment reason comment"
+        />
+      )}
       <div className="flex justify-end">
-        <Button onClick={handleBookAppointment} variant="outlined">
+        <Button
+          onClick={handleBookAppointment}
+          variant="outlined"
+          disabled={
+            bookingAppointment.isPending || createOtherReasonMutation.isPending
+          }
+        >
           Book Appointment
         </Button>
       </div>
