@@ -73,18 +73,19 @@ function MedicationSheet({
   }
 
   const handleAutoFillMedication = useCallback(() => {
-    console.log(selectedMedication, allBillTypeValues?.Pharmacy)
     if (!medicationDays || !medicationIntake || !selectedMedication) return
 
-    const currentDate = dayjs()
     // Use custom intake value if 'Other' is selected, otherwise use the selected intake
     const quantity =
       medicationIntake === 'Other' ? customIntake : medicationIntake
-    const selectedMedicationName = medicationOptions?.find(
-      (med) => med.itemName === selectedMedication,
-    )?.itemName
+    // Match catalog when possible; freeSolo text must still define row + cell keys
+    const selectedMedicationName =
+      medicationOptions?.find((med) => med.itemName === selectedMedication)
+        ?.itemName ?? selectedMedication
 
-    // Add new medication row if it doesn't exist
+    const daysToFill = parseInt(medicationDays, 10)
+    if (!Number.isFinite(daysToFill) || daysToFill < 1) return
+
     setMedicationFormData((prevData) => {
       const safeRows = Array.isArray(prevData?.rows) ? prevData.rows : []
       const medicationExists = safeRows.some(
@@ -100,16 +101,20 @@ function MedicationSheet({
 
       const newData = { ...(prevData || {}), rows: newRows }
 
-      // Fill in quantities for the specified days
-      for (let i = 0; i < parseInt(medicationDays); i++) {
-        const date = currentDate.add(i, 'day').format('DD/MM')
+      // Keys must use the same date strings as sheet column headers (Day 1 = columns[0], …),
+      // not "today", or cells will not bind to the inputs.
+      for (let i = 0; i < daysToFill; i++) {
+        const colDate = Array.isArray(columns) ? columns[i] : null
+        const date =
+          colDate != null && colDate !== ''
+            ? colDate
+            : dayjs().add(i, 'day').format('DD/MM')
         newData[`${date}-${selectedMedicationName}`] = quantity
       }
 
       return newData
     })
 
-    // Clear inputs after auto-fill
     setSelectedMedication('')
     setMedicationDays('')
     setMedicationIntake('')
@@ -119,7 +124,8 @@ function MedicationSheet({
     medicationIntake,
     customIntake,
     selectedMedication,
-    allBillTypeValues,
+    medicationOptions,
+    columns,
     setMedicationFormData,
   ])
 
