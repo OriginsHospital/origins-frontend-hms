@@ -1138,28 +1138,67 @@ function Prescription({
       // ],
     }
 
-    const { mutate: updateTreatmentStatusMutation } = useMutation({
+    const endStageFlagKey =
+      type === 'ICSI'
+        ? 'END_ICSI'
+        : type === 'FET'
+          ? 'END_FET'
+          : type === 'IUI'
+            ? 'END_IUI'
+            : type === 'OITI'
+              ? 'END_OITI'
+              : null
+
+    const {
+      mutate: updateTreatmentStatusMutation,
+      isPending: isEndingTreatment,
+    } = useMutation({
       mutationFn: async (payload) => {
-        console.log('End Treatment Payload:', payload)
         const res = await updateTreatmentStatus(user.accessToken, payload)
-        console.log('End Treatment Response:', res)
-        if (res.status === 200) {
-          // Invalidate with the correct query key that matches the useQuery
-          queryClient.invalidateQueries([
-            'treatmentStatus',
-            patientInfo?.activeVisitId,
-            patientInfo?.treatmentDetails?.treatmentTypeId,
-          ])
-          // Also invalidate all treatmentStatus queries as fallback
-          queryClient.invalidateQueries('treatmentStatus')
+        if (res.status !== 200) {
+          throw new Error(res.message || 'Failed to end treatment')
+        }
+        return res
+      },
+      onSuccess: async (res) => {
+        const vid = patientInfo?.activeVisitId
+        const treatmentTypeId = patientInfo?.treatmentDetails?.treatmentTypeId
+        const statusKey = ['treatmentStatus', vid, treatmentTypeId]
+        const readStatus = () => queryClient.getQueryData(statusKey)
+        await queryClient.invalidateQueries({
+          queryKey: ['treatmentStatus'],
+          exact: false,
+        })
+        await queryClient.refetchQueries({
+          queryKey: statusKey,
+        })
+        let updatedStatus = readStatus()
+        let confirmed =
+          endStageFlagKey && updatedStatus?.[endStageFlagKey] === 1
+        if (!confirmed) {
+          await new Promise((r) => setTimeout(r, 500))
+          await queryClient.refetchQueries({ queryKey: statusKey })
+          updatedStatus = readStatus()
+          confirmed = endStageFlagKey && updatedStatus?.[endStageFlagKey] === 1
+        }
+        if (confirmed) {
           toast.success(
-            res.message || res.data || 'ICSI marked as completed',
+            res.message ||
+              (typeof res.data === 'string' ? res.data : null) ||
+              `${type} treatment ended successfully`,
             toastconfig,
           )
           onClose()
         } else {
-          toast.error(res.message || 'Failed to end treatment', toastconfig)
+          toast.warning(
+            'Treatment end may not have saved correctly. Please refresh the page.',
+            toastconfig,
+          )
+          onClose()
         }
+      },
+      onError: (error) => {
+        toast.error(error.message || 'Failed to end treatment', toastconfig)
       },
     })
 
@@ -1248,7 +1287,10 @@ function Prescription({
             color="error"
             onClick={handleEndTreatment}
             className="capitalize"
-            disabled={selectedReason?.value === 'CANCEL' && !customReason}
+            disabled={
+              isEndingTreatment ||
+              (selectedReason?.value === 'CANCEL' && !customReason)
+            }
           >
             End {type}
           </Button>
