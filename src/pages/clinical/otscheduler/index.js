@@ -46,12 +46,46 @@ function OutPatient() {
   const [toDate, setToDate] = useState(null)
   const user = useSelector((store) => store.user)
   const normalizeValue = (value) => (value || '').toLowerCase().trim()
-  const normalizeName = (name) =>
-    (name || '').toLowerCase().replace(/\s+/g, ' ').trim()
+  const normalizeNameStrict = (name) =>
+    (name || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '')
+      .trim()
   const currentUserEmail = normalizeValue(
     user?.email || user?.userDetails?.email,
   )
-  const isJhansiUser = currentUserEmail === 'jhansi@gmail.com'
+  const OT_DEFAULTS_BY_USER_EMAIL = {
+    'jhansi@gmail.com': {
+      surgeon: ['DR. K. JHANSI RANI', 'DR.Jhansi Rani'],
+      anesthetist: ['DR.Athyun', 'DR. Athyun'],
+      embryologist: ['Ravi Teja', 'Nithya Srinivasan'],
+      otStaff: ['Ashwini'],
+    },
+    'domalateja@gmail.com': {
+      surgeon: ['DR.Teja D', 'DR. Teja D', 'DR.Teja', 'DR. Teja'],
+      anesthetist: ['DR.Karthik', 'DR. Karthik'],
+      embryologist: ['Nithya Srinivasan', 'DR.Nithya', 'DR. Nithya'],
+      otStaff: ['Ramakrishna'],
+    },
+    'sambiswetha@gmail.com': {
+      surgeon: ['DR.Swetha', 'DR. Swetha'],
+      anesthetist: ['DR.Karthik', 'DR. Karthik'],
+      embryologist: ['Nithya Srinivasan', 'DR.Nithya', 'DR. Nithya'],
+      otStaff: ['Ramakrishna'],
+    },
+    'divyanagabushnam37@gmail.com': {
+      surgeon: ['DR.Divya', 'DR. Divya'],
+      anesthetist: [],
+      embryologist: ['Nagaraju'],
+      otStaff: [],
+    },
+    'navyakonjeti2811@gmail.com': {
+      surgeon: ['DR.Navya', 'DR. Navya'],
+      anesthetist: [],
+      embryologist: ['Sridhar'],
+      otStaff: ['Shyam'],
+    },
+  }
   const createEmptyFormData = () => ({
     branchId: '',
     // consultantId: '',
@@ -295,20 +329,42 @@ function OutPatient() {
     )
     return designation?.personList || []
   }
-  const getPersonIdByDesignationAndName = (designationId, personName) => {
-    const selectedPerson = filterPersonListByDesignationId(designationId)?.find(
-      (person) =>
-        normalizeName(person?.personName) === normalizeName(personName),
+  const getPersonIdByDesignationAndNames = (
+    designationId,
+    personNames = [],
+  ) => {
+    if (!personNames?.length) return ''
+    const people = filterPersonListByDesignationId(designationId) || []
+    const normalizedCandidates = personNames
+      .filter(Boolean)
+      .map((name) => normalizeNameStrict(name))
+    const selectedPerson = people.find((person) =>
+      normalizedCandidates.includes(normalizeNameStrict(person?.personName)),
     )
     return selectedPerson?.id ? String(selectedPerson.id) : ''
   }
   const getAddModalInitialValues = () => {
     const baseFormData = createEmptyFormData()
-    if (!isJhansiUser) return baseFormData
+    const defaultConfig = OT_DEFAULTS_BY_USER_EMAIL[currentUserEmail]
+    if (!defaultConfig) return baseFormData
+
+    const surgeonId = getPersonIdByDesignationAndNames(1, defaultConfig.surgeon)
+    const anesthetistId = getPersonIdByDesignationAndNames(
+      2,
+      defaultConfig.anesthetist,
+    )
+    const embryologistId = getPersonIdByDesignationAndNames(
+      4,
+      defaultConfig.embryologist,
+    )
+    const otStaffId = getPersonIdByDesignationAndNames(3, defaultConfig.otStaff)
+
     return {
       ...baseFormData,
-      surgeonId: getPersonIdByDesignationAndName(1, 'DR. K. JHANSI RANI'),
-      embryologistId: getPersonIdByDesignationAndName(4, 'Nithya Srinivasan'),
+      surgeonId,
+      anesthetistId,
+      embryologistId,
+      otStaff: otStaffId,
     }
   }
   const handleChangeMulti = (event) => {

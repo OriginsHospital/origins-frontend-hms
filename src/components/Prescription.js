@@ -241,6 +241,22 @@ function Prescription({
   const [eraStartTime, setEraStartTime] = useState(null)
   const [hysteroscopyTemplate, setHysteroscopyTemplate] = useState(null)
   const [hysteroscopyReportId, setHysteroscopyReportId] = useState(null)
+  const visitTypeText = [
+    selectedPatient?.visitType,
+    selectedPatient?.appointmentType,
+    selectedPatient?.appointmentReason,
+    patientInfo?.visitType,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+    .trim()
+  const isVisitTypeWithoutTreatmentStart =
+    visitTypeText.includes('gynec') ||
+    visitTypeText.includes('gyn') ||
+    visitTypeText.includes('antenatal') ||
+    visitTypeText.includes('anc/zyn') ||
+    visitTypeText.includes('anc')
 
   const { data: treatmentStatus, isLoading: isTreatmentStatusLoading } =
     useQuery({
@@ -1949,15 +1965,17 @@ function Prescription({
         patientInfo?.activeVisitId &&
         !patientInfo?.treatmentExists && (
           <>
-            <Button
-              variant="outlined"
-              className="capitalize"
-              onClick={(e) => dispatch(openModal('startTreatment'))}
-              name="Treatment"
-              // startIcon={<Start />}
-            >
-              Start Treatment
-            </Button>
+            {!isVisitTypeWithoutTreatmentStart && (
+              <Button
+                variant="outlined"
+                className="capitalize"
+                onClick={(e) => dispatch(openModal('startTreatment'))}
+                name="Treatment"
+                // startIcon={<Start />}
+              >
+                Start Treatment
+              </Button>
+            )}
             <Button
               variant="outlined"
               className="capitalize"

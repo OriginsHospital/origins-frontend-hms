@@ -63,19 +63,18 @@ function SaleReturnPage() {
         query: {
           ...router.query,
           tab: newValue,
-          orderId: '', // Clear orderId when switching tabs
+          // Preserve current orderId across tabs so refund logs can be fetched/viewed.
+          orderId: orderId || id || '',
         },
       },
       undefined,
       { shallow: true },
     )
-    // Reset states when switching tabs
-    setOrderId('')
-    setId('')
-    setSaleDetails(null)
-    setFlattenedPurchaseDetails([])
-    setItemReturnHistory([])
-    setNonPharmacyDetails(null)
+    // Keep searched order context while switching tabs.
+    // Only reset tab-specific details as needed.
+    if (newValue === 2) {
+      setNonPharmacyDetails(null)
+    }
   }
 
   // Effect to sync with URL parameters on initial load and URL changes
@@ -346,7 +345,9 @@ function SaleReturnPage() {
 
   useQuery({
     queryKey: ['fetchPharmacyRefundLogs', id, activeTab],
-    enabled: activeTab === 2,
+    // On logs tab, fetch even without order id (show all logs).
+    // On refund tab, keep fetch scoped to current order id for remaining qty.
+    enabled: activeTab === 2 || (activeTab === 0 && !!id),
     queryFn: async () => {
       const responsejson = await getPharmacyRefundLogs(
         user?.accessToken,
@@ -480,6 +481,7 @@ function SaleReturnPage() {
                 headerDetails={saleDetails.patientDetails}
                 type={saleDetails.type}
                 orderId={orderId}
+                returnHistory={itemReturnHistory}
               />
             </>
           ) : (
@@ -585,7 +587,13 @@ const PatientDetails = ({ details }) => {
   )
 }
 
-const PurchaseDetails = ({ details, headerDetails, type, orderId }) => {
+const PurchaseDetails = ({
+  details,
+  headerDetails,
+  type,
+  orderId,
+  returnHistory,
+}) => {
   // State to track return quantities by refId and grnId
   const [returnQuantities, setReturnQuantities] = useState({})
   const [refundMethod, setRefundMethod] = useState('CASH') // Default refund method
@@ -593,6 +601,62 @@ const PurchaseDetails = ({ details, headerDetails, type, orderId }) => {
   const dispatch = useDispatch()
   const queryClient = useQueryClient()
   const user = useSelector((store) => store.user)
+  const returnedByRefId = React.useMemo(() => {
+    const map = {}
+    const logs = Array.isArray(returnHistory) ? returnHistory : []
+    logs.forEach((log) => {
+      // Some APIs return one line per return, some return a nested returnDetails array/string.
+      if (log?.refId) {
+        const qty = Number(log?.returnQuantity || log?.returnedQuantity || 0)
+        map[log.refId] =
+          (map[log.refId] || 0) + (Number.isFinite(qty) ? qty : 0)
+        return
+      }
+
+      let lines = []
+      if (Array.isArray(log?.returnDetails)) lines = log.returnDetails
+      else if (typeof log?.returnDetails === 'string') {
+        try {
+          const parsed = JSON.parse(log.returnDetails)
+          if (Array.isArray(parsed)) lines = parsed
+        } catch (_) {
+          // ignore parse failures
+        }
+      }
+
+      lines.forEach((line) => {
+        const refId = line?.refId || line?.itemRefId || line?.itemId
+        if (!refId) return
+        const qty = Number(line?.returnQuantity || line?.returnedQuantity || 0)
+        map[refId] = (map[refId] || 0) + (Number.isFinite(qty) ? qty : 0)
+      })
+    })
+    return map
+  }, [returnHistory])
+
+  const getRemainingReturnQty = (item) => {
+    const historyReturned = Number(returnedByRefId?.[item?.refId] || 0)
+
+    // Prefer per-GRN sold quantity because backend validates at GRN level.
+    const purchaseDetails = Array.isArray(item?.allPurchaseDetails)
+      ? item.allPurchaseDetails
+      : []
+    if (purchaseDetails.length > 0) {
+      const sold = purchaseDetails.reduce((sum, d) => {
+        const detailQty = Math.max(
+          0,
+          Number(d?.initialUsedQuantity ?? d?.usedQuantity ?? 0),
+        )
+        return sum + detailQty
+      }, 0)
+      return Math.max(0, sold - historyReturned)
+    }
+
+    const purchased = Number(item?.purchaseQuantity || 0)
+    const alreadyReturned =
+      historyReturned > 0 ? historyReturned : Number(item?.returnQuantity || 0)
+    return Math.max(0, purchased - alreadyReturned)
+  }
   // Updated to work with new invoice-mapped structure (one row per item)
   const getReturnValue = (refId) => {
     return returnQuantities[refId] || ''
@@ -691,11 +755,12 @@ const PurchaseDetails = ({ details, headerDetails, type, orderId }) => {
     details.forEach((item) => {
       const refId = item.refId
       const returnQty = parseFloat(returnQuantities[refId] || 0)
+      const remainingQty = getRemainingReturnQty(item)
 
       if (returnQty > 0) {
         if (returnQty < 0) {
           error = 3
-        } else if (returnQty > item.purchaseQuantity) {
+        } else if (returnQty > remainingQty) {
           error = 1
         } else {
           // Use ratePerUnit if available, otherwise use mrpPerTablet
@@ -767,7 +832,7 @@ const PurchaseDetails = ({ details, headerDetails, type, orderId }) => {
 
     if (error == 1) {
       toast.error(
-        'Return quantity cannot exceed purchase quantity',
+        'Return quantity cannot exceed remaining refundable quantity',
         toastconfig,
       )
     } else if (error == 3) {
@@ -903,6 +968,7 @@ const PurchaseDetails = ({ details, headerDetails, type, orderId }) => {
                 {details?.map((item, index) => {
                   const refId = item.refId
                   const returnQty = parseFloat(returnQuantities[refId] || 0)
+                  const remainingQty = getRemainingReturnQty(item)
                   // Use ratePerUnit if available, otherwise use mrpPerTablet
                   const rate = item.ratePerUnit || item.mrpPerTablet || 0
                   const refundAmount = returnQty * rate
@@ -946,10 +1012,10 @@ const PurchaseDetails = ({ details, headerDetails, type, orderId }) => {
                           }}
                           inputProps={{
                             min: 0,
-                            max: item.purchaseQuantity || 0,
+                            max: remainingQty,
                           }}
                           disabled={isPending}
-                          helperText={`Max: ${item.purchaseQuantity || 0}`}
+                          helperText={`Max: ${remainingQty}`}
                           sx={{ width: '120px' }}
                         />
                       </TableCell>
@@ -1119,7 +1185,9 @@ const RefundLogs = ({ details, orderId }) => {
                 <TableRow>
                   <TableCell colSpan={9} className="text-center py-4">
                     <Typography variant="body2" color="textSecondary">
-                      No refund logs available for this order ID.
+                      {orderId
+                        ? 'No refund logs available for this order ID.'
+                        : 'No refund logs available.'}
                     </Typography>
                   </TableCell>
                 </TableRow>
