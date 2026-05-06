@@ -4597,6 +4597,7 @@ export const createHysteroscopyReport = async (token, payload) => {
       otAssistant: toSafeString(input?.otAssistantName),
       procedureType: toSafeString(input?.procedure),
       diagnosis: toSafeString(input?.indications),
+      entry: toSafeString(input?.chiefComplaints),
       operativeFindings: toSafeString(input?.intraOpFindings),
       distensionMedia: toSafeString(input?.distentionMedium),
       postopCourse: toSafeString(input?.courseInHospital),
@@ -4650,6 +4651,7 @@ export const updateHysteroscopyReport = async (token, idOrPayload, payload) => {
       otAssistant: toSafeString(input?.otAssistantName),
       procedureType: toSafeString(input?.procedure),
       diagnosis: toSafeString(input?.indications),
+      entry: toSafeString(input?.chiefComplaints),
       operativeFindings: toSafeString(input?.intraOpFindings),
       distensionMedia: toSafeString(input?.distentionMedium),
       postopCourse: toSafeString(input?.courseInHospital),
@@ -4693,6 +4695,33 @@ export const getHysteroscopyReport = async (
     redirect: 'follow',
     credentials: 'include',
   })
+
+  return response.json()
+}
+
+export const addHysteroscopyReferenceImages = async (
+  token,
+  hysteroscopyId,
+  files = [],
+) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+
+  const formData = new FormData()
+  files.forEach((file) => {
+    formData.append('hysteroscopyReferenceImages', file)
+  })
+
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.ADD_HYSTEROSCOPY_REFERENCE_IMAGES}/${hysteroscopyId}`,
+    {
+      method: 'POST',
+      body: formData,
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
 
   return response.json()
 }

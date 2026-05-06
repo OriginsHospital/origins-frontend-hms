@@ -34,6 +34,7 @@ import {
   createHysteroscopyReport,
   updateHysteroscopyReport,
   getHysteroscopyReport,
+  addHysteroscopyReferenceImages,
   closeVisitInConsultation,
   closeVisitInTreatment,
   getAllActiveVisitAppointments,
@@ -2406,9 +2407,47 @@ function Prescription({
                 }}
                 onCancel={() => dispatch(closeModal())}
                 onImageUpload={async (file, visitId) => {
-                  // TODO: Implement image upload to S3/storage
-                  // For now, return a placeholder URL
-                  return URL.createObjectURL(file)
+                  let currentHysteroscopyId = hysteroscopyReportId
+
+                  if (!currentHysteroscopyId) {
+                    const createRes = await createHysteroscopyReport(
+                      user.accessToken,
+                      {
+                        patientId: resolvedHysteroscopyPatientId,
+                        visitId: resolvedHysteroscopyVisitId,
+                      },
+                    )
+                    if (createRes?.status !== 200 || !createRes?.data?.id) {
+                      throw new Error(
+                        createRes?.message ||
+                          'Unable to initialize hysteroscopy record for image upload',
+                      )
+                    }
+                    currentHysteroscopyId = createRes.data.id
+                    setHysteroscopyReportId(createRes.data.id)
+                    queryClient.invalidateQueries('hysteroscopyReport')
+                  }
+
+                  const uploadRes = await addHysteroscopyReferenceImages(
+                    user.accessToken,
+                    currentHysteroscopyId,
+                    [file],
+                  )
+
+                  if (uploadRes?.status !== 200) {
+                    throw new Error(
+                      uploadRes?.message ||
+                        'Failed to upload hysteroscopy image',
+                    )
+                  }
+
+                  const uploadedUrl = uploadRes?.data?.[0]?.imageUrl
+                  if (!uploadedUrl) {
+                    throw new Error(
+                      'Upload succeeded but image URL was not returned',
+                    )
+                  }
+                  return uploadedUrl
                 }}
               />
             </div>

@@ -54,6 +54,7 @@ import dayjs from 'dayjs'
 import Modal from '@/components/Modal'
 import AdvancePayments from '@/components/AdvancePayments'
 import PatientHistory from '@/components/PatientHistory'
+import PreviousPrescriptionTab from '@/components/PreviousPrescriptionTab'
 
 const toastconfig = {
   position: 'top-right',
@@ -848,6 +849,9 @@ export default function Register() {
             {formData.id && (
               <Tab label="Advance Payments" value="advancePayment" />
             )}
+            {formData.id && (
+              <Tab label="Previous Prescription" value="previousPrescription" />
+            )}
           </TabList>
           {/* </Box> */}
         </div>
@@ -1022,6 +1026,9 @@ export default function Register() {
         </TabPanel>
         <TabPanel value="advancePayment">
           <AdvancePayments formData={formData} />
+        </TabPanel>
+        <TabPanel value="previousPrescription">
+          <PreviousPrescriptionTab patientDetails={formData} />
         </TabPanel>
       </TabContext>
     </div>

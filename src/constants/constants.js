@@ -347,6 +347,9 @@ export const API_ROUTES = {
   CREATE_HYSTEROSCOPY_REPORT: '/visits/saveHysteroscopy',
   UPDATE_HYSTEROSCOPY_REPORT: '/visits/saveHysteroscopy',
   GET_HYSTEROSCOPY_REPORT: '/visits/getHysteroscopy',
+  ADD_HYSTEROSCOPY_REFERENCE_IMAGES: '/visits/addHysteroscopyReferenceImages',
+  DELETE_HYSTEROSCOPY_REFERENCE_IMAGE:
+    '/visits/deleteHysteroscopyReferenceImage',
 
   //orders
   GET_ORDERS: '/orders/getAllOrders',

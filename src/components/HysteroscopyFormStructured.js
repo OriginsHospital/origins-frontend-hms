@@ -133,7 +133,7 @@ function HysteroscopyFormStructured({
               : typeof initialData.indications === 'string'
                 ? JSON.parse(initialData.indications || '[]')
                 : initialData.indications || [],
-        chiefComplaints: initialData.chiefComplaints || '',
+        chiefComplaints: initialData.entry || initialData.chiefComplaints || '',
         intraOpFindings:
           initialData.operativeFindings || initialData.intraOpFindings || '',
         distentionMedium: initialData.distensionMedia || 'Normal Saline',
