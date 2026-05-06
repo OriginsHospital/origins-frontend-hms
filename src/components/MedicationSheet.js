@@ -101,10 +101,35 @@ function MedicationSheet({
 
       const newData = { ...(prevData || {}), rows: newRows }
 
-      // Keys must use the same date strings as sheet column headers (Day 1 = columns[0], …),
-      // not "today", or cells will not bind to the inputs.
-      for (let i = 0; i < daysToFill; i++) {
-        const colDate = Array.isArray(columns) ? columns[i] : null
+      const normalizeDayMonth = (value) => {
+        if (!value) return ''
+        const [dayPart, monthPart] = String(value).split('/')
+        const day = Number(dayPart)
+        const month = Number(monthPart)
+        if (!Number.isFinite(day) || !Number.isFinite(month)) return ''
+        return `${day}/${month}`
+      }
+
+      const normalizedToday = normalizeDayMonth(dayjs().format('DD/MM'))
+      const todayColumnIndex = Array.isArray(columns)
+        ? columns.findIndex(
+            (columnValue) => normalizeDayMonth(columnValue) === normalizedToday,
+          )
+        : -1
+      const startColumnIndex = todayColumnIndex >= 0 ? todayColumnIndex : 0
+      const availableColumnCount = Array.isArray(columns)
+        ? Math.max(columns.length - startColumnIndex, 0)
+        : 0
+      const totalDaysToFill =
+        availableColumnCount > 0
+          ? Math.min(daysToFill, availableColumnCount)
+          : daysToFill
+
+      // Keys must use the same date strings as sheet column headers, or inputs won't bind.
+      for (let i = 0; i < totalDaysToFill; i++) {
+        const colDate = Array.isArray(columns)
+          ? columns[startColumnIndex + i]
+          : null
         const date =
           colDate != null && colDate !== ''
             ? colDate
