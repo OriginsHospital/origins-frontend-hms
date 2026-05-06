@@ -123,24 +123,43 @@ function HysteroscopyFormStructured({
         otAssistantName: initialData.otAssistant || '',
         procedure: initialData.procedureType || '',
         indications:
-          typeof initialData.indications === 'string'
-            ? JSON.parse(initialData.indications || '[]')
-            : initialData.indications || [],
+          typeof initialData.diagnosis === 'string'
+            ? initialData.diagnosis
+                .split(',')
+                .map((item) => item.trim())
+                .filter(Boolean)
+            : Array.isArray(initialData.diagnosis)
+              ? initialData.diagnosis
+              : typeof initialData.indications === 'string'
+                ? JSON.parse(initialData.indications || '[]')
+                : initialData.indications || [],
         chiefComplaints: initialData.chiefComplaints || '',
-        intraOpFindings: initialData.intraOpFindings || '',
+        intraOpFindings:
+          initialData.operativeFindings || initialData.intraOpFindings || '',
         distentionMedium: initialData.distensionMedia || 'Normal Saline',
-        courseInHospital: initialData.courseInHospital || '',
-        postOpInstructions: initialData.postOpInstructions || '',
-        followUp: initialData.followUp || '',
-        imageUrls:
-          typeof initialData.imageUrls === 'string'
+        courseInHospital:
+          initialData.postopCourse || initialData.courseInHospital || '',
+        postOpInstructions:
+          initialData.dischargeMedications ||
+          initialData.postOpInstructions ||
+          '',
+        followUp: initialData.consultantName || initialData.followUp || '',
+        imageUrls: Array.isArray(initialData.referenceImages)
+          ? initialData.referenceImages
+              .map((image) => image?.imageUrl)
+              .filter(Boolean)
+          : typeof initialData.imageUrls === 'string'
             ? JSON.parse(initialData.imageUrls || '[]')
             : initialData.imageUrls || [],
       })
       setUploadedImages(
-        typeof initialData.imageUrls === 'string'
-          ? JSON.parse(initialData.imageUrls || '[]')
-          : initialData.imageUrls || [],
+        Array.isArray(initialData.referenceImages)
+          ? initialData.referenceImages
+              .map((image) => image?.imageUrl)
+              .filter(Boolean)
+          : typeof initialData.imageUrls === 'string'
+            ? JSON.parse(initialData.imageUrls || '[]')
+            : initialData.imageUrls || [],
       )
     }
   }, [initialData])
