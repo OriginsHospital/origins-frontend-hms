@@ -344,9 +344,9 @@ export const API_ROUTES = {
     '/treatment/getHysteroscopySheetByVisitId',
   UPDATE_HYSTEROSCOPY_SHEET_BY_VISIT_ID:
     '/treatment/updateHysteroscopySheetByVisitId',
-  CREATE_HYSTEROSCOPY_REPORT: '/api/hysteroscopy/create',
-  UPDATE_HYSTEROSCOPY_REPORT: '/api/hysteroscopy/update',
-  GET_HYSTEROSCOPY_REPORT: '/api/hysteroscopy',
+  CREATE_HYSTEROSCOPY_REPORT: '/visits/saveHysteroscopy',
+  UPDATE_HYSTEROSCOPY_REPORT: '/visits/saveHysteroscopy',
+  GET_HYSTEROSCOPY_REPORT: '/visits/getHysteroscopy',
 
   //orders
   GET_ORDERS: '/orders/getAllOrders',

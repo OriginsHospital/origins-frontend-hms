@@ -4570,14 +4570,49 @@ export const updateHysteroscopySheetByVisitId = async (token, payload) => {
 }
 
 export const createHysteroscopyReport = async (token, payload) => {
+  const normalizeHysteroscopyPayload = (input = {}) => {
+    const parsedPatientId = Number(input?.patientId)
+    const parsedVisitId = Number(input?.visitId)
+    const toSafeString = (value) => {
+      if (value == null) return ''
+      if (Array.isArray(value)) return value.filter(Boolean).join(', ')
+      if (typeof value === 'object') return JSON.stringify(value)
+      return String(value)
+    }
+    return {
+      patientId: Number.isFinite(parsedPatientId)
+        ? parsedPatientId
+        : input?.patientId,
+      visitId: Number.isFinite(parsedVisitId) ? parsedVisitId : input?.visitId,
+      hospitalBranch: toSafeString(input?.branchLocation),
+      clinicalDiagnosis: toSafeString(input?.clinicalDiagnosis),
+      lmp: input?.lmpDate ?? null,
+      dayOfCycle: toSafeString(input?.dayOfCycle),
+      admissionDate: input?.admissionDate ?? null,
+      procedureDate: input?.procedureDate ?? null,
+      dischargeDate: input?.dischargeDate ?? null,
+      gynecologist: toSafeString(input?.gynaecologistName),
+      assistant: toSafeString(input?.staffNurseName),
+      anesthetist: toSafeString(input?.anesthetistName),
+      otAssistant: toSafeString(input?.otAssistantName),
+      procedureType: toSafeString(input?.procedure),
+      diagnosis: toSafeString(input?.indications),
+      operativeFindings: toSafeString(input?.intraOpFindings),
+      distensionMedia: toSafeString(input?.distentionMedium),
+      postopCourse: toSafeString(input?.courseInHospital),
+      dischargeMedications: toSafeString(input?.postOpInstructions),
+      consultantName: toSafeString(input?.followUp),
+    }
+  }
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
+  const requestPayload = normalizeHysteroscopyPayload(payload)
   const response = await fetch(
     `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.CREATE_HYSTEROSCOPY_REPORT}`,
     {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(requestPayload),
       headers: myHeaders,
       redirect: 'follow',
       credentials: 'include',
@@ -4587,15 +4622,50 @@ export const createHysteroscopyReport = async (token, payload) => {
   return response.json()
 }
 
-export const updateHysteroscopyReport = async (token, id, payload) => {
+export const updateHysteroscopyReport = async (token, idOrPayload, payload) => {
+  const normalizeHysteroscopyPayload = (input = {}) => {
+    const parsedPatientId = Number(input?.patientId)
+    const parsedVisitId = Number(input?.visitId)
+    const toSafeString = (value) => {
+      if (value == null) return ''
+      if (Array.isArray(value)) return value.filter(Boolean).join(', ')
+      if (typeof value === 'object') return JSON.stringify(value)
+      return String(value)
+    }
+    return {
+      patientId: Number.isFinite(parsedPatientId)
+        ? parsedPatientId
+        : input?.patientId,
+      visitId: Number.isFinite(parsedVisitId) ? parsedVisitId : input?.visitId,
+      hospitalBranch: toSafeString(input?.branchLocation),
+      clinicalDiagnosis: toSafeString(input?.clinicalDiagnosis),
+      lmp: input?.lmpDate ?? null,
+      dayOfCycle: toSafeString(input?.dayOfCycle),
+      admissionDate: input?.admissionDate ?? null,
+      procedureDate: input?.procedureDate ?? null,
+      dischargeDate: input?.dischargeDate ?? null,
+      gynecologist: toSafeString(input?.gynaecologistName),
+      assistant: toSafeString(input?.staffNurseName),
+      anesthetist: toSafeString(input?.anesthetistName),
+      otAssistant: toSafeString(input?.otAssistantName),
+      procedureType: toSafeString(input?.procedure),
+      diagnosis: toSafeString(input?.indications),
+      operativeFindings: toSafeString(input?.intraOpFindings),
+      distensionMedia: toSafeString(input?.distentionMedium),
+      postopCourse: toSafeString(input?.courseInHospital),
+      dischargeMedications: toSafeString(input?.postOpInstructions),
+      consultantName: toSafeString(input?.followUp),
+    }
+  }
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
+  const requestPayload = normalizeHysteroscopyPayload(payload ?? idOrPayload)
   const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.UPDATE_HYSTEROSCOPY_REPORT}/${id}`,
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.UPDATE_HYSTEROSCOPY_REPORT}`,
     {
-      method: 'PUT',
-      body: JSON.stringify(payload),
+      method: 'POST',
+      body: JSON.stringify(requestPayload),
       headers: myHeaders,
       redirect: 'follow',
       credentials: 'include',
@@ -4613,9 +4683,10 @@ export const getHysteroscopyReport = async (
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
-  const url = visitId
-    ? `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_HYSTEROSCOPY_REPORT}/${patientId}?visitId=${visitId}`
-    : `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_HYSTEROSCOPY_REPORT}/${patientId}`
+  const queryParams = new URLSearchParams()
+  if (patientId != null) queryParams.set('patientId', Number(patientId))
+  if (visitId != null) queryParams.set('visitId', Number(visitId))
+  const url = `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_HYSTEROSCOPY_REPORT}?${queryParams.toString()}`
   const response = await fetch(url, {
     method: 'GET',
     headers: myHeaders,

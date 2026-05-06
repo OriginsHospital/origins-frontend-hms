@@ -241,6 +241,14 @@ function Prescription({
   const [eraStartTime, setEraStartTime] = useState(null)
   const [hysteroscopyTemplate, setHysteroscopyTemplate] = useState(null)
   const [hysteroscopyReportId, setHysteroscopyReportId] = useState(null)
+  const resolvedHysteroscopyPatientId = Number(
+    patientInfo?.id ?? patientInfo?.patientId,
+  )
+  const resolvedHysteroscopyVisitId = Number(
+    patientInfo?.activeVisitId ??
+      selectedPatient?.visitId ??
+      selectedPatient?.visit_id,
+  )
   const visitTypeText = [
     selectedPatient?.visitType,
     selectedPatient?.appointmentType,
@@ -919,11 +927,11 @@ function Prescription({
     },
   })
   const { data: hysteroscopySheet } = useQuery({
-    queryKey: ['hysteroscopySheet', patientInfo?.activeVisitId],
+    queryKey: ['hysteroscopySheet', resolvedHysteroscopyVisitId],
     queryFn: async () => {
       const res = await getHysteroscopySheetByVisitId(
         user.accessToken,
-        patientInfo?.activeVisitId,
+        resolvedHysteroscopyVisitId,
       )
       if (res.status == 200) {
         setHysteroscopyTemplate(res.data.hysteroscopySheet)
@@ -932,31 +940,39 @@ function Prescription({
         throw new Error(res.message || 'Failed to get treatment sheet')
       }
     },
-    enabled: !!patientInfo?.activeVisitId,
+    enabled: Number.isFinite(resolvedHysteroscopyVisitId),
   })
 
   // New structured hysteroscopy report query
   const { data: hysteroscopyReport } = useQuery({
     queryKey: [
       'hysteroscopyReport',
-      patientInfo?.patientId,
-      patientInfo?.activeVisitId,
+      resolvedHysteroscopyPatientId,
+      resolvedHysteroscopyVisitId,
     ],
     queryFn: async () => {
-      if (!patientInfo?.patientId || !patientInfo?.activeVisitId) return null
+      if (
+        !Number.isFinite(resolvedHysteroscopyPatientId) ||
+        !Number.isFinite(resolvedHysteroscopyVisitId)
+      ) {
+        return null
+      }
       const res = await getHysteroscopyReport(
         user.accessToken,
-        patientInfo.patientId,
-        patientInfo.activeVisitId,
+        resolvedHysteroscopyPatientId,
+        resolvedHysteroscopyVisitId,
       )
-      if (res.status == 200 && res.data && res.data.length > 0) {
-        const report = res.data[0]
+      if (res.status == 200 && res.data) {
+        const report = Array.isArray(res.data) ? res.data[0] : res.data
+        if (!report) return null
         setHysteroscopyReportId(report.id)
         return report
       }
       return null
     },
-    enabled: !!patientInfo?.patientId && !!patientInfo?.activeVisitId,
+    enabled:
+      Number.isFinite(resolvedHysteroscopyPatientId) &&
+      Number.isFinite(resolvedHysteroscopyVisitId),
   })
 
   // Mutations for structured hysteroscopy report
@@ -2344,17 +2360,44 @@ function Prescription({
           {hysteroscopyTemplate ? (
             <div>
               <HysteroscopyFormStructured
-                visitId={patientInfo?.activeVisitId}
-                patientId={patientInfo?.patientId}
+                visitId={
+                  Number.isFinite(resolvedHysteroscopyVisitId)
+                    ? resolvedHysteroscopyVisitId
+                    : null
+                }
+                patientId={
+                  Number.isFinite(resolvedHysteroscopyPatientId)
+                    ? resolvedHysteroscopyPatientId
+                    : null
+                }
                 initialData={hysteroscopyReport}
                 onSave={(payload) => {
+                  const normalizedPayload = {
+                    ...payload,
+                    patientId: Number.isFinite(resolvedHysteroscopyPatientId)
+                      ? resolvedHysteroscopyPatientId
+                      : payload?.patientId,
+                    visitId: Number.isFinite(resolvedHysteroscopyVisitId)
+                      ? resolvedHysteroscopyVisitId
+                      : payload?.visitId,
+                  }
+                  if (
+                    !Number.isFinite(Number(normalizedPayload?.patientId)) ||
+                    !Number.isFinite(Number(normalizedPayload?.visitId))
+                  ) {
+                    toast.error(
+                      'Unable to save hysteroscopy report: invalid patient or visit ID',
+                      toastconfig,
+                    )
+                    return
+                  }
                   if (hysteroscopyReportId) {
                     updateHysteroscopyReportMutation.mutate({
                       id: hysteroscopyReportId,
-                      payload,
+                      payload: normalizedPayload,
                     })
                   } else {
-                    createHysteroscopyReportMutation.mutate(payload)
+                    createHysteroscopyReportMutation.mutate(normalizedPayload)
                   }
                 }}
                 onPrint={(formData) => {
@@ -2394,7 +2437,7 @@ function Prescription({
                 className="text-white capitalize mt-5"
                 disabled={!hysteroscopyTime}
                 onClick={() =>
-                  startHysteroscopyMutation.mutate(patientInfo?.activeVisitId)
+                  startHysteroscopyMutation.mutate(resolvedHysteroscopyVisitId)
                 }
               >
                 Start Hysteroscopy
