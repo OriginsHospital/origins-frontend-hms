@@ -141,6 +141,9 @@ export const API_ROUTES = {
   SAVE_GRN_DETAILS: '/pharmacy/saveGrnDetails',
   RETURN_GRN_HISTORY_LIST: '/pharmacy/getGrnItemsReturnHistory',
   RETURN_GRN_ITEMS: '/pharmacy/returnGrnItems',
+  GRN_BRANCH_TRANSFER_PREVIEW: '/pharmacy/grnBranchTransfer/preview',
+  GRN_BRANCH_TRANSFER: '/pharmacy/grnBranchTransfer',
+  GRN_BRANCH_TRANSFER_HISTORY: '/pharmacy/grnBranchTransfer/history',
   //Path for reports
   GET_REPORT_BY_DATE: '/reports/appointmentStageDurationReport',
   GET_STOCK_EXPIRY_REPORT: '/reports/stockExpiryReport',

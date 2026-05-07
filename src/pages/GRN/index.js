@@ -11,6 +11,7 @@ import {
 import { API_ROUTES } from '@/constants/constants'
 import { TabContext, TabList, TabPanel } from '@mui/lab'
 import {
+  Autocomplete,
   Button,
   Checkbox,
   Divider,
@@ -22,10 +23,11 @@ import {
   TableContainer,
   TableHead,
   TableRow,
+  TextField,
   Tooltip,
 } from '@mui/material'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import dayjs from 'dayjs'
 import { DataGrid } from '@mui/x-data-grid'
@@ -36,6 +38,11 @@ import { toast } from 'react-toastify'
 import { toastconfig } from '@/utils/toastconfig'
 import { grnStockReport } from '@/constants/apis'
 import StockReport from '../reports/stockReport'
+import {
+  createGrnBranchTransfer,
+  getGrnBranchTransferHistory,
+  getGrnBranchTransferPreview,
+} from '@/constants/apis'
 const createEmptyItem = () => ({
   itemId: '',
   itemName: '',
@@ -201,6 +208,7 @@ const GRNsReturnTable = [
 function Grn() {
   // const [suppliers,setSuppliers]=useState('');
   const user = useSelector((store) => store.user)
+  const dropdowns = useSelector((store) => store.dropdowns)
   const [grnDetails, setGrnDetails] = useState(createEmptyGrnDetail())
   const dispatch = useDispatch()
 
@@ -228,6 +236,12 @@ function Grn() {
     },
   })
   const [selectedTab, setSelectedTab] = useState('addGRNs')
+  const [branchTransferForm, setBranchTransferForm] = useState({
+    grnId: '',
+    itemId: null,
+    quantity: '',
+    destinationBranchId: null,
+  })
   const { data: getAllGRNs } = useQuery({
     queryKey: ['getAllGRNs'],
     queryFn: async () => {
@@ -238,6 +252,31 @@ function Grn() {
       } else {
         throw new Error('Error occured while fetching labtest field values')
       }
+    },
+  })
+  const transferPreview = useQuery({
+    queryKey: ['getGrnBranchTransferPreview', branchTransferForm.grnId],
+    queryFn: async () => {
+      const response = await getGrnBranchTransferPreview(
+        user.accessToken,
+        Number(branchTransferForm.grnId),
+      )
+      if (response.status === 200) {
+        return response.data
+      }
+      throw new Error(response.message || 'Failed to fetch transfer preview')
+    },
+    enabled: Boolean(branchTransferForm.grnId),
+    retry: false,
+  })
+  const { data: branchTransferHistory = [] } = useQuery({
+    queryKey: ['getGrnBranchTransferHistory'],
+    queryFn: async () => {
+      const response = await getGrnBranchTransferHistory(user.accessToken)
+      if (response.status === 200) {
+        return response.data
+      }
+      throw new Error(response.message || 'Failed to fetch transfer history')
     },
   })
   const { data: getGRNById } = useQuery({
@@ -368,6 +407,79 @@ function Grn() {
     setSelectedRow(null)
     setSelectedRowReturn(null)
     setSelectedItems([])
+  }
+  const branchOptions = useMemo(() => {
+    const globalBranches = dropdowns?.branches || []
+    if (globalBranches.length > 0) {
+      return globalBranches
+    }
+    return user?.branchDetails || []
+  }, [dropdowns, user])
+  const destinationBranchOptions = useMemo(() => {
+    const sourceBranchId = transferPreview?.data?.sourceBranchId
+    return branchOptions.filter((branch) => branch.id !== sourceBranchId)
+  }, [branchOptions, transferPreview?.data?.sourceBranchId])
+
+  const transferHistoryColumns = [
+    { field: 'sourceBranchCode', headerName: 'Source', width: 120 },
+    { field: 'destinationBranchCode', headerName: 'Destination', width: 140 },
+    {
+      field: 'transferInvoiceNumber',
+      headerName: 'Transfer Invoice',
+      width: 200,
+    },
+    { field: 'itemName', headerName: 'Medicine', width: 220, flex: 1 },
+    { field: 'transferredQuantity', headerName: 'Quantity', width: 120 },
+    {
+      field: 'transferDate',
+      headerName: 'Transfer Date',
+      width: 170,
+      valueFormatter: (value) => {
+        if (value == null || value === '') return ''
+        const d = dayjs(value)
+        return d.isValid() ? d.format('DD-MM-YYYY HH:mm') : ''
+      },
+    },
+    { field: 'transferredByName', headerName: 'Transferred By', width: 180 },
+  ]
+
+  const handleBranchTransferSubmit = async () => {
+    if (
+      !branchTransferForm.grnId ||
+      !branchTransferForm.itemId ||
+      !branchTransferForm.quantity ||
+      !branchTransferForm.destinationBranchId
+    ) {
+      toast.error(
+        'Please fill GRN ID, medicine, quantity, and destination branch.',
+        toastconfig,
+      )
+      return
+    }
+    const payload = {
+      grnId: Number(branchTransferForm.grnId),
+      itemId: Number(branchTransferForm.itemId),
+      quantity: Number(branchTransferForm.quantity),
+      destinationBranchId: Number(branchTransferForm.destinationBranchId),
+    }
+    const response = await createGrnBranchTransfer(user.accessToken, payload)
+    if (response.status === 200) {
+      toast.success(
+        `Transfer complete. Invoice: ${response?.data?.transferInvoiceNumber || ''}`,
+        toastconfig,
+      )
+      queryClient.invalidateQueries(['getGrnBranchTransferHistory'])
+      queryClient.invalidateQueries(['getAllGRNs'])
+      queryClient.invalidateQueries(['getGrnBranchTransferPreview'])
+      setBranchTransferForm({
+        grnId: '',
+        itemId: null,
+        quantity: '',
+        destinationBranchId: null,
+      })
+    } else {
+      toast.error(response.message || 'Failed to transfer stock', toastconfig)
+    }
   }
   // getGRNReturnedHistory
   // useQuery
@@ -510,6 +622,7 @@ function Grn() {
           <Tab value={`addGRNs`} label={`GRN`}></Tab>
           <Tab value={`allGRNs`} label={`All GRN's`}></Tab>
           <Tab value={`returnGRNs`} label={`Returned GRN's`}></Tab>
+          <Tab value={`branchTransfer`} label={`Branch Transfer`}></Tab>
           <Tab value={`StockReport`} label={`GRN Stock Report`}></Tab>
         </TabList>
         <TabPanel value={`allGRNs`}>
@@ -657,6 +770,110 @@ function Grn() {
         </TabPanel>
         <TabPanel value={`StockReport`}>
           <StockReport breadcrumb={false} />
+        </TabPanel>
+        <TabPanel value={`branchTransfer`}>
+          <div className="flex flex-col gap-4 p-2">
+            <div className="flex flex-wrap gap-4 items-end">
+              <TextField
+                label="GRN ID"
+                type="number"
+                value={branchTransferForm.grnId}
+                onChange={(event) =>
+                  setBranchTransferForm((prev) => ({
+                    ...prev,
+                    grnId: event.target.value,
+                    itemId: null,
+                    quantity: '',
+                  }))
+                }
+              />
+              <Autocomplete
+                className="min-w-64"
+                options={transferPreview?.data?.items || []}
+                getOptionLabel={(option) =>
+                  `${option.itemName} (Available: ${option.availableQuantity})`
+                }
+                value={
+                  (transferPreview?.data?.items || []).find(
+                    (item) => item.itemId === branchTransferForm.itemId,
+                  ) || null
+                }
+                onChange={(_, value) =>
+                  setBranchTransferForm((prev) => ({
+                    ...prev,
+                    itemId: value?.itemId || null,
+                  }))
+                }
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Medicine Name"
+                    helperText={
+                      transferPreview.error
+                        ? 'Enter a valid GRN ID from your branch.'
+                        : ''
+                    }
+                  />
+                )}
+              />
+              <TextField
+                label="Quantity"
+                type="number"
+                value={branchTransferForm.quantity}
+                onChange={(event) =>
+                  setBranchTransferForm((prev) => ({
+                    ...prev,
+                    quantity: event.target.value,
+                  }))
+                }
+              />
+              <Autocomplete
+                className="min-w-56"
+                options={destinationBranchOptions}
+                getOptionLabel={(option) =>
+                  `${option.branchCode || option.name} - ${option.name}`
+                }
+                value={
+                  destinationBranchOptions.find(
+                    (branch) =>
+                      branch.id === branchTransferForm.destinationBranchId,
+                  ) || null
+                }
+                onChange={(_, value) =>
+                  setBranchTransferForm((prev) => ({
+                    ...prev,
+                    destinationBranchId: value?.id || null,
+                  }))
+                }
+                renderInput={(params) => (
+                  <TextField {...params} label="Destination Branch" />
+                )}
+              />
+              <Button
+                variant="contained"
+                onClick={handleBranchTransferSubmit}
+                disabled={transferPreview.isFetching}
+              >
+                Confirm Transfer
+              </Button>
+            </div>
+            {transferPreview?.data?.sourceBranchName && (
+              <div className="text-sm text-secondary">
+                Source Branch: {transferPreview?.data?.sourceBranchCode} -{' '}
+                {transferPreview?.data?.sourceBranchName}
+              </div>
+            )}
+            <Divider />
+            <h3 className="text-lg font-semibold text-secondary">
+              Transfer History
+            </h3>
+            <DataGrid
+              rows={branchTransferHistory}
+              getRowId={(row) => row.id}
+              columns={transferHistoryColumns}
+              autoHeight
+            />
+          </div>
         </TabPanel>
       </TabContext>
     </div>

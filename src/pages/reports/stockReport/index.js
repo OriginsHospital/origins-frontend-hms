@@ -33,15 +33,19 @@ import { exportReport } from '@/utils/reportExport'
 
 function parseGrnDetails(raw) {
   if (raw == null) return []
+  const normalize = (value) =>
+    Array.isArray(value)
+      ? value.filter((entry) => entry && typeof entry === 'object')
+      : []
   if (typeof raw === 'string') {
     try {
       const parsed = JSON.parse(raw)
-      return Array.isArray(parsed) ? parsed : []
+      return normalize(parsed)
     } catch {
       return []
     }
   }
-  return Array.isArray(raw) ? raw : []
+  return normalize(raw)
 }
 
 /** Sentinel value for branch filter state (all branches in dropdown). */
@@ -719,7 +723,13 @@ function StockReport({ breadcrumb = true }) {
                 <div className="grid grid-cols-3 gap-2">
                   <div>
                     <p className="text-sm text-gray-600">GRN ID</p>
-                    <p className="font-medium">{item.grnId}</p>
+                    <p className="font-medium">{item.grnId ?? 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Invoice Number</p>
+                    <p className="font-medium">
+                      {item.invoiceNumber || item.invoiceNo || 'N/A'}
+                    </p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Branch</p>
@@ -731,10 +741,10 @@ function StockReport({ breadcrumb = true }) {
                   </div>
                   <div>
                     <p className="text-sm text-gray-600">Available Quantity</p>
-                    <p className="font-medium">{item.availableQuantity}</p>
+                    <p className="font-medium">{item.availableQuantity ?? 0}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-600">Expriry Date</p>
+                    <p className="text-sm text-gray-600">Expiry Date</p>
                     <p className="font-medium">{item.expiryDate || '-'}</p>
                   </div>
                 </div>

@@ -1841,6 +1841,55 @@ export const saveGrnReturn = async (token, payload) => {
   return response.json()
 }
 
+export const getGrnBranchTransferPreview = async (token, grnId) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GRN_BRANCH_TRANSFER_PREVIEW}?grnId=${grnId}`,
+    {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const createGrnBranchTransfer = async (token, payload) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GRN_BRANCH_TRANSFER}`,
+    {
+      method: 'POST',
+      headers: myHeaders,
+      body: JSON.stringify(payload),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const getGrnBranchTransferHistory = async (token) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GRN_BRANCH_TRANSFER_HISTORY}`,
+    {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
 export const getOrderId = async (token, payload) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
