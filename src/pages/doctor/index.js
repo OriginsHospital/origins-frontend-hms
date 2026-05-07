@@ -15,6 +15,7 @@ import Select from '@mui/material/Select'
 import MenuItem from '@mui/material/MenuItem'
 import InputLabel from '@mui/material/InputLabel'
 import FormControl from '@mui/material/FormControl'
+import Switch from '@mui/material/Switch'
 import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import DialogTitle from '@mui/material/DialogTitle'
@@ -28,6 +29,7 @@ import {
   getBlockedTimeSlots,
   getDoctorsForAvailability,
   saveDoctorAvailability,
+  updateDoctorActiveStatus,
 } from '@/constants/apis'
 import { getTimeDivisions } from '@/utils/getTimeDivisions'
 import { hideLoader, showLoader } from '@/redux/loaderSlice'
@@ -392,7 +394,7 @@ function BlockCalender({ doctorsData }) {
   )
 }
 
-function ShiftTimings({ doctorsData }) {
+function ShiftTimings({ doctorsData, isDoctorStatusEditor }) {
   const user = useSelector((store) => store.user)
   const dispatch = useDispatch()
   const [formDetails, setFormDetails] = useState({
@@ -454,6 +456,26 @@ function ShiftTimings({ doctorsData }) {
     },
   })
 
+  const { mutate: updateDoctorStatus, isPending: isDoctorStatusUpdating } =
+    useMutation({
+      mutationFn: async (payload) => {
+        const res = await updateDoctorActiveStatus(user.accessToken, payload)
+        if (res.status !== 200) {
+          throw new Error(res.message || 'Could not update doctor status')
+        }
+        return res
+      },
+      onSuccess: () => {
+        toast.success('Doctor status updated successfully')
+        QueryClient.invalidateQueries({
+          queryKey: ['savedShiftTimings'],
+        })
+      },
+      onError: (error) => {
+        toast.error(error.message || 'Could not update doctor status')
+      },
+    })
+
   function onDialogClose() {
     setEditShift({ index: '', from: '', to: '' })
     setOpen(false)
@@ -489,6 +511,7 @@ function ShiftTimings({ doctorsData }) {
           {
             id: id,
             ...formDetails,
+            isActive: 1,
             saved: false,
           },
           ...shiftTimingsData,
@@ -542,6 +565,14 @@ function ShiftTimings({ doctorsData }) {
     })
   }
 
+  function handleDoctorStatusToggle(shift, checked) {
+    if (!isDoctorStatusEditor) return
+    updateDoctorStatus({
+      doctorId: shift.doctorId,
+      isActive: checked ? 1 : 0,
+    })
+  }
+
   useEffect(() => {
     setFormDetails({
       doctorId: '',
@@ -563,6 +594,7 @@ function ShiftTimings({ doctorsData }) {
           doctorName: each.doctorName,
           from: each.shiftFrom,
           to: each.shiftTo,
+          isActive: Number(each.isActive) === 1 ? 1 : 0,
           saved: true,
         }
       })
@@ -572,12 +604,12 @@ function ShiftTimings({ doctorsData }) {
   }, [savedShiftTimingsData])
 
   useEffect(() => {
-    if (isLoading || isPending) {
+    if (isLoading || isPending || isDoctorStatusUpdating) {
       dispatch(showLoader())
     } else {
       dispatch(hideLoader())
     }
-  }, [isLoading, isPending])
+  }, [isLoading, isPending, isDoctorStatusUpdating])
 
   // Add new function to check for unsaved changes
   const hasUnsavedChanges = useMemo(() => {
@@ -720,28 +752,49 @@ function ShiftTimings({ doctorsData }) {
                   >
                     {shift.doctorName}
                   </Typography>
-                  {!shift.saved && (
-                    <div className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-warning-content animate-pulse"></span>
-                      <Typography
-                        variant="caption"
-                        className="text-warning-content"
-                      >
-                        Unsaved
-                      </Typography>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2">
+                    <Typography
+                      variant="caption"
+                      className={`font-medium ${
+                        shift.isActive ? 'text-success' : 'text-error'
+                      }`}
+                    >
+                      {shift.isActive ? 'Active' : 'Inactive'}
+                    </Typography>
+                    {!shift.saved && (
+                      <div className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-warning-content animate-pulse"></span>
+                        <Typography
+                          variant="caption"
+                          className="text-warning-content"
+                        >
+                          Unsaved
+                        </Typography>
+                      </div>
+                    )}
+                  </div>
                 </div>
               }
               action={
-                <IconButton
-                  size="small"
-                  color="primary"
-                  onClick={() => handleEditClick(index)}
-                  className="hover:bg-primary/10"
-                >
-                  <EditIcon fontSize="small" />
-                </IconButton>
+                <div className="flex items-center">
+                  {isDoctorStatusEditor && (
+                    <Switch
+                      checked={Number(shift.isActive) === 1}
+                      onChange={(e) =>
+                        handleDoctorStatusToggle(shift, e.target.checked)
+                      }
+                      color="success"
+                    />
+                  )}
+                  <IconButton
+                    size="small"
+                    color="primary"
+                    onClick={() => handleEditClick(index)}
+                    className="hover:bg-primary/10"
+                  >
+                    <EditIcon fontSize="small" />
+                  </IconButton>
+                </div>
               }
             />
             <CardContent className="pt-0">
@@ -817,6 +870,11 @@ function Doctor() {
   const user = useSelector((store) => store.user)
   const dispatch = useDispatch()
   const [tab, setTab] = useState('shiftTimings')
+  const userEmail = (user?.email || user?.userDetails?.email || '')
+    .toString()
+    .trim()
+    .toLowerCase()
+  const isDoctorStatusEditor = userEmail === 'nikhilsuvva@gmail.com'
 
   const { data: doctorsData, isLoading } = useQuery({
     queryKey: ['doctorsList'],
@@ -859,7 +917,10 @@ function Doctor() {
           </TabList>
         </Box>
         <TabPanel value="shiftTimings">
-          <ShiftTimings doctorsData={doctorsData} />
+          <ShiftTimings
+            doctorsData={doctorsData}
+            isDoctorStatusEditor={isDoctorStatusEditor}
+          />
         </TabPanel>
         <TabPanel value="blockCalender">
           <BlockCalender doctorsData={doctorsData} />

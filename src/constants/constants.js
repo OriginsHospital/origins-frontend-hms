@@ -45,6 +45,7 @@ export const API_ROUTES = {
   GET_BLOCKED_TIME_SLOTS: '/slots/getBlockedTimeSlots',
   SAVE_DOCTOR_AVAILABILITY: '/doctors/saveDoctorAvailability',
   GET_DOCTORS_FOR_AVAILABILITY: '/doctors/getDoctorsForAvailability',
+  UPDATE_DOCTOR_ACTIVE_STATUS: '/doctors/updateDoctorActiveStatus',
   GET_VISIT_INFO: '/visits/getVisitInfo',
   CREATE_CONSULTATION_OR_TREATMENT: '/visits/createConsultationOrTreatment',
   GET_PACKAGE_DATA: '/visits/getPackages',

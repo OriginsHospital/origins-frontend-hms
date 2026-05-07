@@ -22,6 +22,7 @@ function Register() {
   const initialValues = {
     fullName: '',
     email: '',
+    aadhaarNo: '',
     userName: '',
     password: '',
     confirmPassword: '',
@@ -34,11 +35,53 @@ function Register() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
+  const isValidAadhaar = (value) => {
+    if (!/^\d{12}$/.test(value)) {
+      return false
+    }
+    const d = [
+      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+      [1, 2, 3, 4, 0, 6, 7, 8, 9, 5],
+      [2, 3, 4, 0, 1, 7, 8, 9, 5, 6],
+      [3, 4, 0, 1, 2, 8, 9, 5, 6, 7],
+      [4, 0, 1, 2, 3, 9, 5, 6, 7, 8],
+      [5, 9, 8, 7, 6, 0, 4, 3, 2, 1],
+      [6, 5, 9, 8, 7, 1, 0, 4, 3, 2],
+      [7, 6, 5, 9, 8, 2, 1, 0, 4, 3],
+      [8, 7, 6, 5, 9, 3, 2, 1, 0, 4],
+      [9, 8, 7, 6, 5, 4, 3, 2, 1, 0],
+    ]
+    const p = [
+      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+      [1, 5, 7, 6, 2, 8, 3, 0, 9, 4],
+      [5, 8, 0, 3, 7, 9, 6, 1, 4, 2],
+      [8, 9, 1, 6, 0, 4, 3, 5, 2, 7],
+      [9, 4, 5, 3, 1, 2, 6, 8, 7, 0],
+      [4, 2, 8, 6, 5, 7, 3, 9, 0, 1],
+      [2, 7, 9, 3, 8, 0, 6, 4, 1, 5],
+      [7, 0, 4, 6, 9, 1, 3, 2, 5, 8],
+    ]
+    let checksum = 0
+    const reversed = value.split('').reverse()
+    for (let i = 0; i < reversed.length; i += 1) {
+      checksum = d[checksum][p[i % 8][parseInt(reversed[i], 10)]]
+    }
+    return checksum === 0
+  }
+
   const validationSchema = Yup.object({
     fullName: Yup.string().required('Full Name is required'),
     email: Yup.string()
       .email('Invalid email address')
       .required('Email is required'),
+    aadhaarNo: Yup.string()
+      .required('Aadhaar Number is required')
+      .matches(/^[0-9]{12}$/, 'Aadhaar Number must be exactly 12 digits')
+      .test(
+        'aadhaar-valid',
+        'Invalid Aadhaar Number',
+        (value) => !value || isValidAadhaar(value),
+      ),
     userName: Yup.string().required('Username is required'),
     password: Yup.string()
       .min(8, 'Password must be atleast 8 characters long')
@@ -56,7 +99,7 @@ function Register() {
           .required('OTP is required')
       : Yup.string(),
   })
-  const dropdowns = useSelector(store => store.dropdowns)
+  const dropdowns = useSelector((store) => store.dropdowns)
   const toastconfig = {
     position: 'top-right',
     autoClose: 5000,
@@ -106,6 +149,7 @@ function Register() {
             },
             body: JSON.stringify({
               email: values.email,
+              aadhaarNo: values.aadhaarNo,
               userName: values.userName,
               fullName: values.fullName,
               password: values.password,
@@ -135,6 +179,7 @@ function Register() {
             },
             body: JSON.stringify({
               email: values.email,
+              aadhaarNo: values.aadhaarNo,
               userName: values.userName,
               fullName: values.fullName,
               password: values.password,
@@ -279,6 +324,26 @@ function Register() {
                     {/* Username Field */}
                     <div className="col-span-2">
                       <label className="text-sm font-medium text-gray-700">
+                        Aadhaar Number
+                      </label>
+                      <Field
+                        name="aadhaarNo"
+                        type="text"
+                        disabled={otpSent}
+                        maxLength={12}
+                        className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-150"
+                        placeholder="Enter 12-digit Aadhaar number"
+                      />
+                      <ErrorMessage
+                        name="aadhaarNo"
+                        component="div"
+                        className="text-rose-500 text-xs mt-1"
+                      />
+                    </div>
+
+                    {/* Username Field */}
+                    <div className="col-span-2">
+                      <label className="text-sm font-medium text-gray-700">
                         Username
                       </label>
                       <Field
@@ -367,12 +432,12 @@ function Register() {
                         as="select"
                         name="role"
                         disabled={otpSent}
-                        onChange={e => onRoleChange(e, setFieldValue)}
+                        onChange={(e) => onRoleChange(e, setFieldValue)}
                         className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-150"
                       >
                         <option value="">Select Role</option>
                         {data?.status == 200 &&
-                          data.data?.map(eachRole => (
+                          data.data?.map((eachRole) => (
                             <option key={eachRole.name} value={eachRole.id}>
                               {eachRole.name}
                             </option>
@@ -394,21 +459,21 @@ function Register() {
                         name="branches"
                         isMulti
                         // disabled={otpSent}
-                        options={dropdowns?.branches.map(branch => ({
+                        options={dropdowns?.branches.map((branch) => ({
                           value: branch.id,
                           label: branch.name,
                         }))}
-                        onChange={selectedOptions => {
+                        onChange={(selectedOptions) => {
                           // if (otpSent) {
                           setFieldValue(
                             'branches',
-                            selectedOptions.map(option => option.value),
+                            selectedOptions.map((option) => option.value),
                           )
                           // }
                         }}
                         className="mt-1"
                         styles={{
-                          control: base => ({
+                          control: (base) => ({
                             ...base,
                             borderRadius: '0.5rem',
                             borderColor: '#D1D5DB',
@@ -438,7 +503,7 @@ function Register() {
                                   maxLength="1"
                                   className="w-12 h-12 text-center text-xl font-semibold border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
                                   value={field.value[index] || ''}
-                                  onChange={e =>
+                                  onChange={(e) =>
                                     handleOtpChange(
                                       e,
                                       index,
@@ -446,8 +511,8 @@ function Register() {
                                       form.values,
                                     )
                                   }
-                                  onKeyDown={e => handleKeyDown(e, index)}
-                                  onPaste={e =>
+                                  onKeyDown={(e) => handleKeyDown(e, index)}
+                                  onPaste={(e) =>
                                     handlePaste(e, form.setFieldValue)
                                   }
                                   style={{
