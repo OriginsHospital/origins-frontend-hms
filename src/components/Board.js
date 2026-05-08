@@ -18,7 +18,6 @@ import {
   OpenInNewOff,
   OpenInNewRounded,
   OpenWithOutlined,
-  PaymentOutlined,
   PaymentsOutlined,
   PendingActions,
   PersonOffOutlined,
@@ -111,11 +110,20 @@ import { withPermission } from './withPermission'
 import { ACCESS_TYPES } from '@/constants/constants'
 import { PrintPreview } from './PrintPreview'
 import { TbInvoice } from 'react-icons/tb'
-import PendingAmount from './PendingAmount'
 import { CalendarIcon, DatePicker } from '@mui/x-date-pickers'
 
 import dynamic from 'next/dynamic'
 import { ArrowBack } from '@mui/icons-material'
+import {
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
+  Inventory2Outlined,
+  EventOutlined,
+  WarningAmberRounded,
+  CheckCircleOutline,
+  HourglassEmptyRounded,
+} from '@mui/icons-material'
+import { Collapse, LinearProgress } from '@mui/material'
 // import { useReactToPrint } from 'react-to-print'
 // export const CustomKanban = () => {
 //   return (
@@ -124,6 +132,412 @@ import { ArrowBack } from '@mui/icons-material'
 //     </div>
 //   );
 // };
+
+const formatPackageAmount = (value) => {
+  const numericValue = Number(value || 0)
+  if (!Number.isFinite(numericValue)) return '0'
+  return new Intl.NumberFormat('en-IN', {
+    maximumFractionDigits: 0,
+  }).format(numericValue)
+}
+
+const formatPackageDate = (date) => {
+  if (!date || date === 'NA') return 'No date set'
+  const parsed = dayjs(date)
+  if (!parsed.isValid()) return 'No date set'
+  return parsed.format('DD MMM YYYY')
+}
+
+const STAGE_STATUS_STYLES = {
+  PAID: {
+    label: 'Paid',
+    chipClass: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+    icon: <CheckCircleOutline className="w-3.5 h-3.5" />,
+  },
+  OVERDUE: {
+    label: 'Overdue',
+    chipClass: 'bg-rose-50 text-rose-700 border border-rose-200',
+    icon: <WarningAmberRounded className="w-3.5 h-3.5" />,
+  },
+  PENDING: {
+    label: 'Pending',
+    chipClass: 'bg-amber-50 text-amber-700 border border-amber-200',
+    icon: <HourglassEmptyRounded className="w-3.5 h-3.5" />,
+  },
+  NA: {
+    label: '—',
+    chipClass: 'bg-gray-50 text-gray-500 border border-gray-200',
+    icon: null,
+  },
+}
+
+const PACKAGE_STAGE_SEQUENCE = [
+  'REGISTRATION_FEE',
+  'DONOR_BOOKING_AMOUNT',
+  'DAY1_AMOUNT',
+  'PICKUP_AMOUNT',
+  'DAY5FREEZING_AMOUNT',
+  'HYTEROSCOPY_AMOUNT',
+  'ERA_AMOUNT',
+  'FET_AMOUNT',
+  'PGTA_AMOUNT',
+  'UPTPOSITIVE_AMOUNT',
+]
+
+const isStageDateDue = (dateValue) => {
+  if (!dateValue || dateValue === 'NA') return false
+  const parsed = dayjs(dateValue)
+  if (!parsed.isValid()) return false
+  return (
+    parsed.startOf('day').isSame(dayjs().startOf('day')) ||
+    parsed.startOf('day').isBefore(dayjs().startOf('day'))
+  )
+}
+
+const buildNormalizedStages = (stages) => {
+  if (!Array.isArray(stages) || stages.length === 0) return []
+
+  const stagesByEnum = stages.reduce((acc, stage) => {
+    if (stage?.productTypeEnum) {
+      acc[stage.productTypeEnum] = stage
+    }
+    return acc
+  }, {})
+
+  const orderedRaw = PACKAGE_STAGE_SEQUENCE.map(
+    (key) => stagesByEnum[key],
+  ).filter(Boolean)
+  const remaining = stages.filter(
+    (stage) => !PACKAGE_STAGE_SEQUENCE.includes(stage?.productTypeEnum),
+  )
+  const orderedAll = [...orderedRaw, ...remaining]
+
+  let totalAlreadyPaid = 0
+  orderedAll.forEach((stage) => {
+    totalAlreadyPaid += Number(stage?.totalPaid || stage?.allocatedAmount || 0)
+  })
+
+  let firstPendingAssigned = false
+  let runningPaidPool = totalAlreadyPaid
+
+  return orderedAll.map((stage, idx) => {
+    const totalAmount = Number(stage?.totalAmount || 0)
+    const directlyPaid = Number(stage?.totalPaid || 0)
+
+    let allocatedAmount
+    if (
+      stage?.allocatedAmount !== undefined &&
+      stage?.allocatedAmount !== null
+    ) {
+      allocatedAmount = Number(stage.allocatedAmount)
+    } else if (totalAmount > 0) {
+      allocatedAmount = Math.max(
+        directlyPaid,
+        Math.min(runningPaidPool, totalAmount),
+      )
+      runningPaidPool = Math.max(runningPaidPool - allocatedAmount, 0)
+    } else {
+      allocatedAmount = 0
+    }
+
+    const effectivePendingAmount =
+      stage?.effectivePendingAmount !== undefined &&
+      stage?.effectivePendingAmount !== null
+        ? Number(stage.effectivePendingAmount)
+        : Math.max(totalAmount - allocatedAmount, 0)
+
+    const isDue =
+      stage?.isDue !== undefined
+        ? Boolean(stage.isDue)
+        : isStageDateDue(stage?.mileStoneStartedDate)
+
+    let status
+    if (totalAmount === 0) {
+      status = 'NA'
+    } else if (effectivePendingAmount === 0) {
+      status = 'PAID'
+    } else if (isDue) {
+      status = 'OVERDUE'
+    } else {
+      status = 'PENDING'
+    }
+
+    const stageHasPending = effectivePendingAmount > 0 && totalAmount > 0
+    let isCurrent = Boolean(stage?.isCurrent)
+    if (
+      stage?.isCurrent === undefined &&
+      !firstPendingAssigned &&
+      stageHasPending
+    ) {
+      isCurrent = true
+    }
+    if (isCurrent) firstPendingAssigned = true
+
+    return {
+      ...stage,
+      order: stage?.order || idx + 1,
+      productTypeEnum: stage?.productTypeEnum || `STAGE_${idx}`,
+      displayName: stage?.displayName || `Stage ${idx + 1}`,
+      mileStoneStartedDate: stage?.mileStoneStartedDate,
+      totalAmount,
+      allocatedAmount,
+      effectivePendingAmount,
+      status,
+      isDue,
+      isCurrent,
+      isRestrictionTrigger: stageHasPending && isDue && isCurrent,
+    }
+  })
+}
+
+const PackagePaymentStages = ({ stages, summary }) => {
+  const [expanded, setExpanded] = useState(false)
+
+  const normalizedStages = useMemo(
+    () => buildNormalizedStages(stages),
+    [stages],
+  )
+  const billableStages = useMemo(
+    () => normalizedStages.filter((stage) => stage.totalAmount > 0),
+    [normalizedStages],
+  )
+
+  if (billableStages.length === 0) return null
+
+  const totalPackageAmount = billableStages.reduce(
+    (acc, stage) => acc + stage.totalAmount,
+    0,
+  )
+  const totalAllocated = billableStages.reduce(
+    (acc, stage) => acc + stage.allocatedAmount,
+    0,
+  )
+  const totalPending = billableStages.reduce(
+    (acc, stage) => acc + stage.effectivePendingAmount,
+    0,
+  )
+
+  const summaryTotalPending = Number(summary?.totalPendingAmount)
+  const totalPendingDisplay = Number.isFinite(summaryTotalPending)
+    ? summaryTotalPending
+    : totalPending
+
+  const currentStageFromList = billableStages.find((stage) => stage.isCurrent)
+  const currentStage = summary?.currentStage || currentStageFromList || null
+  const isBlocked = Boolean(
+    billableStages.some((stage) => stage.isRestrictionTrigger) ||
+      (currentStage?.isDue && totalPendingDisplay > 0),
+  )
+
+  const progressPercent =
+    totalPackageAmount > 0
+      ? Math.min(100, Math.round((totalAllocated / totalPackageAmount) * 100))
+      : 0
+
+  const headerAccent = isBlocked
+    ? 'border-rose-200 bg-rose-50/60'
+    : totalPendingDisplay > 0
+      ? 'border-amber-200 bg-amber-50/60'
+      : 'border-emerald-200 bg-emerald-50/60'
+
+  const statusBadgeText = isBlocked
+    ? 'Due Now'
+    : totalPendingDisplay > 0
+      ? 'Upcoming'
+      : 'Cleared'
+
+  const statusBadgeClass = isBlocked
+    ? 'text-rose-600 border-rose-200'
+    : totalPendingDisplay > 0
+      ? 'text-amber-700 border-amber-200'
+      : 'text-emerald-700 border-emerald-200'
+
+  return (
+    <div
+      className={`mt-2 rounded-lg border ${headerAccent} overflow-hidden`}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          setExpanded((prev) => !prev)
+        }}
+        className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left"
+      >
+        <div className="p-1 bg-white/80 rounded-md border border-white shadow-sm">
+          <Inventory2Outlined className="w-4 h-4 text-secondary" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] font-semibold text-gray-700 uppercase tracking-wide">
+              Package Dues
+            </span>
+            <span
+              className={`text-[10px] font-semibold uppercase tracking-wide bg-white px-1.5 py-0.5 rounded border ${statusBadgeClass}`}
+            >
+              {statusBadgeText}
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-2 mt-0.5">
+            <span className="text-[11px] text-gray-600 truncate">
+              {totalPendingDisplay > 0
+                ? currentStage?.displayName
+                  ? `${isBlocked ? 'Overdue' : 'Next'}: ${currentStage.displayName}`
+                  : isBlocked
+                    ? 'Stage overdue'
+                    : 'Next stage pending'
+                : 'All package stages paid'}
+            </span>
+            <span className="text-[11px] text-gray-600 whitespace-nowrap">
+              <span className="text-emerald-700 font-semibold">
+                ₹{formatPackageAmount(totalAllocated)}
+              </span>
+              <span className="mx-1 text-gray-400">/</span>
+              <span className="text-gray-500">
+                ₹{formatPackageAmount(totalPackageAmount)}
+              </span>
+            </span>
+          </div>
+          <div className="flex items-center justify-between gap-2 mt-0.5 text-[11px]">
+            <span className="text-gray-500">{progressPercent}% paid</span>
+            <span
+              className={`font-semibold ${
+                totalPendingDisplay > 0 ? 'text-rose-600' : 'text-emerald-700'
+              }`}
+            >
+              {totalPendingDisplay > 0
+                ? `₹${formatPackageAmount(totalPendingDisplay)} due`
+                : 'No dues'}
+            </span>
+          </div>
+          <LinearProgress
+            variant="determinate"
+            value={progressPercent}
+            sx={{
+              mt: 0.75,
+              height: 4,
+              borderRadius: 2,
+              backgroundColor: 'rgba(0,0,0,0.06)',
+              '& .MuiLinearProgress-bar': {
+                backgroundColor: isBlocked
+                  ? '#f43f5e'
+                  : totalPendingDisplay > 0
+                    ? '#f59e0b'
+                    : '#10b981',
+              },
+            }}
+          />
+        </div>
+        {expanded ? (
+          <ExpandLessIcon className="w-4 h-4 text-gray-500" />
+        ) : (
+          <ExpandMoreIcon className="w-4 h-4 text-gray-500" />
+        )}
+      </button>
+
+      <Collapse in={expanded} timeout="auto" unmountOnExit>
+        <div className="px-2.5 pb-2 pt-1 bg-white/70 border-t border-white/80">
+          <div className="space-y-1.5 max-h-56 overflow-y-auto pr-0.5">
+            {billableStages.map((stage) => {
+              const styles =
+                STAGE_STATUS_STYLES[stage.status] || STAGE_STATUS_STYLES.PENDING
+              const rowAccent =
+                stage.status === 'OVERDUE'
+                  ? 'border-rose-300 bg-rose-50/60'
+                  : stage.status === 'PENDING'
+                    ? 'border-amber-200 bg-amber-50/40'
+                    : stage.status === 'PAID'
+                      ? 'border-emerald-200 bg-emerald-50/40'
+                      : 'border-gray-200 bg-white'
+              return (
+                <div
+                  key={stage.productTypeEnum}
+                  className={`flex items-start gap-2 rounded-md border px-2 py-1.5 text-xs ${rowAccent}`}
+                >
+                  <div className="flex flex-col items-center justify-center w-5 h-5 rounded-full bg-secondary/10 text-secondary text-[10px] font-bold mt-0.5">
+                    {stage.order}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-gray-800 truncate">
+                        {stage.displayName}
+                      </span>
+                      <span
+                        className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${styles.chipClass}`}
+                      >
+                        {styles.icon}
+                        {styles.label}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 mt-0.5 text-[11px] text-gray-500">
+                      <span className="flex items-center gap-1 truncate">
+                        <EventOutlined className="w-3 h-3 text-gray-400" />
+                        {formatPackageDate(stage.mileStoneStartedDate)}
+                      </span>
+                      <span className="text-[10px] text-gray-400">
+                        Total ₹{formatPackageAmount(stage.totalAmount)}
+                      </span>
+                    </div>
+                    <div className="mt-1 grid grid-cols-2 gap-1">
+                      <div className="rounded border border-emerald-100 bg-emerald-50/70 px-1.5 py-0.5">
+                        <div className="text-[9px] uppercase tracking-wide text-emerald-700/80">
+                          Paid
+                        </div>
+                        <div className="text-[11px] font-semibold text-emerald-700">
+                          ₹{formatPackageAmount(stage.allocatedAmount)}
+                        </div>
+                      </div>
+                      <div
+                        className={`rounded border px-1.5 py-0.5 ${
+                          stage.status === 'OVERDUE'
+                            ? 'border-rose-200 bg-rose-50/70'
+                            : stage.status === 'PENDING'
+                              ? 'border-amber-200 bg-amber-50/70'
+                              : 'border-gray-100 bg-gray-50/60'
+                        }`}
+                      >
+                        <div
+                          className={`text-[9px] uppercase tracking-wide ${
+                            stage.status === 'OVERDUE'
+                              ? 'text-rose-700/80'
+                              : stage.status === 'PENDING'
+                                ? 'text-amber-700/80'
+                                : 'text-gray-500'
+                          }`}
+                        >
+                          Due
+                        </div>
+                        <div
+                          className={`text-[11px] font-semibold ${
+                            stage.status === 'OVERDUE'
+                              ? 'text-rose-700'
+                              : stage.status === 'PENDING'
+                                ? 'text-amber-700'
+                                : 'text-gray-500'
+                          }`}
+                        >
+                          ₹{formatPackageAmount(stage.effectivePendingAmount)}
+                        </div>
+                      </div>
+                    </div>
+                    {stage.status === 'OVERDUE' && (
+                      <div className="mt-1 text-[10px] font-medium text-rose-600 flex items-center gap-1">
+                        <WarningAmberRounded className="w-3 h-3" />
+                        Payment overdue — only Admin / Central / Regional
+                        Manager can move to Doctor
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </Collapse>
+    </div>
+  )
+}
 
 const PermissionedPayButton = withPermission(
   ({ onClick, children, ...props }) => (
@@ -304,44 +718,57 @@ const Column = ({
       // console.log(cardToTransfer)
       if (!cardToTransfer) return
 
-      // Check if moving from "Scan" (Check-In / Vitals) to "Doctor" stage
       if (cardToTransfer.stage === 'Scan' && stage === 'Doctor') {
-        // Check if patient has pending amount
-        const pendingAmountDetails = cardToTransfer.pendingAmountDetails || []
-        const hasPendingAmount = pendingAmountDetails.some(
-          (item) => item.pending_amount > 0,
-        )
-
-        // Get user role information
         const userRoleId = user?.roleDetails?.id
         const userRoleName = user?.roleDetails?.name?.toLowerCase() || ''
 
-        // Check if user is Admin (ID: 1)
         const isAdmin = userRoleId === 1
-
-        // Check if user is Receptionist (ID: 6) or Frontdesk (by name)
         const isReceptionist = userRoleId === 6
         const isFrontdesk =
           userRoleName === 'frontdesk' || userRoleName === 'front desk'
+        const isCentralManager =
+          userRoleId === 7 ||
+          userRoleName.includes('central manager') ||
+          userRoleName.includes('center manager')
+        const isRegionalManager = userRoleName.includes('regional manager')
 
-        // Validate based on pending amount and user role
-        if (hasPendingAmount) {
-          // Patient has pending amount - only Admin can move
-          if (!isAdmin) {
-            toast.error(
-              'Only Admin can move patients with pending amounts to Doctor stage',
-              toastconfig,
-            )
-            return
-          }
-        } else {
-          // Patient has no pending amount - Admin, Receptionist, and Frontdesk can move
-          if (!isAdmin && !isReceptionist && !isFrontdesk) {
-            toast.error(
-              'Only Admin, Receptionist, and Frontdesk users can move patients to Doctor stage',
-              toastconfig,
-            )
-            return
+        if (
+          !isAdmin &&
+          !isReceptionist &&
+          !isFrontdesk &&
+          !isCentralManager &&
+          !isRegionalManager
+        ) {
+          toast.error(
+            'Only Admin, Receptionist, Frontdesk, Central Manager, or Regional Manager users can move patients to Doctor stage',
+            toastconfig,
+          )
+          return
+        }
+
+        const hasPackage =
+          cardToTransfer.isPackageExists === 1 ||
+          cardToTransfer.isPackageExists === true ||
+          cardToTransfer.isPackageExists === '1'
+        if (hasPackage) {
+          const stagesNormalized = buildNormalizedStages(
+            cardToTransfer.pendingAmountDetails,
+          )
+          const overdueStage = stagesNormalized.find(
+            (eachStage) => eachStage.isRestrictionTrigger,
+          )
+          if (overdueStage) {
+            const canOverridePackage =
+              isAdmin || isCentralManager || isRegionalManager
+            if (!canOverridePackage) {
+              toast.error(
+                `Package payment overdue for ${overdueStage.displayName} (₹${formatPackageAmount(
+                  overdueStage.effectivePendingAmount,
+                )} pending). Only Admin, Central Manager, or Regional Manager can move this appointment.`,
+                toastconfig,
+              )
+              return
+            }
           }
         }
       }
@@ -534,55 +961,6 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
   const [previewContent, setPreviewContent] = useState(null)
   const [anchorEl, setAnchorEl] = useState(null)
   const open = Boolean(anchorEl)
-  const [treatmentPendings, setTreatmentPendings] = useState(null)
-  const [selectedPendingHead, setSelectedPendingHead] = useState(null)
-  const totalPendingAmount = useMemo(() => {
-    return (patientDetails?.pendingAmountDetails || []).reduce((acc, item) => {
-      const pendingAmount = Number(item?.pending_amount) || 0
-      return acc + pendingAmount
-    }, 0)
-  }, [patientDetails?.pendingAmountDetails])
-  const hasPendingAmount = totalPendingAmount > 0
-  const formattedPendingAmount = useMemo(
-    () =>
-      new Intl.NumberFormat('en-IN', {
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 2,
-      }).format(totalPendingAmount),
-    [totalPendingAmount],
-  )
-  const pendingAmountBreakdown = useMemo(() => {
-    return (patientDetails?.pendingAmountDetails || [])
-      .filter((item) => (Number(item?.pending_amount) || 0) > 0)
-      .map((item, index) => {
-        const rawLabel =
-          item?.displayName ||
-          item?.productTypeEnum ||
-          item?.productType ||
-          item?.dateColumn ||
-          `Item ${index + 1}`
-
-        const normalizedLabel = String(rawLabel)
-          .replace(/_/g, ' ')
-          .toLowerCase()
-          .replace(/\b\w/g, (char) => char.toUpperCase())
-
-        return {
-          selectionKey:
-            item?.productTypeEnum || item?.productType || item?.displayName,
-          label: normalizedLabel,
-          amount: Number(item?.pending_amount) || 0,
-        }
-      })
-  }, [patientDetails?.pendingAmountDetails])
-  const handlePendingHeadClick = (selectionKey) => {
-    setSelectedPendingHead(selectionKey || null)
-    dispatch(
-      openModal(
-        'pendingAmount' + patientDetails?.appointmentId + patientDetails?.type,
-      ),
-    )
-  }
   const handleStatusClick = (event) => {
     setAnchorEl(event.currentTarget) // Just set the anchor element
   }
@@ -629,17 +1007,6 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
     }
   }, [router.query, patientDetails, stage])
 
-  // handle treatment pendings
-  useEffect(() => {
-    // if (modalState?.key == `pendingAmount${patientDetails?.appointmentId}${patientDetails?.type}`) {
-    let totalPendings = patientDetails?.pendingAmountDetails?.filter(
-      (item) =>
-        // item.mileStoneStartedDate !== 'NA' &&
-        item.pending_amount > 0,
-    )
-    setTreatmentPendings(totalPendings)
-    // }
-  }, [patientDetails])
   // Query for line bills and notes
   const {
     data: lineBillsAndNotesData,
@@ -1077,52 +1444,6 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
                   {patientDetails?.appointmentReason}
                 </span>
               </Tooltip>
-              {stage === 'Scan' && hasPendingAmount && (
-                <Tooltip
-                  title={
-                    <div className="py-1">
-                      <div className="font-semibold">
-                        Total Pending: ₹{formattedPendingAmount}
-                      </div>
-                      <div className="mt-1 text-[11px]">
-                        Only Admin can move this patient to Doctor stage.
-                      </div>
-                      {pendingAmountBreakdown.length > 0 && (
-                        <div className="mt-2 space-y-1">
-                          {pendingAmountBreakdown.map((item, index) => (
-                            <div
-                              key={`${patientDetails?.appointmentId}-${item.label}-${index}`}
-                              className="flex items-center justify-between gap-4 text-[11px]"
-                            >
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handlePendingHeadClick(item.selectionKey)
-                                }
-                                className="flex w-full items-center justify-between gap-4 text-left hover:underline"
-                              >
-                                <span>{item.label}</span>
-                                <span className="font-semibold">
-                                  ₹
-                                  {new Intl.NumberFormat('en-IN', {
-                                    minimumFractionDigits: 0,
-                                    maximumFractionDigits: 2,
-                                  }).format(item.amount)}
-                                </span>
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  }
-                >
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
-                    <PaymentOutlined className="!text-[14px]" />₹
-                    {formattedPendingAmount}
-                  </span>
-                </Tooltip>
-              )}
               {/* <span>•</span> */}
             </div>
           </div>
@@ -1189,6 +1510,13 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
             <span className="text-sm">{patientDetails?.timeStart}</span>
           </div>
         </div>
+
+        {patientDetails?.isPackageExists == 1 && (
+          <PackagePaymentStages
+            stages={patientDetails?.pendingAmountDetails}
+            summary={patientDetails?.packagePaymentSummary}
+          />
+        )}
 
         {/* Action Buttons Section */}
         <Divider className="my-2" />
@@ -1312,27 +1640,6 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
               />
             </div>
           )}
-
-          {/* Pending Amount Section */}
-          {stage == 'Scan' && !!patientDetails?.isPackageExists && (
-            <span className="text-xs text-gray-600 bg-gray-50 p-2 rounded flex items-center gap-2">
-              Pending ₹
-              {treatmentPendings?.reduce(
-                (acc, curr) => acc + curr.pending_amount,
-                0,
-              )}
-              <Button
-                variant="outlined"
-                color="success"
-                size="small"
-                className="flex-1 capitalize"
-                startIcon={<PaymentsOutlined />}
-                onClick={() => handlePendingHeadClick(null)}
-              >
-                Pay
-              </Button>
-            </span>
-          )}
         </div>
       </motion.div>
 
@@ -1374,21 +1681,6 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
         closeOnOutsideClick={true}
       >
         <ConsultationFee patientDetails={patientDetails} />
-      </Modal>
-      <Modal
-        maxWidth={'sm'}
-        key="pendingAmount"
-        uniqueKey={
-          'pendingAmount' + patientDetails?.appointmentId + patientDetails?.type
-        }
-        closeOnOutsideClick={true}
-      >
-        <PendingAmount
-          patientDetails={patientDetails}
-          treatmentPendings={treatmentPendings}
-          allPaymentDetails={patientDetails?.pendingAmountDetails}
-          initialSelectedProductType={selectedPendingHead}
-        />
       </Modal>
       <Modal
         maxWidth={'sm'}
