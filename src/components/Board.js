@@ -109,22 +109,12 @@ import BillDataFallBack from '@/fallbacks/BillDataFallBack'
 import { withPermission } from './withPermission'
 import { ACCESS_TYPES } from '@/constants/constants'
 import { PrintPreview } from './PrintPreview'
+import PendingAmount from './PendingAmount'
 import { TbInvoice } from 'react-icons/tb'
 import { CalendarIcon, DatePicker } from '@mui/x-date-pickers'
 
 import dynamic from 'next/dynamic'
 import { ArrowBack } from '@mui/icons-material'
-import {
-  ExpandMore as ExpandMoreIcon,
-  ExpandLess as ExpandLessIcon,
-  Inventory2Outlined,
-  EventOutlined,
-  WarningAmberRounded,
-  CheckCircleOutline,
-  HourglassEmptyRounded,
-} from '@mui/icons-material'
-import { Collapse, LinearProgress } from '@mui/material'
-import PendingAmount from './PendingAmount'
 // import { useReactToPrint } from 'react-to-print'
 // export const CustomKanban = () => {
 //   return (
@@ -133,428 +123,6 @@ import PendingAmount from './PendingAmount'
 //     </div>
 //   );
 // };
-
-const formatPackageAmount = (value) => {
-  const numericValue = Number(value || 0)
-  if (!Number.isFinite(numericValue)) return '0'
-  return new Intl.NumberFormat('en-IN', {
-    maximumFractionDigits: 0,
-  }).format(numericValue)
-}
-
-const formatPackageDate = (date) => {
-  if (!date || date === 'NA') return 'No date set'
-  const parsed = dayjs(date)
-  if (!parsed.isValid()) return 'No date set'
-  return parsed.format('DD MMM YYYY')
-}
-
-const STAGE_STATUS_STYLES = {
-  PAID: {
-    label: 'Paid',
-    chipClass: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
-    icon: <CheckCircleOutline className="w-3.5 h-3.5" />,
-  },
-  OVERDUE: {
-    label: 'Overdue',
-    chipClass: 'bg-rose-50 text-rose-700 border border-rose-200',
-    icon: <WarningAmberRounded className="w-3.5 h-3.5" />,
-  },
-  PENDING: {
-    label: 'Pending',
-    chipClass: 'bg-amber-50 text-amber-700 border border-amber-200',
-    icon: <HourglassEmptyRounded className="w-3.5 h-3.5" />,
-  },
-  NA: {
-    label: '—',
-    chipClass: 'bg-gray-50 text-gray-500 border border-gray-200',
-    icon: null,
-  },
-}
-
-const PACKAGE_STAGE_SEQUENCE = [
-  'REGISTRATION_FEE',
-  'DONOR_BOOKING_AMOUNT',
-  'DAY1_AMOUNT',
-  'PICKUP_AMOUNT',
-  'DAY5FREEZING_AMOUNT',
-  'HYTEROSCOPY_AMOUNT',
-  'ERA_AMOUNT',
-  'FET_AMOUNT',
-  'PGTA_AMOUNT',
-  'UPTPOSITIVE_AMOUNT',
-]
-
-const isStageDateDue = (dateValue) => {
-  if (!dateValue || dateValue === 'NA') return false
-  const parsed = dayjs(dateValue)
-  if (!parsed.isValid()) return false
-  return (
-    parsed.startOf('day').isSame(dayjs().startOf('day')) ||
-    parsed.startOf('day').isBefore(dayjs().startOf('day'))
-  )
-}
-
-const buildNormalizedStages = (stages) => {
-  if (!Array.isArray(stages) || stages.length === 0) return []
-
-  const stagesByEnum = stages.reduce((acc, stage) => {
-    if (stage?.productTypeEnum) {
-      acc[stage.productTypeEnum] = stage
-    }
-    return acc
-  }, {})
-
-  const orderedRaw = PACKAGE_STAGE_SEQUENCE.map(
-    (key) => stagesByEnum[key],
-  ).filter(Boolean)
-  const remaining = stages.filter(
-    (stage) => !PACKAGE_STAGE_SEQUENCE.includes(stage?.productTypeEnum),
-  )
-  const orderedAll = [...orderedRaw, ...remaining]
-
-  let totalAlreadyPaid = 0
-  orderedAll.forEach((stage) => {
-    totalAlreadyPaid += Number(stage?.totalPaid || stage?.allocatedAmount || 0)
-  })
-
-  let firstPendingAssigned = false
-  let runningPaidPool = totalAlreadyPaid
-
-  return orderedAll.map((stage, idx) => {
-    const totalAmount = Number(stage?.totalAmount || 0)
-    const directlyPaid = Number(stage?.totalPaid || 0)
-
-    let allocatedAmount
-    if (
-      stage?.allocatedAmount !== undefined &&
-      stage?.allocatedAmount !== null
-    ) {
-      allocatedAmount = Number(stage.allocatedAmount)
-    } else if (totalAmount > 0) {
-      allocatedAmount = Math.max(
-        directlyPaid,
-        Math.min(runningPaidPool, totalAmount),
-      )
-      runningPaidPool = Math.max(runningPaidPool - allocatedAmount, 0)
-    } else {
-      allocatedAmount = 0
-    }
-
-    const effectivePendingAmount =
-      stage?.effectivePendingAmount !== undefined &&
-      stage?.effectivePendingAmount !== null
-        ? Number(stage.effectivePendingAmount)
-        : Math.max(totalAmount - allocatedAmount, 0)
-
-    const isDue =
-      stage?.isDue !== undefined
-        ? Boolean(stage.isDue)
-        : isStageDateDue(stage?.mileStoneStartedDate)
-
-    let status
-    if (totalAmount === 0) {
-      status = 'NA'
-    } else if (effectivePendingAmount === 0) {
-      status = 'PAID'
-    } else if (isDue) {
-      status = 'OVERDUE'
-    } else {
-      status = 'PENDING'
-    }
-
-    const stageHasPending = effectivePendingAmount > 0 && totalAmount > 0
-    let isCurrent = Boolean(stage?.isCurrent)
-    if (
-      stage?.isCurrent === undefined &&
-      !firstPendingAssigned &&
-      stageHasPending
-    ) {
-      isCurrent = true
-    }
-    if (isCurrent) firstPendingAssigned = true
-
-    return {
-      ...stage,
-      order: stage?.order || idx + 1,
-      productTypeEnum: stage?.productTypeEnum || `STAGE_${idx}`,
-      displayName: stage?.displayName || `Stage ${idx + 1}`,
-      mileStoneStartedDate: stage?.mileStoneStartedDate,
-      totalAmount,
-      allocatedAmount,
-      effectivePendingAmount,
-      status,
-      isDue,
-      isCurrent,
-      isRestrictionTrigger: stageHasPending && isDue && isCurrent,
-    }
-  })
-}
-
-const PackagePaymentStages = ({ stages, summary, onCollectPayment }) => {
-  const [expanded, setExpanded] = useState(false)
-
-  const normalizedStages = useMemo(
-    () => buildNormalizedStages(stages),
-    [stages],
-  )
-  const billableStages = useMemo(
-    () => normalizedStages.filter((stage) => stage.totalAmount > 0),
-    [normalizedStages],
-  )
-
-  if (billableStages.length === 0) return null
-
-  const totalPackageAmount = billableStages.reduce(
-    (acc, stage) => acc + stage.totalAmount,
-    0,
-  )
-  const totalAllocated = billableStages.reduce(
-    (acc, stage) => acc + stage.allocatedAmount,
-    0,
-  )
-  const totalPending = billableStages.reduce(
-    (acc, stage) => acc + stage.effectivePendingAmount,
-    0,
-  )
-
-  const summaryTotalPending = Number(summary?.totalPendingAmount)
-  const totalPendingDisplay = Number.isFinite(summaryTotalPending)
-    ? summaryTotalPending
-    : totalPending
-
-  const currentStageFromList = billableStages.find((stage) => stage.isCurrent)
-  const currentStage = summary?.currentStage || currentStageFromList || null
-  const isBlocked = Boolean(
-    billableStages.some((stage) => stage.isRestrictionTrigger) ||
-      (currentStage?.isDue && totalPendingDisplay > 0),
-  )
-
-  const progressPercent =
-    totalPackageAmount > 0
-      ? Math.min(100, Math.round((totalAllocated / totalPackageAmount) * 100))
-      : 0
-
-  const headerAccent = isBlocked
-    ? 'border-rose-200 bg-rose-50/60'
-    : totalPendingDisplay > 0
-      ? 'border-amber-200 bg-amber-50/60'
-      : 'border-emerald-200 bg-emerald-50/60'
-
-  const statusBadgeText = isBlocked
-    ? 'Due Now'
-    : totalPendingDisplay > 0
-      ? 'Upcoming'
-      : 'Cleared'
-
-  const statusBadgeClass = isBlocked
-    ? 'text-rose-600 border-rose-200'
-    : totalPendingDisplay > 0
-      ? 'text-amber-700 border-amber-200'
-      : 'text-emerald-700 border-emerald-200'
-
-  return (
-    <div
-      className={`mt-2 rounded-lg border ${headerAccent} overflow-hidden`}
-      onClick={(e) => e.stopPropagation()}
-    >
-      <button
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation()
-          setExpanded((prev) => !prev)
-        }}
-        className="w-full flex items-center gap-2 px-2.5 py-1.5 text-left"
-      >
-        <div className="p-1 bg-white/80 rounded-md border border-white shadow-sm">
-          <Inventory2Outlined className="w-4 h-4 text-secondary" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] font-semibold text-gray-700 uppercase tracking-wide">
-              Package Dues
-            </span>
-            <span
-              className={`text-[10px] font-semibold uppercase tracking-wide bg-white px-1.5 py-0.5 rounded border ${statusBadgeClass}`}
-            >
-              {statusBadgeText}
-            </span>
-          </div>
-          <div className="flex items-center justify-between gap-2 mt-0.5">
-            <span className="text-[11px] text-gray-600 truncate">
-              {totalPendingDisplay > 0
-                ? currentStage?.displayName
-                  ? `${isBlocked ? 'Overdue' : 'Next'}: ${currentStage.displayName}`
-                  : isBlocked
-                    ? 'Stage overdue'
-                    : 'Next stage pending'
-                : 'All package stages paid'}
-            </span>
-            <span className="text-[11px] text-gray-600 whitespace-nowrap">
-              <span className="text-emerald-700 font-semibold">
-                ₹{formatPackageAmount(totalAllocated)}
-              </span>
-              <span className="mx-1 text-gray-400">/</span>
-              <span className="text-gray-500">
-                ₹{formatPackageAmount(totalPackageAmount)}
-              </span>
-            </span>
-          </div>
-          <div className="flex items-center justify-between gap-2 mt-0.5 text-[11px]">
-            <span className="text-gray-500">{progressPercent}% paid</span>
-            <span
-              className={`font-semibold ${
-                totalPendingDisplay > 0 ? 'text-rose-600' : 'text-emerald-700'
-              }`}
-            >
-              {totalPendingDisplay > 0
-                ? `₹${formatPackageAmount(totalPendingDisplay)} due`
-                : 'No dues'}
-            </span>
-          </div>
-          <LinearProgress
-            variant="determinate"
-            value={progressPercent}
-            sx={{
-              mt: 0.75,
-              height: 4,
-              borderRadius: 2,
-              backgroundColor: 'rgba(0,0,0,0.06)',
-              '& .MuiLinearProgress-bar': {
-                backgroundColor: isBlocked
-                  ? '#f43f5e'
-                  : totalPendingDisplay > 0
-                    ? '#f59e0b'
-                    : '#10b981',
-              },
-            }}
-          />
-        </div>
-        {expanded ? (
-          <ExpandLessIcon className="w-4 h-4 text-gray-500" />
-        ) : (
-          <ExpandMoreIcon className="w-4 h-4 text-gray-500" />
-        )}
-      </button>
-
-      <Collapse in={expanded} timeout="auto" unmountOnExit>
-        <div className="px-2.5 pb-2 pt-1 bg-white/70 border-t border-white/80">
-          <div className="space-y-1.5 max-h-56 overflow-y-auto pr-0.5">
-            {billableStages.map((stage) => {
-              const styles =
-                STAGE_STATUS_STYLES[stage.status] || STAGE_STATUS_STYLES.PENDING
-              const rowAccent =
-                stage.status === 'OVERDUE'
-                  ? 'border-rose-300 bg-rose-50/60'
-                  : stage.status === 'PENDING'
-                    ? 'border-amber-200 bg-amber-50/40'
-                    : stage.status === 'PAID'
-                      ? 'border-emerald-200 bg-emerald-50/40'
-                      : 'border-gray-200 bg-white'
-              return (
-                <div
-                  key={stage.productTypeEnum}
-                  className={`flex items-start gap-2 rounded-md border px-2 py-1.5 text-xs ${rowAccent}`}
-                >
-                  <div className="flex flex-col items-center justify-center w-5 h-5 rounded-full bg-secondary/10 text-secondary text-[10px] font-bold mt-0.5">
-                    {stage.order}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-gray-800 truncate">
-                        {stage.displayName}
-                      </span>
-                      <span
-                        className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${styles.chipClass}`}
-                      >
-                        {styles.icon}
-                        {styles.label}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 mt-0.5 text-[11px] text-gray-500">
-                      <span className="flex items-center gap-1 truncate">
-                        <EventOutlined className="w-3 h-3 text-gray-400" />
-                        {formatPackageDate(stage.mileStoneStartedDate)}
-                      </span>
-                      <span className="text-[10px] text-gray-400">
-                        Total ₹{formatPackageAmount(stage.totalAmount)}
-                      </span>
-                    </div>
-                    <div className="mt-1 grid grid-cols-2 gap-1">
-                      <div className="rounded border border-emerald-100 bg-emerald-50/70 px-1.5 py-0.5">
-                        <div className="text-[9px] uppercase tracking-wide text-emerald-700/80">
-                          Paid
-                        </div>
-                        <div className="text-[11px] font-semibold text-emerald-700">
-                          ₹{formatPackageAmount(stage.allocatedAmount)}
-                        </div>
-                      </div>
-                      <div
-                        className={`rounded border px-1.5 py-0.5 ${
-                          stage.status === 'OVERDUE'
-                            ? 'border-rose-200 bg-rose-50/70'
-                            : stage.status === 'PENDING'
-                              ? 'border-amber-200 bg-amber-50/70'
-                              : 'border-gray-100 bg-gray-50/60'
-                        }`}
-                      >
-                        <div
-                          className={`text-[9px] uppercase tracking-wide ${
-                            stage.status === 'OVERDUE'
-                              ? 'text-rose-700/80'
-                              : stage.status === 'PENDING'
-                                ? 'text-amber-700/80'
-                                : 'text-gray-500'
-                          }`}
-                        >
-                          Due
-                        </div>
-                        <div
-                          className={`text-[11px] font-semibold ${
-                            stage.status === 'OVERDUE'
-                              ? 'text-rose-700'
-                              : stage.status === 'PENDING'
-                                ? 'text-amber-700'
-                                : 'text-gray-500'
-                          }`}
-                        >
-                          ₹{formatPackageAmount(stage.effectivePendingAmount)}
-                        </div>
-                      </div>
-                    </div>
-                    {stage.status === 'OVERDUE' && (
-                      <div className="mt-1 text-[10px] font-medium text-rose-600 flex items-center gap-1">
-                        <WarningAmberRounded className="w-3 h-3" />
-                        Payment overdue — only Admin / Central / Regional
-                        Manager can move to Doctor
-                      </div>
-                    )}
-                    {stage.effectivePendingAmount > 0 &&
-                      typeof onCollectPayment === 'function' && (
-                        <div className="mt-1.5 flex justify-end">
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            className="capitalize"
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              onCollectPayment(stage?.productTypeEnum)
-                            }}
-                          >
-                            Collect payment
-                          </Button>
-                        </div>
-                      )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      </Collapse>
-    </div>
-  )
-}
 
 const PermissionedPayButton = withPermission(
   ({ onClick, children, ...props }) => (
@@ -607,6 +175,194 @@ const PermissionedVitalsButton = withPermission(
   'appointment',
   [ACCESS_TYPES.WRITE],
 )
+
+const PACKAGE_MILESTONE_ORDER = [
+  'REGISTRATION_FEE',
+  'DONOR_BOOKING_AMOUNT',
+  'DAY1_AMOUNT',
+  'PICKUP_AMOUNT',
+  'DAY5FREEZING_AMOUNT',
+  'HYTEROSCOPY_AMOUNT',
+  'ERA_AMOUNT',
+  'FET_AMOUNT',
+  'PGTA_AMOUNT',
+  'UPTPOSITIVE_AMOUNT',
+]
+
+const normalizeRoleName = (roleName) =>
+  String(roleName || '')
+    .trim()
+    .toLowerCase()
+
+const isPackageOverrideRole = (user) => {
+  const roleId = user?.roleDetails?.id
+  const roleName = normalizeRoleName(user?.roleDetails?.name)
+
+  return (
+    [1, 7].includes(roleId) ||
+    [
+      'admin',
+      'center manager',
+      'centre manager',
+      'central manager',
+      'regional manager',
+    ].includes(roleName)
+  )
+}
+
+const isAppointmentForwardMover = (user) => {
+  const roleId = user?.roleDetails?.id
+  const roleName = normalizeRoleName(user?.roleDetails?.name)
+
+  return (
+    [1, 6, 7].includes(roleId) ||
+    isPackageOverrideRole(user) ||
+    ['receptionist', 'frontdesk', 'front desk'].includes(roleName)
+  )
+}
+
+const formatCurrency = (amount) =>
+  new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 0,
+  }).format(Number(amount || 0))
+
+const getPackagePaymentRows = (patientDetails) => {
+  if (
+    !(
+      patientDetails?.isPackageExists === 1 ||
+      patientDetails?.isPackageExists === '1' ||
+      patientDetails?.isPackageExists === true
+    )
+  ) {
+    return []
+  }
+
+  return (patientDetails?.pendingAmountDetails || [])
+    .filter((item) => Number(item?.totalAmount || 0) > 0)
+    .sort((a, b) => {
+      const aIndex = PACKAGE_MILESTONE_ORDER.indexOf(a?.productTypeEnum)
+      const bIndex = PACKAGE_MILESTONE_ORDER.indexOf(b?.productTypeEnum)
+      return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex)
+    })
+}
+
+const isMilestoneDue = (milestoneDate) => {
+  if (!milestoneDate || milestoneDate === 'NA') return false
+  return !dayjs(milestoneDate).isAfter(dayjs(), 'day')
+}
+
+const getMilestoneStatus = (item) => {
+  const totalAmount = Number(item?.totalAmount || 0)
+  const totalPaid = Number(item?.totalPaid || 0)
+  const pendingAmount = Number(item?.pending_amount || 0)
+
+  if (totalAmount > 0 && pendingAmount <= 0) return 'paid'
+  if (pendingAmount > 0 && isMilestoneDue(item?.mileStoneStartedDate))
+    return 'overdue'
+  if (pendingAmount > 0) return 'pending'
+  if (totalAmount === 0 && totalPaid === 0) return 'inactive'
+  return 'paid'
+}
+
+const PACKAGE_STATUS_THEME = {
+  paid: {
+    label: 'Paid',
+    badgeBg: 'bg-green-100',
+    badgeText: 'text-green-800',
+    border: 'border-green-400',
+    chipBg: 'bg-green-50',
+    chipText: 'text-green-700',
+    chipBorder: 'border-green-300',
+    dot: 'bg-green-500',
+  },
+  pending: {
+    label: 'Pending',
+    badgeBg: 'bg-yellow-100',
+    badgeText: 'text-yellow-800',
+    border: 'border-yellow-400',
+    chipBg: 'bg-yellow-50',
+    chipText: 'text-yellow-800',
+    chipBorder: 'border-yellow-300',
+    dot: 'bg-yellow-500',
+  },
+  overdue: {
+    label: 'Overdue',
+    badgeBg: 'bg-red-100',
+    badgeText: 'text-red-800',
+    border: 'border-red-500',
+    chipBg: 'bg-red-50',
+    chipText: 'text-red-700',
+    chipBorder: 'border-red-400',
+    dot: 'bg-red-500',
+  },
+  inactive: {
+    label: 'NA',
+    badgeBg: 'bg-gray-100',
+    badgeText: 'text-gray-600',
+    border: 'border-gray-300',
+    chipBg: 'bg-gray-50',
+    chipText: 'text-gray-500',
+    chipBorder: 'border-gray-300',
+    dot: 'bg-gray-400',
+  },
+}
+
+const packageStatusStyles = {
+  paid: `${PACKAGE_STATUS_THEME.paid.border} ${PACKAGE_STATUS_THEME.paid.chipBg} ${PACKAGE_STATUS_THEME.paid.chipText}`,
+  pending: `${PACKAGE_STATUS_THEME.pending.border} ${PACKAGE_STATUS_THEME.pending.chipBg} ${PACKAGE_STATUS_THEME.pending.chipText}`,
+  overdue: `${PACKAGE_STATUS_THEME.overdue.border} ${PACKAGE_STATUS_THEME.overdue.chipBg} ${PACKAGE_STATUS_THEME.overdue.chipText}`,
+}
+
+const packageStatusLabels = {
+  paid: PACKAGE_STATUS_THEME.paid.label,
+  pending: PACKAGE_STATUS_THEME.pending.label,
+  overdue: PACKAGE_STATUS_THEME.overdue.label,
+}
+
+const getPackagePaymentSummary = (patientDetails) => {
+  const rows = getPackagePaymentRows(patientDetails)
+  if (!rows.length) return null
+
+  const decoratedRows = rows.map((item) => ({
+    ...item,
+    status: getMilestoneStatus(item),
+  }))
+
+  const totalAmount = decoratedRows.reduce(
+    (sum, item) => sum + Number(item?.totalAmount || 0),
+    0,
+  )
+  const paidAmount = decoratedRows.reduce(
+    (sum, item) => sum + Number(item?.totalPaid || 0),
+    0,
+  )
+  const pendingAmount = decoratedRows.reduce(
+    (sum, item) => sum + Number(item?.pending_amount || 0),
+    0,
+  )
+  const overdueRows = decoratedRows.filter((item) => item.status === 'overdue')
+  const pendingRows = decoratedRows.filter(
+    (item) => item.status === 'pending' || item.status === 'overdue',
+  )
+  const currentPendingRow = overdueRows[0] || pendingRows[0] || null
+
+  return {
+    rows: decoratedRows,
+    totalAmount,
+    paidAmount,
+    pendingAmount,
+    overdueRows,
+    pendingRows,
+    currentPendingRow,
+    status: overdueRows.length
+      ? 'overdue'
+      : pendingAmount > 0
+        ? 'pending'
+        : 'paid',
+  }
+}
 
 export const Board = ({ allAppointmentsData, updateStage }) => {
   const [cards, setCards] = useState(allAppointmentsData?.data)
@@ -735,58 +491,37 @@ const Column = ({
       // console.log(cardToTransfer)
       if (!cardToTransfer) return
 
+      // Check if moving from "Scan" (Check-In / Vitals) to "Doctor" stage
       if (cardToTransfer.stage === 'Scan' && stage === 'Doctor') {
-        const userRoleId = user?.roleDetails?.id
-        const userRoleName = user?.roleDetails?.name?.toLowerCase() || ''
+        const packagePaymentSummary = getPackagePaymentSummary(cardToTransfer)
+        const overduePackageMilestone =
+          packagePaymentSummary?.overdueRows?.[0] || null
 
-        const isAdmin = userRoleId === 1
-        const isReceptionist = userRoleId === 6
-        const isFrontdesk =
-          userRoleName === 'frontdesk' || userRoleName === 'front desk'
-        const isCentralManager =
-          userRoleId === 7 ||
-          userRoleName.includes('central manager') ||
-          userRoleName.includes('center manager')
-        const isRegionalManager = userRoleName.includes('regional manager')
-
-        if (
-          !isAdmin &&
-          !isReceptionist &&
-          !isFrontdesk &&
-          !isCentralManager &&
-          !isRegionalManager
-        ) {
+        if (overduePackageMilestone && !isPackageOverrideRole(user)) {
           toast.error(
-            'Only Admin, Receptionist, Frontdesk, Central Manager, or Regional Manager users can move patients to Doctor stage',
+            `Package payment overdue for ${overduePackageMilestone.displayName}. Pending ${formatCurrency(
+              overduePackageMilestone.pending_amount,
+            )}. Admin/Central/Regional Manager override required.`,
             toastconfig,
           )
           return
         }
 
-        const hasPackage =
-          cardToTransfer.isPackageExists === 1 ||
-          cardToTransfer.isPackageExists === true ||
-          cardToTransfer.isPackageExists === '1'
-        if (hasPackage) {
-          const stagesNormalized = buildNormalizedStages(
-            cardToTransfer.pendingAmountDetails,
+        if (overduePackageMilestone && isPackageOverrideRole(user)) {
+          const shouldOverride = window.confirm(
+            `Package payment is overdue for ${overduePackageMilestone.displayName}. Pending ${formatCurrency(
+              overduePackageMilestone.pending_amount,
+            )}. Continue with manager override?`,
           )
-          const overdueStage = stagesNormalized.find(
-            (eachStage) => eachStage.isRestrictionTrigger,
+          if (!shouldOverride) return
+        }
+
+        if (!overduePackageMilestone && !isAppointmentForwardMover(user)) {
+          toast.error(
+            'Only Admin, Receptionist, Frontdesk and management users can move patients to Doctor stage',
+            toastconfig,
           )
-          if (overdueStage) {
-            const canOverridePackage =
-              isAdmin || isCentralManager || isRegionalManager
-            if (!canOverridePackage) {
-              toast.error(
-                `Package payment overdue for ${overdueStage.displayName} (₹${formatPackageAmount(
-                  overdueStage.effectivePendingAmount,
-                )} pending). Only Admin, Central Manager, or Regional Manager can move this appointment.`,
-                toastconfig,
-              )
-              return
-            }
-          }
+          return
         }
       }
 
@@ -976,65 +711,8 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
   const isReceptionistUser =
     user?.roleDetails?.id === 6 || userRoleName === 'receptionist'
   const [previewContent, setPreviewContent] = useState(null)
-  const [selectedPendingProductType, setSelectedPendingProductType] =
-    useState(null)
   const [anchorEl, setAnchorEl] = useState(null)
   const open = Boolean(anchorEl)
-
-  const packagePendingDetails = useMemo(() => {
-    const normalizedStages = buildNormalizedStages(
-      patientDetails?.pendingAmountDetails,
-    )
-
-    return normalizedStages
-      .filter((stageItem) => Number(stageItem?.totalAmount || 0) > 0)
-      .map((stageItem) => {
-        const totalAmount = Number(stageItem?.totalAmount || 0)
-        const totalPaid = Number(
-          stageItem?.totalPaid ?? stageItem?.allocatedAmount ?? 0,
-        )
-        const pendingAmount = Number(
-          stageItem?.pending_amount ??
-            stageItem?.effectivePendingAmount ??
-            Math.max(totalAmount - totalPaid, 0),
-        )
-
-        return {
-          ...stageItem,
-          totalAmount,
-          totalPaid,
-          pending_amount: pendingAmount,
-          dateColumn:
-            stageItem?.dateColumn || stageItem?.productTypeEnum || 'NA',
-          mileStoneStartedDate: stageItem?.mileStoneStartedDate || 'NA',
-          displayName: stageItem?.displayName || stageItem?.productTypeEnum,
-          productTypeEnum: stageItem?.productTypeEnum,
-        }
-      })
-  }, [patientDetails?.pendingAmountDetails])
-
-  const hasPackagePendingPayments = useMemo(
-    () =>
-      packagePendingDetails.some(
-        (stageItem) => Number(stageItem?.pending_amount || 0) > 0,
-      ),
-    [packagePendingDetails],
-  )
-
-  const handleOpenPackagePendingModal = useCallback(
-    (productTypeEnum) => {
-      if (!hasPackagePendingPayments) return
-
-      setSelectedPendingProductType(productTypeEnum || null)
-      dispatch(openModal('pendingAmount' + patientDetails?.appointmentId))
-    },
-    [
-      dispatch,
-      hasPackagePendingPayments,
-      patientDetails?.appointmentId,
-      setSelectedPendingProductType,
-    ],
-  )
   const handleStatusClick = (event) => {
     setAnchorEl(event.currentTarget) // Just set the anchor element
   }
@@ -1301,6 +979,23 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
       enabled: open, // Only fetch when popper is open
     })
 
+  const packagePaymentSummary = getPackagePaymentSummary(patientDetails)
+  const [selectedMilestoneEnum, setSelectedMilestoneEnum] = useState(null)
+  const overallTheme =
+    PACKAGE_STATUS_THEME[packagePaymentSummary?.status || 'paid']
+  const packagePayModalKey = `packagePay-${patientDetails?.appointmentId}`
+
+  useEffect(() => {
+    if (modalState?.key !== packagePayModalKey && selectedMilestoneEnum) {
+      setSelectedMilestoneEnum(null)
+    }
+  }, [modalState?.key, packagePayModalKey, selectedMilestoneEnum])
+
+  const handleOpenPackagePay = (productTypeEnum = null) => {
+    setSelectedMilestoneEnum(productTypeEnum)
+    dispatch(openModal(packagePayModalKey))
+  }
+
   return (
     <>
       <DropIndicator beforeId={patientDetails?.appointmentId} stage={stage} />
@@ -1311,6 +1006,10 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
         className={`cursor-grab rounded-lg bg-white p-2 shadow-md hover:shadow-lg transition-all duration-200 relative ${
           stage === 'Doctor' && patientDetails?.isPrescribed === 1
             ? 'border-t-4 border-t-green-500'
+            : ''
+        } ${
+          packagePaymentSummary?.status === 'overdue'
+            ? 'border-l-4 border-l-red-500'
             : ''
         }`}
       >
@@ -1459,6 +1158,156 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
           )}
         </Popper>
 
+        {packagePaymentSummary && (
+          <div
+            className={`mb-2 rounded-md border ${overallTheme.border} ${overallTheme.chipBg} px-2 py-1.5 text-xs`}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 font-semibold text-gray-700">
+                <span
+                  className={`inline-block w-2 h-2 rounded-full ${overallTheme.dot}`}
+                />
+                <span>IVF Package</span>
+              </div>
+              <span
+                className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold uppercase ${overallTheme.badgeBg} ${overallTheme.badgeText}`}
+              >
+                {overallTheme.label}
+              </span>
+            </div>
+
+            <div className="mt-1 flex items-center justify-between gap-2 text-gray-700">
+              <span>
+                Paid{' '}
+                <span className="font-semibold text-green-700">
+                  {formatCurrency(packagePaymentSummary.paidAmount)}
+                </span>{' '}
+                / {formatCurrency(packagePaymentSummary.totalAmount)}
+              </span>
+              <span
+                className={
+                  packagePaymentSummary.pendingAmount > 0
+                    ? packagePaymentSummary.status === 'overdue'
+                      ? 'font-semibold text-red-700'
+                      : 'font-semibold text-yellow-700'
+                    : 'font-semibold text-green-700'
+                }
+              >
+                {packagePaymentSummary.pendingAmount > 0
+                  ? `Due ${formatCurrency(packagePaymentSummary.pendingAmount)}`
+                  : 'Fully Paid'}
+              </span>
+            </div>
+
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {packagePaymentSummary.rows.map((item) => {
+                const theme =
+                  PACKAGE_STATUS_THEME[item.status] ||
+                  PACKAGE_STATUS_THEME.inactive
+                const tooltipText = `${item.displayName}\nTotal: ${formatCurrency(
+                  item.totalAmount,
+                )}\nPaid: ${formatCurrency(item.totalPaid)}\nPending: ${formatCurrency(
+                  item.pending_amount,
+                )}${
+                  item.mileStoneStartedDate &&
+                  item.mileStoneStartedDate !== 'NA'
+                    ? `\nStage Date: ${dayjs(item.mileStoneStartedDate).format('DD MMM YYYY')}`
+                    : ''
+                }`
+                const isClickable = Number(item?.pending_amount || 0) > 0
+                return (
+                  <Tooltip
+                    key={item.productTypeEnum}
+                    title={
+                      <span style={{ whiteSpace: 'pre-line' }}>
+                        {tooltipText}
+                      </span>
+                    }
+                  >
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        if (isClickable) {
+                          handleOpenPackagePay(item.productTypeEnum)
+                        }
+                      }}
+                      disabled={!isClickable}
+                      className={`flex items-center gap-1 rounded-full border ${theme.chipBorder} ${theme.chipBg} ${theme.chipText} px-2 py-0.5 text-[11px] ${
+                        isClickable
+                          ? 'cursor-pointer hover:shadow'
+                          : 'cursor-default opacity-90'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block w-1.5 h-1.5 rounded-full ${theme.dot}`}
+                      />
+                      <span className="font-medium">{item.displayName}</span>
+                      <span className="text-[10px] opacity-80">
+                        {item.status === 'paid'
+                          ? `₹${Math.round(item.totalAmount).toLocaleString('en-IN')}`
+                          : `₹${Math.round(item.pending_amount).toLocaleString('en-IN')}`}
+                      </span>
+                    </button>
+                  </Tooltip>
+                )
+              })}
+            </div>
+
+            {packagePaymentSummary.currentPendingRow && (
+              <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px] text-gray-600">
+                <span className="truncate">
+                  Next:{' '}
+                  <span className="font-medium">
+                    {packagePaymentSummary.currentPendingRow.displayName}
+                  </span>{' '}
+                  {formatCurrency(
+                    packagePaymentSummary.currentPendingRow.pending_amount,
+                  )}
+                </span>
+                <PermissionedPayButton
+                  size="small"
+                  variant="contained"
+                  color={
+                    packagePaymentSummary.status === 'overdue'
+                      ? 'error'
+                      : 'warning'
+                  }
+                  className="capitalize text-[10px] py-0.5 px-2 min-w-0"
+                  startIcon={<PaymentsOutlined fontSize="inherit" />}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    handleOpenPackagePay(
+                      packagePaymentSummary.currentPendingRow.productTypeEnum,
+                    )
+                  }}
+                >
+                  Pay Milestone
+                </PermissionedPayButton>
+              </div>
+            )}
+          </div>
+        )}
+
+        <Modal
+          maxWidth="md"
+          uniqueKey={packagePayModalKey}
+          closeOnOutsideClick
+          showCloseButton
+          onOutsideClick={() => setSelectedMilestoneEnum(null)}
+        >
+          <div className="p-4">
+            {packagePaymentSummary && (
+              <PendingAmount
+                patientDetails={patientDetails}
+                treatmentPendings={packagePaymentSummary.rows}
+                allPaymentDetails={packagePaymentSummary.rows}
+                initialSelectedProductType={selectedMilestoneEnum}
+              />
+            )}
+          </div>
+        </Modal>
+
         {/* Patient Info Section */}
         <div className="flex items-start space-x-3 relative">
           {/* <div
@@ -1584,14 +1433,6 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
             <span className="text-sm">{patientDetails?.timeStart}</span>
           </div>
         </div>
-
-        {patientDetails?.isPackageExists == 1 && (
-          <PackagePaymentStages
-            stages={patientDetails?.pendingAmountDetails}
-            summary={patientDetails?.packagePaymentSummary}
-            onCollectPayment={handleOpenPackagePendingModal}
-          />
-        )}
 
         {/* Action Buttons Section */}
         <Divider className="my-2" />
@@ -1756,19 +1597,6 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
         closeOnOutsideClick={true}
       >
         <ConsultationFee patientDetails={patientDetails} />
-      </Modal>
-      <Modal
-        maxWidth={'sm'}
-        key="pendingAmount"
-        uniqueKey={'pendingAmount' + patientDetails?.appointmentId}
-        closeOnOutsideClick={true}
-      >
-        <PendingAmount
-          patientDetails={patientDetails}
-          treatmentPendings={packagePendingDetails}
-          allPaymentDetails={packagePendingDetails}
-          initialSelectedProductType={selectedPendingProductType}
-        />
       </Modal>
       <Modal
         maxWidth={'sm'}
