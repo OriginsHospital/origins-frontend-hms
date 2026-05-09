@@ -109,7 +109,6 @@ import BillDataFallBack from '@/fallbacks/BillDataFallBack'
 import { withPermission } from './withPermission'
 import { ACCESS_TYPES } from '@/constants/constants'
 import { PrintPreview } from './PrintPreview'
-import PendingAmount from './PendingAmount'
 import { TbInvoice } from 'react-icons/tb'
 import { CalendarIcon, DatePicker } from '@mui/x-date-pickers'
 
@@ -189,179 +188,85 @@ const PACKAGE_MILESTONE_ORDER = [
   'UPTPOSITIVE_AMOUNT',
 ]
 
-const normalizeRoleName = (roleName) =>
-  String(roleName || '')
-    .trim()
-    .toLowerCase()
-
-const isPackageOverrideRole = (user) => {
-  const roleId = user?.roleDetails?.id
-  const roleName = normalizeRoleName(user?.roleDetails?.name)
-
-  return (
-    [1, 7].includes(roleId) ||
-    [
-      'admin',
-      'center manager',
-      'centre manager',
-      'central manager',
-      'regional manager',
-    ].includes(roleName)
-  )
+const PACKAGE_MILESTONE_LABELS = {
+  REGISTRATION_FEE: 'Registration',
+  DONOR_BOOKING_AMOUNT: 'Donor Booking',
+  DAY1_AMOUNT: 'Day 1',
+  PICKUP_AMOUNT: 'Trigger',
+  DAY5FREEZING_AMOUNT: 'Day 5 Freezing',
+  HYTEROSCOPY_AMOUNT: 'Hysteroscopy',
+  ERA_AMOUNT: 'ERA',
+  FET_AMOUNT: 'FET',
+  PGTA_AMOUNT: 'PGT-A',
+  UPTPOSITIVE_AMOUNT: 'UPT Positive',
 }
 
-const isAppointmentForwardMover = (user) => {
-  const roleId = user?.roleDetails?.id
-  const roleName = normalizeRoleName(user?.roleDetails?.name)
-
-  return (
-    [1, 6, 7].includes(roleId) ||
-    isPackageOverrideRole(user) ||
-    ['receptionist', 'frontdesk', 'front desk'].includes(roleName)
-  )
-}
-
-const formatCurrency = (amount) =>
+const formatPackageCurrency = (amount) =>
   new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
+    minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(Number(amount || 0))
 
-const getPackagePaymentRows = (patientDetails) => {
-  if (
-    !(
-      patientDetails?.isPackageExists === 1 ||
-      patientDetails?.isPackageExists === '1' ||
-      patientDetails?.isPackageExists === true
-    )
-  ) {
-    return []
-  }
+const hasPackage = (value) => value === true || value === 1 || value === '1'
 
-  return (patientDetails?.pendingAmountDetails || [])
-    .filter((item) => Number(item?.totalAmount || 0) > 0)
+const isPackagePaymentOverrideUser = (user) => {
+  const roleId = user?.roleDetails?.id
+  const roleName = user?.roleDetails?.name?.trim()?.toLowerCase() || ''
+
+  return (
+    roleId === 1 ||
+    roleId === 7 ||
+    roleName.includes('admin') ||
+    roleName.includes('center manager') ||
+    roleName.includes('central manager') ||
+    roleName.includes('regional manager')
+  )
+}
+
+const getPackageMilestoneStatusList = (pendingAmountDetails = []) => {
+  const today = dayjs().startOf('day')
+
+  return [...(pendingAmountDetails || [])]
     .sort((a, b) => {
-      const aIndex = PACKAGE_MILESTONE_ORDER.indexOf(a?.productTypeEnum)
-      const bIndex = PACKAGE_MILESTONE_ORDER.indexOf(b?.productTypeEnum)
-      return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex)
+      const firstIndex = PACKAGE_MILESTONE_ORDER.indexOf(a?.productTypeEnum)
+      const secondIndex = PACKAGE_MILESTONE_ORDER.indexOf(b?.productTypeEnum)
+      return (
+        (firstIndex === -1 ? 999 : firstIndex) -
+        (secondIndex === -1 ? 999 : secondIndex)
+      )
+    })
+    .map((milestone) => {
+      const pendingAmount = Math.max(Number(milestone?.pending_amount || 0), 0)
+      const totalAmount = Number(milestone?.totalAmount || 0)
+      const paidAmount = Number(milestone?.totalPaid || 0)
+      const dueDate = milestone?.mileStoneStartedDate
+      const hasDueDate = dueDate && dueDate !== 'NA' && dayjs(dueDate).isValid()
+      const isDue = hasDueDate && !dayjs(dueDate).startOf('day').isAfter(today)
+      const status = pendingAmount <= 0 ? 'paid' : isDue ? 'overdue' : 'pending'
+
+      return {
+        ...milestone,
+        label:
+          PACKAGE_MILESTONE_LABELS[milestone?.productTypeEnum] ||
+          milestone?.displayName ||
+          milestone?.productTypeEnum,
+        pendingAmount,
+        paidAmount,
+        totalAmount,
+        dueDate,
+        status,
+      }
     })
 }
 
-const isMilestoneDue = (milestoneDate) => {
-  if (!milestoneDate || milestoneDate === 'NA') return false
-  return !dayjs(milestoneDate).isAfter(dayjs(), 'day')
-}
+const getFirstOverduePackageMilestone = (patientDetails) => {
+  if (!hasPackage(patientDetails?.isPackageExists)) return null
 
-const getMilestoneStatus = (item) => {
-  const totalAmount = Number(item?.totalAmount || 0)
-  const totalPaid = Number(item?.totalPaid || 0)
-  const pendingAmount = Number(item?.pending_amount || 0)
-
-  if (totalAmount > 0 && pendingAmount <= 0) return 'paid'
-  if (pendingAmount > 0 && isMilestoneDue(item?.mileStoneStartedDate))
-    return 'overdue'
-  if (pendingAmount > 0) return 'pending'
-  if (totalAmount === 0 && totalPaid === 0) return 'inactive'
-  return 'paid'
-}
-
-const PACKAGE_STATUS_THEME = {
-  paid: {
-    label: 'Paid',
-    badgeBg: 'bg-green-100',
-    badgeText: 'text-green-800',
-    border: 'border-green-400',
-    chipBg: 'bg-green-50',
-    chipText: 'text-green-700',
-    chipBorder: 'border-green-300',
-    dot: 'bg-green-500',
-  },
-  pending: {
-    label: 'Pending',
-    badgeBg: 'bg-yellow-100',
-    badgeText: 'text-yellow-800',
-    border: 'border-yellow-400',
-    chipBg: 'bg-yellow-50',
-    chipText: 'text-yellow-800',
-    chipBorder: 'border-yellow-300',
-    dot: 'bg-yellow-500',
-  },
-  overdue: {
-    label: 'Overdue',
-    badgeBg: 'bg-red-100',
-    badgeText: 'text-red-800',
-    border: 'border-red-500',
-    chipBg: 'bg-red-50',
-    chipText: 'text-red-700',
-    chipBorder: 'border-red-400',
-    dot: 'bg-red-500',
-  },
-  inactive: {
-    label: 'NA',
-    badgeBg: 'bg-gray-100',
-    badgeText: 'text-gray-600',
-    border: 'border-gray-300',
-    chipBg: 'bg-gray-50',
-    chipText: 'text-gray-500',
-    chipBorder: 'border-gray-300',
-    dot: 'bg-gray-400',
-  },
-}
-
-const packageStatusStyles = {
-  paid: `${PACKAGE_STATUS_THEME.paid.border} ${PACKAGE_STATUS_THEME.paid.chipBg} ${PACKAGE_STATUS_THEME.paid.chipText}`,
-  pending: `${PACKAGE_STATUS_THEME.pending.border} ${PACKAGE_STATUS_THEME.pending.chipBg} ${PACKAGE_STATUS_THEME.pending.chipText}`,
-  overdue: `${PACKAGE_STATUS_THEME.overdue.border} ${PACKAGE_STATUS_THEME.overdue.chipBg} ${PACKAGE_STATUS_THEME.overdue.chipText}`,
-}
-
-const packageStatusLabels = {
-  paid: PACKAGE_STATUS_THEME.paid.label,
-  pending: PACKAGE_STATUS_THEME.pending.label,
-  overdue: PACKAGE_STATUS_THEME.overdue.label,
-}
-
-const getPackagePaymentSummary = (patientDetails) => {
-  const rows = getPackagePaymentRows(patientDetails)
-  if (!rows.length) return null
-
-  const decoratedRows = rows.map((item) => ({
-    ...item,
-    status: getMilestoneStatus(item),
-  }))
-
-  const totalAmount = decoratedRows.reduce(
-    (sum, item) => sum + Number(item?.totalAmount || 0),
-    0,
-  )
-  const paidAmount = decoratedRows.reduce(
-    (sum, item) => sum + Number(item?.totalPaid || 0),
-    0,
-  )
-  const pendingAmount = decoratedRows.reduce(
-    (sum, item) => sum + Number(item?.pending_amount || 0),
-    0,
-  )
-  const overdueRows = decoratedRows.filter((item) => item.status === 'overdue')
-  const pendingRows = decoratedRows.filter(
-    (item) => item.status === 'pending' || item.status === 'overdue',
-  )
-  const currentPendingRow = overdueRows[0] || pendingRows[0] || null
-
-  return {
-    rows: decoratedRows,
-    totalAmount,
-    paidAmount,
-    pendingAmount,
-    overdueRows,
-    pendingRows,
-    currentPendingRow,
-    status: overdueRows.length
-      ? 'overdue'
-      : pendingAmount > 0
-        ? 'pending'
-        : 'paid',
-  }
+  return getPackageMilestoneStatusList(
+    patientDetails?.pendingAmountDetails,
+  ).find((milestone) => milestone.status === 'overdue')
 }
 
 export const Board = ({ allAppointmentsData, updateStage }) => {
@@ -493,32 +398,42 @@ const Column = ({
 
       // Check if moving from "Scan" (Check-In / Vitals) to "Doctor" stage
       if (cardToTransfer.stage === 'Scan' && stage === 'Doctor') {
-        const packagePaymentSummary = getPackagePaymentSummary(cardToTransfer)
-        const overduePackageMilestone =
-          packagePaymentSummary?.overdueRows?.[0] || null
+        // Get user role information
+        const userRoleId = user?.roleDetails?.id
+        const userRoleName = user?.roleDetails?.name?.toLowerCase() || ''
 
-        if (overduePackageMilestone && !isPackageOverrideRole(user)) {
+        // Check if user is Admin (ID: 1)
+        const isAdmin = userRoleId === 1
+
+        // Check if user is Receptionist (ID: 6) or Frontdesk (by name)
+        const isReceptionist = userRoleId === 6
+        const isFrontdesk =
+          userRoleName === 'frontdesk' || userRoleName === 'front desk'
+        const isManager =
+          userRoleId === 7 ||
+          userRoleName.includes('center manager') ||
+          userRoleName.includes('central manager') ||
+          userRoleName.includes('regional manager')
+
+        if (!isAdmin && !isReceptionist && !isFrontdesk && !isManager) {
           toast.error(
-            `Package payment overdue for ${overduePackageMilestone.displayName}. Pending ${formatCurrency(
-              overduePackageMilestone.pending_amount,
-            )}. Admin/Central/Regional Manager override required.`,
+            'Only Admin, Receptionist, Frontdesk, and Center Manager users can move patients to Doctor stage',
             toastconfig,
           )
           return
         }
 
-        if (overduePackageMilestone && isPackageOverrideRole(user)) {
-          const shouldOverride = window.confirm(
-            `Package payment is overdue for ${overduePackageMilestone.displayName}. Pending ${formatCurrency(
-              overduePackageMilestone.pending_amount,
-            )}. Continue with manager override?`,
-          )
-          if (!shouldOverride) return
-        }
+        const firstOverduePackageMilestone =
+          getFirstOverduePackageMilestone(cardToTransfer)
 
-        if (!overduePackageMilestone && !isAppointmentForwardMover(user)) {
+        if (
+          firstOverduePackageMilestone &&
+          !isPackagePaymentOverrideUser(user)
+        ) {
           toast.error(
-            'Only Admin, Receptionist, Frontdesk and management users can move patients to Doctor stage',
+            `${firstOverduePackageMilestone.label} package amount is overdue. Pending: ${formatPackageCurrency(
+              firstOverduePackageMilestone.pendingAmount,
+            )}. Only Admin, Central Manager, or Regional Manager can move this appointment.`,
             toastconfig,
           )
           return
@@ -710,6 +625,34 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
   const userRoleName = user?.roleDetails?.name?.trim()?.toLowerCase() || ''
   const isReceptionistUser =
     user?.roleDetails?.id === 6 || userRoleName === 'receptionist'
+  const packageStatusList = useMemo(
+    () =>
+      hasPackage(patientDetails?.isPackageExists)
+        ? getPackageMilestoneStatusList(patientDetails?.pendingAmountDetails)
+        : [],
+    [patientDetails?.isPackageExists, patientDetails?.pendingAmountDetails],
+  )
+  const packageStatusSummary = useMemo(() => {
+    if (!packageStatusList.length) return null
+
+    const overdueCount = packageStatusList.filter(
+      (milestone) => milestone.status === 'overdue',
+    ).length
+    const pendingCount = packageStatusList.filter(
+      (milestone) => milestone.status === 'pending',
+    ).length
+    const paidCount = packageStatusList.filter(
+      (milestone) => milestone.status === 'paid',
+    ).length
+
+    return {
+      overdueCount,
+      pendingCount,
+      paidCount,
+      status:
+        overdueCount > 0 ? 'overdue' : pendingCount > 0 ? 'pending' : 'paid',
+    }
+  }, [packageStatusList])
   const [previewContent, setPreviewContent] = useState(null)
   const [anchorEl, setAnchorEl] = useState(null)
   const open = Boolean(anchorEl)
@@ -979,23 +922,6 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
       enabled: open, // Only fetch when popper is open
     })
 
-  const packagePaymentSummary = getPackagePaymentSummary(patientDetails)
-  const [selectedMilestoneEnum, setSelectedMilestoneEnum] = useState(null)
-  const overallTheme =
-    PACKAGE_STATUS_THEME[packagePaymentSummary?.status || 'paid']
-  const packagePayModalKey = `packagePay-${patientDetails?.appointmentId}`
-
-  useEffect(() => {
-    if (modalState?.key !== packagePayModalKey && selectedMilestoneEnum) {
-      setSelectedMilestoneEnum(null)
-    }
-  }, [modalState?.key, packagePayModalKey, selectedMilestoneEnum])
-
-  const handleOpenPackagePay = (productTypeEnum = null) => {
-    setSelectedMilestoneEnum(productTypeEnum)
-    dispatch(openModal(packagePayModalKey))
-  }
-
   return (
     <>
       <DropIndicator beforeId={patientDetails?.appointmentId} stage={stage} />
@@ -1006,10 +932,6 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
         className={`cursor-grab rounded-lg bg-white p-2 shadow-md hover:shadow-lg transition-all duration-200 relative ${
           stage === 'Doctor' && patientDetails?.isPrescribed === 1
             ? 'border-t-4 border-t-green-500'
-            : ''
-        } ${
-          packagePaymentSummary?.status === 'overdue'
-            ? 'border-l-4 border-l-red-500'
             : ''
         }`}
       >
@@ -1158,156 +1080,6 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
           )}
         </Popper>
 
-        {packagePaymentSummary && (
-          <div
-            className={`mb-2 rounded-md border ${overallTheme.border} ${overallTheme.chipBg} px-2 py-1.5 text-xs`}
-          >
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5 font-semibold text-gray-700">
-                <span
-                  className={`inline-block w-2 h-2 rounded-full ${overallTheme.dot}`}
-                />
-                <span>IVF Package</span>
-              </div>
-              <span
-                className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold uppercase ${overallTheme.badgeBg} ${overallTheme.badgeText}`}
-              >
-                {overallTheme.label}
-              </span>
-            </div>
-
-            <div className="mt-1 flex items-center justify-between gap-2 text-gray-700">
-              <span>
-                Paid{' '}
-                <span className="font-semibold text-green-700">
-                  {formatCurrency(packagePaymentSummary.paidAmount)}
-                </span>{' '}
-                / {formatCurrency(packagePaymentSummary.totalAmount)}
-              </span>
-              <span
-                className={
-                  packagePaymentSummary.pendingAmount > 0
-                    ? packagePaymentSummary.status === 'overdue'
-                      ? 'font-semibold text-red-700'
-                      : 'font-semibold text-yellow-700'
-                    : 'font-semibold text-green-700'
-                }
-              >
-                {packagePaymentSummary.pendingAmount > 0
-                  ? `Due ${formatCurrency(packagePaymentSummary.pendingAmount)}`
-                  : 'Fully Paid'}
-              </span>
-            </div>
-
-            <div className="mt-1.5 flex flex-wrap gap-1">
-              {packagePaymentSummary.rows.map((item) => {
-                const theme =
-                  PACKAGE_STATUS_THEME[item.status] ||
-                  PACKAGE_STATUS_THEME.inactive
-                const tooltipText = `${item.displayName}\nTotal: ${formatCurrency(
-                  item.totalAmount,
-                )}\nPaid: ${formatCurrency(item.totalPaid)}\nPending: ${formatCurrency(
-                  item.pending_amount,
-                )}${
-                  item.mileStoneStartedDate &&
-                  item.mileStoneStartedDate !== 'NA'
-                    ? `\nStage Date: ${dayjs(item.mileStoneStartedDate).format('DD MMM YYYY')}`
-                    : ''
-                }`
-                const isClickable = Number(item?.pending_amount || 0) > 0
-                return (
-                  <Tooltip
-                    key={item.productTypeEnum}
-                    title={
-                      <span style={{ whiteSpace: 'pre-line' }}>
-                        {tooltipText}
-                      </span>
-                    }
-                  >
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        if (isClickable) {
-                          handleOpenPackagePay(item.productTypeEnum)
-                        }
-                      }}
-                      disabled={!isClickable}
-                      className={`flex items-center gap-1 rounded-full border ${theme.chipBorder} ${theme.chipBg} ${theme.chipText} px-2 py-0.5 text-[11px] ${
-                        isClickable
-                          ? 'cursor-pointer hover:shadow'
-                          : 'cursor-default opacity-90'
-                      }`}
-                    >
-                      <span
-                        className={`inline-block w-1.5 h-1.5 rounded-full ${theme.dot}`}
-                      />
-                      <span className="font-medium">{item.displayName}</span>
-                      <span className="text-[10px] opacity-80">
-                        {item.status === 'paid'
-                          ? `₹${Math.round(item.totalAmount).toLocaleString('en-IN')}`
-                          : `₹${Math.round(item.pending_amount).toLocaleString('en-IN')}`}
-                      </span>
-                    </button>
-                  </Tooltip>
-                )
-              })}
-            </div>
-
-            {packagePaymentSummary.currentPendingRow && (
-              <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px] text-gray-600">
-                <span className="truncate">
-                  Next:{' '}
-                  <span className="font-medium">
-                    {packagePaymentSummary.currentPendingRow.displayName}
-                  </span>{' '}
-                  {formatCurrency(
-                    packagePaymentSummary.currentPendingRow.pending_amount,
-                  )}
-                </span>
-                <PermissionedPayButton
-                  size="small"
-                  variant="contained"
-                  color={
-                    packagePaymentSummary.status === 'overdue'
-                      ? 'error'
-                      : 'warning'
-                  }
-                  className="capitalize text-[10px] py-0.5 px-2 min-w-0"
-                  startIcon={<PaymentsOutlined fontSize="inherit" />}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    handleOpenPackagePay(
-                      packagePaymentSummary.currentPendingRow.productTypeEnum,
-                    )
-                  }}
-                >
-                  Pay Milestone
-                </PermissionedPayButton>
-              </div>
-            )}
-          </div>
-        )}
-
-        <Modal
-          maxWidth="md"
-          uniqueKey={packagePayModalKey}
-          closeOnOutsideClick
-          showCloseButton
-          onOutsideClick={() => setSelectedMilestoneEnum(null)}
-        >
-          <div className="p-4">
-            {packagePaymentSummary && (
-              <PendingAmount
-                patientDetails={patientDetails}
-                treatmentPendings={packagePaymentSummary.rows}
-                allPaymentDetails={packagePaymentSummary.rows}
-                initialSelectedProductType={selectedMilestoneEnum}
-              />
-            )}
-          </div>
-        </Modal>
-
         {/* Patient Info Section */}
         <div className="flex items-start space-x-3 relative">
           {/* <div
@@ -1412,6 +1184,80 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
           </div>
           <div className="h-[1px] flex-1 bg-gray-200"></div>
         </div>
+
+        {packageStatusSummary && (
+          <div
+            className={`mb-2 rounded-md border p-2 ${
+              packageStatusSummary.status === 'overdue'
+                ? 'border-red-200 bg-red-50'
+                : packageStatusSummary.status === 'pending'
+                  ? 'border-yellow-200 bg-yellow-50'
+                  : 'border-green-200 bg-green-50'
+            }`}
+          >
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <span className="text-[11px] font-semibold text-gray-700">
+                IVF Package
+              </span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                  packageStatusSummary.status === 'overdue'
+                    ? 'bg-red-100 text-red-700'
+                    : packageStatusSummary.status === 'pending'
+                      ? 'bg-yellow-100 text-yellow-700'
+                      : 'bg-green-100 text-green-700'
+                }`}
+              >
+                {packageStatusSummary.status === 'overdue'
+                  ? `${packageStatusSummary.overdueCount} overdue`
+                  : packageStatusSummary.status === 'pending'
+                    ? `${packageStatusSummary.pendingCount} pending`
+                    : 'Paid'}
+              </span>
+            </div>
+            <div className="grid grid-cols-5 gap-1">
+              {packageStatusList.map((milestone, index) => (
+                <Tooltip
+                  key={milestone.productTypeEnum}
+                  arrow
+                  title={
+                    <div className="space-y-0.5 text-xs">
+                      <div className="font-semibold">{milestone.label}</div>
+                      <div>
+                        Total: {formatPackageCurrency(milestone.totalAmount)}
+                      </div>
+                      <div>
+                        Paid: {formatPackageCurrency(milestone.paidAmount)}
+                      </div>
+                      <div>
+                        Pending:{' '}
+                        {formatPackageCurrency(milestone.pendingAmount)}
+                      </div>
+                      <div>
+                        Date:{' '}
+                        {milestone.dueDate && milestone.dueDate !== 'NA'
+                          ? dayjs(milestone.dueDate).format('DD/MM/YYYY')
+                          : 'Not set'}
+                      </div>
+                    </div>
+                  }
+                >
+                  <span
+                    className={`rounded px-1.5 py-1 text-center text-[10px] font-semibold ${
+                      milestone.status === 'paid'
+                        ? 'bg-green-500 text-white'
+                        : milestone.status === 'overdue'
+                          ? 'bg-red-500 text-white'
+                          : 'bg-yellow-400 text-yellow-950'
+                    }`}
+                  >
+                    {index + 1}
+                  </span>
+                </Tooltip>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Doctor & Time Info */}
         <div className="flex items-center gap-2 justify-between">
