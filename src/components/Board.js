@@ -111,6 +111,7 @@ import { ACCESS_TYPES } from '@/constants/constants'
 import { PrintPreview } from './PrintPreview'
 import { TbInvoice } from 'react-icons/tb'
 import { CalendarIcon, DatePicker } from '@mui/x-date-pickers'
+import PendingAmount from './PendingAmount'
 
 import dynamic from 'next/dynamic'
 import { ArrowBack } from '@mui/icons-material'
@@ -290,7 +291,7 @@ const buildNormalizedStages = (stages) => {
   })
 }
 
-const PackagePaymentStages = ({ stages, summary }) => {
+const PackagePaymentStages = ({ stages, summary, onCollectPendingAmount }) => {
   const [expanded, setExpanded] = useState(false)
 
   const normalizedStages = useMemo(
@@ -435,6 +436,24 @@ const PackagePaymentStages = ({ stages, summary }) => {
           <ExpandMoreIcon className="w-4 h-4 text-gray-500" />
         )}
       </button>
+      {totalPendingDisplay > 0 &&
+        typeof onCollectPendingAmount === 'function' && (
+          <div className="px-2.5 pb-1.5">
+            <Button
+              size="small"
+              variant="outlined"
+              color="success"
+              className="capitalize"
+              startIcon={<PaymentsOutlined />}
+              onClick={(e) => {
+                e.stopPropagation()
+                onCollectPendingAmount()
+              }}
+            >
+              Collect Pending
+            </Button>
+          </div>
+        )}
 
       <Collapse in={expanded} timeout="auto" unmountOnExit>
         <div className="px-2.5 pb-2 pt-1 bg-white/70 border-t border-white/80">
@@ -1227,6 +1246,35 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
       enabled: open, // Only fetch when popper is open
     })
 
+  const allMilestonePaymentDetails = useMemo(() => {
+    return (patientDetails?.pendingAmountDetails || []).map((stage) => {
+      const totalAmount = Number(stage?.totalAmount || 0)
+      const allocatedAmount = Number(
+        stage?.totalPaid ?? stage?.allocatedAmount ?? 0,
+      )
+      const pendingAmount = Number(
+        stage?.pending_amount ??
+          stage?.effectivePendingAmount ??
+          Math.max(totalAmount - allocatedAmount, 0),
+      )
+
+      return {
+        ...stage,
+        totalAmount,
+        totalPaid: allocatedAmount,
+        pending_amount: pendingAmount,
+      }
+    })
+  }, [patientDetails?.pendingAmountDetails])
+
+  const pendingMilestones = useMemo(
+    () =>
+      allMilestonePaymentDetails.filter(
+        (stage) => Number(stage?.pending_amount || 0) > 0,
+      ),
+    [allMilestonePaymentDetails],
+  )
+
   return (
     <>
       <DropIndicator beforeId={patientDetails?.appointmentId} stage={stage} />
@@ -1515,6 +1563,11 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
           <PackagePaymentStages
             stages={patientDetails?.pendingAmountDetails}
             summary={patientDetails?.packagePaymentSummary}
+            onCollectPendingAmount={() =>
+              dispatch(
+                openModal('pendingAmount' + patientDetails?.appointmentId),
+              )
+            }
           />
         )}
 
@@ -1681,6 +1734,18 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
         closeOnOutsideClick={true}
       >
         <ConsultationFee patientDetails={patientDetails} />
+      </Modal>
+      <Modal
+        maxWidth={'md'}
+        key="pendingAmount"
+        uniqueKey={'pendingAmount' + patientDetails?.appointmentId}
+        closeOnOutsideClick={true}
+      >
+        <PendingAmount
+          patientDetails={patientDetails}
+          treatmentPendings={pendingMilestones}
+          allPaymentDetails={allMilestonePaymentDetails}
+        />
       </Modal>
       <Modal
         maxWidth={'sm'}
