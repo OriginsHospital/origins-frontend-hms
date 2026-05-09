@@ -99,6 +99,7 @@ import WaveDots from './WaveDots'
 import { toastconfig } from '@/utils/toastconfig'
 import { toast } from 'react-toastify'
 import Vitals from './Vitals'
+import PendingAmount from './PendingAmount'
 import { Autocomplete } from '@mui/material'
 import { CreditCard, Money, Print } from '@mui/icons-material'
 import { hideLoader, showLoader } from '@/redux/loaderSlice'
@@ -653,6 +654,27 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
         overdueCount > 0 ? 'overdue' : pendingCount > 0 ? 'pending' : 'paid',
     }
   }, [packageStatusList])
+  const billingMilestones = useMemo(
+    () =>
+      packageStatusList.map((milestone) => ({
+        ...milestone,
+        displayName: milestone.label,
+        pending_amount: milestone.pendingAmount,
+        totalPaid: milestone.paidAmount,
+        totalAmount: milestone.totalAmount,
+      })),
+    [packageStatusList],
+  )
+  const nextBillableMilestone = useMemo(
+    () =>
+      billingMilestones.find((milestone) => milestone.status === 'overdue') ||
+      billingMilestones.find((milestone) => milestone.status === 'pending') ||
+      null,
+    [billingMilestones],
+  )
+  const [selectedBillingProductType, setSelectedBillingProductType] =
+    useState('')
+  const milestoneBillingModalKey = `milestoneBilling${patientDetails?.appointmentId}`
   const [previewContent, setPreviewContent] = useState(null)
   const [anchorEl, setAnchorEl] = useState(null)
   const open = Boolean(anchorEl)
@@ -863,6 +885,10 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
   })
   const handleOpenVitalsModal = () => {
     dispatch(openModal(patientDetails?.appointmentId + 'vitals'))
+  }
+  const handleOpenMilestoneBilling = (productType = '') => {
+    setSelectedBillingProductType(productType)
+    dispatch(openModal(milestoneBillingModalKey))
   }
 
   const handleDeleteAppointments = async () => {
@@ -1243,7 +1269,26 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
                   }
                 >
                   <span
+                    role={milestone.pendingAmount > 0 ? 'button' : undefined}
+                    tabIndex={milestone.pendingAmount > 0 ? 0 : undefined}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      if (milestone.pendingAmount > 0) {
+                        handleOpenMilestoneBilling(milestone.productTypeEnum)
+                      }
+                    }}
+                    onKeyDown={(event) => {
+                      if (
+                        milestone.pendingAmount > 0 &&
+                        (event.key === 'Enter' || event.key === ' ')
+                      ) {
+                        event.preventDefault()
+                        handleOpenMilestoneBilling(milestone.productTypeEnum)
+                      }
+                    }}
                     className={`rounded px-1.5 py-1 text-center text-[10px] font-semibold ${
+                      milestone.pendingAmount > 0 ? 'cursor-pointer' : ''
+                    } ${
                       milestone.status === 'paid'
                         ? 'bg-green-500 text-white'
                         : milestone.status === 'overdue'
@@ -1256,6 +1301,24 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
                 </Tooltip>
               ))}
             </div>
+            <PermissionedPayButton
+              color={
+                packageStatusSummary.status === 'overdue' ? 'error' : 'success'
+              }
+              variant="outlined"
+              size="small"
+              className="mt-2 w-full capitalize bg-white"
+              startIcon={<PaymentsOutlined />}
+              disabled={!nextBillableMilestone}
+              onClick={(event) => {
+                event.stopPropagation()
+                handleOpenMilestoneBilling(
+                  nextBillableMilestone?.productTypeEnum || '',
+                )
+              }}
+            >
+              Milestone Billing
+            </PermissionedPayButton>
           </div>
         )}
 
@@ -1443,6 +1506,19 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
         closeOnOutsideClick={true}
       >
         <ConsultationFee patientDetails={patientDetails} />
+      </Modal>
+      <Modal
+        maxWidth={'md'}
+        key="milestoneBilling"
+        uniqueKey={milestoneBillingModalKey}
+        closeOnOutsideClick={true}
+      >
+        <PendingAmount
+          patientDetails={patientDetails}
+          treatmentPendings={billingMilestones}
+          allPaymentDetails={billingMilestones}
+          initialSelectedProductType={selectedBillingProductType}
+        />
       </Modal>
       <Modal
         maxWidth={'sm'}
