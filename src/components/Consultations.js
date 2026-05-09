@@ -19,7 +19,7 @@ import {
   IconButton,
 } from '@mui/material'
 import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query'
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import Modal from './Modal'
 import VerticalTabs from './VerticalConsultationTabs'
@@ -111,6 +111,18 @@ export default function Consultations({
       ),
     enabled: !!selectedTab?.id && selectedTab.type === 'consultation',
   })
+
+  /** Prefer latest appointment's branch (visit location); else user's default branch — not registration-only. */
+  const defaultBookBranchId = useMemo(() => {
+    const appts = getConsultationAppointments?.data
+    if (appts?.length) {
+      const latest = [...appts].sort(
+        (a, b) => new Date(b.appointmentDate) - new Date(a.appointmentDate),
+      )[0]
+      if (latest?.branchId != null) return latest.branchId
+    }
+    return userDetails?.branchDetails?.[0]?.id
+  }, [getConsultationAppointments?.data, userDetails?.branchDetails])
   const { data: doctorsList } = useQuery({
     queryKey: ['doctors', appointmentForm?.date],
     queryFn: () =>
@@ -249,6 +261,7 @@ export default function Consultations({
                   console.log(selectedTab)
                   setAppointmentForm({
                     consultationId: clickedConsultationOrTreatmentType,
+                    branchId: defaultBookBranchId,
                   })
                 }}
                 variant="outlined"
@@ -271,6 +284,7 @@ export default function Consultations({
                 console.log(selectedTab)
                 setAppointmentForm({
                   consultationId: clickedConsultationOrTreatmentType,
+                  branchId: defaultBookBranchId,
                 })
               }}
               variant="outlined"
