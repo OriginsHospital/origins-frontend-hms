@@ -111,7 +111,6 @@ import { ACCESS_TYPES } from '@/constants/constants'
 import { PrintPreview } from './PrintPreview'
 import { TbInvoice } from 'react-icons/tb'
 import { CalendarIcon, DatePicker } from '@mui/x-date-pickers'
-import PendingAmount from './PendingAmount'
 
 import dynamic from 'next/dynamic'
 import { ArrowBack } from '@mui/icons-material'
@@ -125,6 +124,7 @@ import {
   HourglassEmptyRounded,
 } from '@mui/icons-material'
 import { Collapse, LinearProgress } from '@mui/material'
+import PendingAmount from './PendingAmount'
 // import { useReactToPrint } from 'react-to-print'
 // export const CustomKanban = () => {
 //   return (
@@ -291,7 +291,7 @@ const buildNormalizedStages = (stages) => {
   })
 }
 
-const PackagePaymentStages = ({ stages, summary, onCollectPendingAmount }) => {
+const PackagePaymentStages = ({ stages, summary, onCollectPayment }) => {
   const [expanded, setExpanded] = useState(false)
 
   const normalizedStages = useMemo(
@@ -436,24 +436,6 @@ const PackagePaymentStages = ({ stages, summary, onCollectPendingAmount }) => {
           <ExpandMoreIcon className="w-4 h-4 text-gray-500" />
         )}
       </button>
-      {totalPendingDisplay > 0 &&
-        typeof onCollectPendingAmount === 'function' && (
-          <div className="px-2.5 pb-1.5">
-            <Button
-              size="small"
-              variant="outlined"
-              color="success"
-              className="capitalize"
-              startIcon={<PaymentsOutlined />}
-              onClick={(e) => {
-                e.stopPropagation()
-                onCollectPendingAmount()
-              }}
-            >
-              Collect Pending
-            </Button>
-          </div>
-        )}
 
       <Collapse in={expanded} timeout="auto" unmountOnExit>
         <div className="px-2.5 pb-2 pt-1 bg-white/70 border-t border-white/80">
@@ -547,6 +529,22 @@ const PackagePaymentStages = ({ stages, summary, onCollectPendingAmount }) => {
                         Manager can move to Doctor
                       </div>
                     )}
+                    {stage.effectivePendingAmount > 0 &&
+                      typeof onCollectPayment === 'function' && (
+                        <div className="mt-1.5 flex justify-end">
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            className="capitalize"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              onCollectPayment(stage?.productTypeEnum)
+                            }}
+                          >
+                            Collect payment
+                          </Button>
+                        </div>
+                      )}
                   </div>
                 </div>
               )
@@ -978,8 +976,65 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
   const isReceptionistUser =
     user?.roleDetails?.id === 6 || userRoleName === 'receptionist'
   const [previewContent, setPreviewContent] = useState(null)
+  const [selectedPendingProductType, setSelectedPendingProductType] =
+    useState(null)
   const [anchorEl, setAnchorEl] = useState(null)
   const open = Boolean(anchorEl)
+
+  const packagePendingDetails = useMemo(() => {
+    const normalizedStages = buildNormalizedStages(
+      patientDetails?.pendingAmountDetails,
+    )
+
+    return normalizedStages
+      .filter((stageItem) => Number(stageItem?.totalAmount || 0) > 0)
+      .map((stageItem) => {
+        const totalAmount = Number(stageItem?.totalAmount || 0)
+        const totalPaid = Number(
+          stageItem?.totalPaid ?? stageItem?.allocatedAmount ?? 0,
+        )
+        const pendingAmount = Number(
+          stageItem?.pending_amount ??
+            stageItem?.effectivePendingAmount ??
+            Math.max(totalAmount - totalPaid, 0),
+        )
+
+        return {
+          ...stageItem,
+          totalAmount,
+          totalPaid,
+          pending_amount: pendingAmount,
+          dateColumn:
+            stageItem?.dateColumn || stageItem?.productTypeEnum || 'NA',
+          mileStoneStartedDate: stageItem?.mileStoneStartedDate || 'NA',
+          displayName: stageItem?.displayName || stageItem?.productTypeEnum,
+          productTypeEnum: stageItem?.productTypeEnum,
+        }
+      })
+  }, [patientDetails?.pendingAmountDetails])
+
+  const hasPackagePendingPayments = useMemo(
+    () =>
+      packagePendingDetails.some(
+        (stageItem) => Number(stageItem?.pending_amount || 0) > 0,
+      ),
+    [packagePendingDetails],
+  )
+
+  const handleOpenPackagePendingModal = useCallback(
+    (productTypeEnum) => {
+      if (!hasPackagePendingPayments) return
+
+      setSelectedPendingProductType(productTypeEnum || null)
+      dispatch(openModal('pendingAmount' + patientDetails?.appointmentId))
+    },
+    [
+      dispatch,
+      hasPackagePendingPayments,
+      patientDetails?.appointmentId,
+      setSelectedPendingProductType,
+    ],
+  )
   const handleStatusClick = (event) => {
     setAnchorEl(event.currentTarget) // Just set the anchor element
   }
@@ -1245,35 +1300,6 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
       },
       enabled: open, // Only fetch when popper is open
     })
-
-  const allMilestonePaymentDetails = useMemo(() => {
-    return (patientDetails?.pendingAmountDetails || []).map((stage) => {
-      const totalAmount = Number(stage?.totalAmount || 0)
-      const allocatedAmount = Number(
-        stage?.totalPaid ?? stage?.allocatedAmount ?? 0,
-      )
-      const pendingAmount = Number(
-        stage?.pending_amount ??
-          stage?.effectivePendingAmount ??
-          Math.max(totalAmount - allocatedAmount, 0),
-      )
-
-      return {
-        ...stage,
-        totalAmount,
-        totalPaid: allocatedAmount,
-        pending_amount: pendingAmount,
-      }
-    })
-  }, [patientDetails?.pendingAmountDetails])
-
-  const pendingMilestones = useMemo(
-    () =>
-      allMilestonePaymentDetails.filter(
-        (stage) => Number(stage?.pending_amount || 0) > 0,
-      ),
-    [allMilestonePaymentDetails],
-  )
 
   return (
     <>
@@ -1563,11 +1589,7 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
           <PackagePaymentStages
             stages={patientDetails?.pendingAmountDetails}
             summary={patientDetails?.packagePaymentSummary}
-            onCollectPendingAmount={() =>
-              dispatch(
-                openModal('pendingAmount' + patientDetails?.appointmentId),
-              )
-            }
+            onCollectPayment={handleOpenPackagePendingModal}
           />
         )}
 
@@ -1736,15 +1758,16 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
         <ConsultationFee patientDetails={patientDetails} />
       </Modal>
       <Modal
-        maxWidth={'md'}
+        maxWidth={'sm'}
         key="pendingAmount"
         uniqueKey={'pendingAmount' + patientDetails?.appointmentId}
         closeOnOutsideClick={true}
       >
         <PendingAmount
           patientDetails={patientDetails}
-          treatmentPendings={pendingMilestones}
-          allPaymentDetails={allMilestonePaymentDetails}
+          treatmentPendings={packagePendingDetails}
+          allPaymentDetails={packagePendingDetails}
+          initialSelectedProductType={selectedPendingProductType}
         />
       </Modal>
       <Modal
