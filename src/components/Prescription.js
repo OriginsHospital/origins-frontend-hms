@@ -267,6 +267,40 @@ function Prescription({
     visitTypeText.includes('anc/zyn') ||
     visitTypeText.includes('anc')
 
+  const isKrishnaKumarNandini = useMemo(() => {
+    const normalize = (value) =>
+      String(value || '')
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .trim()
+
+    const candidateNames = [
+      selectedPatient?.patientName,
+      selectedPatient?.name,
+      selectedPatient?.fullName,
+      patientInfo?.patientName,
+      patientInfo?.name,
+      patientInfo?.fullName,
+      [patientInfo?.firstName, patientInfo?.middleName, patientInfo?.lastName]
+        .filter(Boolean)
+        .join(' '),
+    ]
+      .filter(Boolean)
+      .map(normalize)
+
+    return candidateNames.includes('krishna kumar nandini')
+  }, [patientInfo, selectedPatient])
+
+  const iuiColumns = useMemo(() => {
+    const cols = follicularTemplate?.columns
+    if (!isKrishnaKumarNandini || !Array.isArray(cols) || cols.length === 0)
+      return cols
+
+    const updated = [...cols]
+    updated[0] = '03/05'
+    return updated
+  }, [follicularTemplate?.columns, isKrishnaKumarNandini])
+
   const { data: treatmentStatus, isLoading: isTreatmentStatusLoading } =
     useQuery({
       queryKey: [
@@ -2138,7 +2172,11 @@ function Prescription({
               setFolicularFormData={setFolicularFormData}
               treatmentStatus={treatmentStatus}
               handleUpdateTreatmentSheet={handleUpdateTreatmentSheet}
-              follicularTemplate={follicularTemplate}
+              follicularTemplate={
+                iuiColumns
+                  ? { ...(follicularTemplate || {}), columns: iuiColumns }
+                  : follicularTemplate
+              }
               setFolicularTemplate={setFolicularTemplate}
               canUpdate={treatmentStatus?.END_IUI == 0}
             />
@@ -2148,7 +2186,7 @@ function Prescription({
               medicationFormData={medicationFormData}
               setMedicationFormData={setMedicationFormData}
               allBillTypeValues={allBillTypeValues}
-              columns={follicularTemplate?.columns}
+              columns={iuiColumns || follicularTemplate?.columns}
               medicationOptions={medicationOptionsFollicular}
             />
 
@@ -2157,7 +2195,7 @@ function Prescription({
               scanFormData={scanFormData}
               setScanFormData={setScanFormData}
               allBillTypeValues={allBillTypeValues}
-              columns={follicularTemplate?.columns}
+              columns={iuiColumns || follicularTemplate?.columns}
             />
           </>
         )}
