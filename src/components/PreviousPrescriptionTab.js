@@ -171,17 +171,37 @@ export default function PreviousPrescriptionTab({ patientDetails }) {
             ? getOutcomeFromText(latestNotes)
             : getOutcomeFromText(stageText)
 
+        const endReasonFromApi = [
+          treatment?.closeCancelReason,
+          treatment?.endedReason,
+          treatment?.fetEndedReason,
+          treatment?.eraEndedReason,
+        ]
+          .map((v) => (v != null ? String(v).trim() : ''))
+          .find((s) => s.length > 0)
+
+        const closeReason =
+          endReasonFromApi ||
+          (isClosedOrCancelled && appointmentReason && appointmentReason !== '-'
+            ? appointmentReason
+            : null) ||
+          '-'
+
         allCycles.push({
           visitId: visit?.visitId,
           visitType: visit?.visitType,
           visitDate: visit?.visitDate,
-          treatmentCycleId: treatment?.treatmentCycleId,
+          treatmentCycleId:
+            treatment?.treatmentCycleId ?? treatment?.treatment_cycle_id,
+          treatmentTimestampId:
+            treatment?.treatmentTimestampId ??
+            treatment?.treatment_timestamp_id,
           treatmentType: treatment?.treatmentType || 'Treatment',
           treatmentDate: treatment?.treatmentDate,
           stage: stageText || '-',
           outcome,
           doctorName: latestAppointment?.consultationDoctor || '-',
-          closeReason: isClosedOrCancelled ? appointmentReason : '-',
+          closeReason,
           notes: latestNotes || '-',
         })
       })
@@ -251,8 +271,26 @@ export default function PreviousPrescriptionTab({ patientDetails }) {
                       ? dayjs(cycle.treatmentDate).format('DD-MM-YYYY')
                       : '-'}
                   </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Treatment cycle ID: {cycle.treatmentCycleId ?? '-'}
+                  </Typography>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Chip
+                    label={`Treatment cycle ID: ${cycle.treatmentCycleId ?? '-'}`}
+                    size="small"
+                    variant="outlined"
+                  />
+                  <Chip
+                    label={`Treatment timestamp ID: ${cycle.treatmentTimestampId ?? '-'}`}
+                    size="small"
+                    variant="outlined"
+                  />
+                  <Chip
+                    label={`Visit ID: ${cycle.visitId ?? '-'}`}
+                    size="small"
+                    variant="outlined"
+                  />
                   <Chip
                     label={`Visit: ${cycle.visitType || '-'}`}
                     size="small"
@@ -274,7 +312,15 @@ export default function PreviousPrescriptionTab({ patientDetails }) {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 <Typography variant="body2">
-                  <strong>Cycle ID:</strong> {cycle.treatmentCycleId}
+                  <strong>Treatment cycle ID:</strong>{' '}
+                  {cycle.treatmentCycleId ?? '-'}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Treatment timestamp ID:</strong>{' '}
+                  {cycle.treatmentTimestampId ?? '-'}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Visit ID:</strong> {cycle.visitId ?? '-'}
                 </Typography>
                 <Typography variant="body2">
                   <strong>Current Status:</strong> {cycle.stage}
