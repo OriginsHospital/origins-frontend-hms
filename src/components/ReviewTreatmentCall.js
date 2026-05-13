@@ -4,11 +4,13 @@ import {
   Checkbox,
   FormControlLabel,
   TextField,
-  Menu,
   MenuItem,
   Switch,
   IconButton,
   FormControl,
+  InputLabel,
+  Select,
+  Skeleton,
 } from '@mui/material'
 import { DatePicker } from '@mui/x-date-pickers'
 import React, { useState, useMemo } from 'react'
@@ -16,12 +18,13 @@ import dayjs from 'dayjs'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useDispatch, useSelector } from 'react-redux'
 import { closeModal } from '@/redux/modalSlice'
-import Select from 'react-select'
+import ReactSelect from 'react-select'
 import {
   getAllAppointmentsReasons,
   bookReviewTreatmentCall,
   getBillTypeValuesByBillTypeId,
   createOtherAppointmentReason,
+  getAvailableConsultationSlots,
 } from '@/constants/apis'
 import { toast } from 'react-toastify'
 import { toastconfig } from '@/utils/toastconfig'
@@ -40,6 +43,7 @@ function ReviewTreatmentCall({
 }) {
   const [reviewForm, setReviewForm] = React.useState({
     date: '',
+    timeslot: '',
     appointmentReasonId: null,
     hasAnyFuturePrescription: false,
     lineBillEntries: [],
@@ -55,14 +59,14 @@ function ReviewTreatmentCall({
 
   const queryClient = useQueryClient()
 
-  const userDetails = useSelector(state => state.user)
-  const { branches, billTypes } = useSelector(store => store.dropdowns)
+  const userDetails = useSelector((state) => state.user)
+  const { branches, billTypes } = useSelector((store) => store.dropdowns)
   const [defaultLineBillValues, setDefaultLineBillValues] = useState(null)
   const dispatch = useDispatch()
 
   const billTypesMap = useMemo(() => {
     const map = {}
-    billTypes.map(eachBillType => {
+    billTypes.map((eachBillType) => {
       map[eachBillType.id] = eachBillType.name
       map[eachBillType.name] = eachBillType.id
     })
@@ -88,27 +92,41 @@ function ReviewTreatmentCall({
 
   // Get appointment reasons
   // console.log(treatmentCycleId)
-  const {
-    data: appointmentReasonsList,
-    isLoading: isLoadingReasons,
-  } = useQuery({
-    queryKey: ['appointmentReasons', treatmentCycleId],
-    queryFn: async () => {
-      const response = await getAllAppointmentsReasons(
-        userDetails?.accessToken,
-        'Treatment',
-        treatmentCycleId,
-      )
-      if (response.status === 200) {
-        setAppointmentReasons(response.data)
-        return response.data
-      }
-      throw new Error('Error fetching appointment reasons')
+  const { data: availableSlots, isLoading: isLoadingAvailableSlots } = useQuery(
+    {
+      queryKey: [
+        'ReviewTreatmentCallAvailableSlots',
+        reviewForm?.date,
+        userDetails?.id,
+      ],
+      queryFn: () =>
+        getAvailableConsultationSlots(userDetails?.accessToken, {
+          date: reviewForm?.date,
+          doctorId: userDetails?.id,
+        }),
+      enabled: !!reviewForm?.date && !!userDetails?.id,
     },
-    enabled: !!treatmentCycleId,
-  })
+  )
+
+  const { data: appointmentReasonsList, isLoading: isLoadingReasons } =
+    useQuery({
+      queryKey: ['appointmentReasons', treatmentCycleId],
+      queryFn: async () => {
+        const response = await getAllAppointmentsReasons(
+          userDetails?.accessToken,
+          'Treatment',
+          treatmentCycleId,
+        )
+        if (response.status === 200) {
+          setAppointmentReasons(response.data)
+          return response.data
+        }
+        throw new Error('Error fetching appointment reasons')
+      },
+      enabled: !!treatmentCycleId,
+    })
   const { mutate: createOtherReason } = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const response = await createOtherAppointmentReason(
         userDetails.accessToken,
         payload,
@@ -140,11 +158,11 @@ function ReviewTreatmentCall({
     if (defaultLineBillValues) {
       const SelectedTypeIdArray = Object.keys(defaultLineBillValues)
       if (SelectedTypeIdArray.length != 0) {
-        SelectedTypeIdArray?.map(data => {
+        SelectedTypeIdArray?.map((data) => {
           const SelectedTypeValuesArray = defaultLineBillValues?.[data]
           if (SelectedTypeValuesArray?.length != 0) {
             const billTypeValues = SelectedTypeValuesArray.filter(
-              item => item.status !== 'PAID',
+              (item) => item.status !== 'PAID',
             ).map(({ status, ...item }) => item)
 
             if (billTypeValues.length > 0) {
@@ -160,14 +178,14 @@ function ReviewTreatmentCall({
     return billTypeStruct
   }
 
-  const setSelectedValues = name => selectedOptions => {
+  const setSelectedValues = (name) => (selectedOptions) => {
     const billTypeId = billTypesMap[name]
     let copyOfDefaultLineBillValues = { ...defaultLineBillValues }
     let billTypeValues = []
 
-    selectedOptions?.forEach(element => {
+    selectedOptions?.forEach((element) => {
       const BillTypeValuesArray = allBillTypeValues[name]
-      const BillTYpeValueObject = BillTypeValuesArray.find(values => {
+      const BillTYpeValueObject = BillTypeValuesArray.find((values) => {
         return values.id === element.value
       })
 
@@ -197,7 +215,7 @@ function ReviewTreatmentCall({
 
   // Book appointment mutation
   const bookAppointment = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const res = await bookReviewTreatmentCall(
         userDetails.accessToken,
         payload,
@@ -214,7 +232,12 @@ function ReviewTreatmentCall({
   })
 
   const handleBookAppointment = () => {
-    if (!reviewForm.date || !reviewForm.appointmentReasonId) {
+    if (
+      !reviewForm.branchId ||
+      !reviewForm.date ||
+      !reviewForm.timeslot ||
+      !reviewForm.appointmentReasonId
+    ) {
       toast.error('Please fill all required fields', toastconfig)
       return
     }
@@ -224,6 +247,8 @@ function ReviewTreatmentCall({
       type: type,
       date: reviewForm.date,
       doctorId: userDetails?.id,
+      timeStart: reviewForm.timeslot.split('-')[0].trim(),
+      timeEnd: reviewForm.timeslot.split('-')[1].trim(),
       treatmentCycleId: treatmentCycleId,
       appointmentReasonId: reviewForm.appointmentReasonId,
       hasAnyFuturePrescription: reviewForm.hasAnyFuturePrescription,
@@ -242,7 +267,7 @@ function ReviewTreatmentCall({
     )
     let tempLineBillValues = copyOfDefaultLineBillValues?.[
       billTypeIdPrescription
-    ]?.map(lineBillValues => {
+    ]?.map((lineBillValues) => {
       if (lineBillValues.id == prescriptionId) {
         lineBillValues.prescriptionDetails = medIntake
         lineBillValues.prescribedQuantity =
@@ -265,7 +290,7 @@ function ReviewTreatmentCall({
 
     // Check for duplicate reason
     const isDuplicate = appointmentReasons?.some(
-      reason => reason.name.toLowerCase() === inputValue.toLowerCase(),
+      (reason) => reason.name.toLowerCase() === inputValue.toLowerCase(),
     )
 
     if (isDuplicate) {
@@ -287,9 +312,9 @@ function ReviewTreatmentCall({
         <FormControl className="min-w-[30%]">
           <Autocomplete
             options={branches || []}
-            getOptionLabel={option => option.name}
+            getOptionLabel={(option) => option.name}
             value={
-              branches?.find(branch => branch.id === reviewForm.branchId) ||
+              branches?.find((branch) => branch.id === reviewForm.branchId) ||
               null
             }
             onChange={(_, value) =>
@@ -298,7 +323,7 @@ function ReviewTreatmentCall({
                 branchId: value?.id || null,
               })
             }
-            renderInput={params => (
+            renderInput={(params) => (
               <TextField {...params} label="Branch" fullWidth />
             )}
           />
@@ -309,20 +334,55 @@ function ReviewTreatmentCall({
           format="DD/MM/YYYY"
           className="bg-white rounded-lg min-w-[50%]"
           value={reviewForm?.date ? dayjs(reviewForm?.date) : null}
-          onChange={newValue =>
+          onChange={(newValue) =>
             setReviewForm({
               ...reviewForm,
               date: dayjs(newValue).format('YYYY-MM-DD'),
+              timeslot: '',
             })
           }
         />
+
+        {reviewForm?.date && (
+          <FormControl className="min-w-[30%]">
+            <InputLabel id="review-treatment-timeslot-label">
+              Time Slot
+            </InputLabel>
+            <Select
+              labelId="review-treatment-timeslot-label"
+              id="review-treatment-timeslot"
+              className="bg-white rounded-lg"
+              value={reviewForm.timeslot || ''}
+              name="timeslot"
+              label="Time Slot"
+              onChange={(e) =>
+                setReviewForm({
+                  ...reviewForm,
+                  timeslot: e.target.value,
+                })
+              }
+            >
+              {isLoadingAvailableSlots ? (
+                <MenuItem disabled>
+                  <Skeleton width="100%" />
+                </MenuItem>
+              ) : (
+                availableSlots?.data?.map((each) => (
+                  <MenuItem key={each} value={each}>
+                    {each}
+                  </MenuItem>
+                ))
+              )}
+            </Select>
+          </FormControl>
+        )}
 
         <div className="flex gap-2 items-center">
           <Autocomplete
             fullWidth
             className="min-w-[700px]"
             options={appointmentReasons || []}
-            getOptionLabel={option => option.name}
+            getOptionLabel={(option) => option.name}
             loading={isLoadingReasons}
             inputValue={inputValue}
             onInputChange={(event, newInputValue) => {
@@ -334,7 +394,7 @@ function ReviewTreatmentCall({
                 appointmentReasonId: value?.id,
               })
             }}
-            renderInput={params => (
+            renderInput={(params) => (
               <TextField
                 {...params}
                 label="Appointment Reason"
@@ -350,7 +410,7 @@ function ReviewTreatmentCall({
                             <p className="text-sm">Is Spouse</p>
                             <Switch
                               checked={newReason.isSpouse}
-                              onChange={e =>
+                              onChange={(e) =>
                                 setNewReason({
                                   ...newReason,
                                   isSpouse: e.target.checked,
@@ -394,7 +454,7 @@ function ReviewTreatmentCall({
         control={
           <Checkbox
             checked={reviewForm.hasAnyFuturePrescription}
-            onChange={e =>
+            onChange={(e) =>
               setReviewForm({
                 ...reviewForm,
                 hasAnyFuturePrescription: e.target.checked,
@@ -408,13 +468,13 @@ function ReviewTreatmentCall({
 
       {reviewForm.hasAnyFuturePrescription && allBillTypeValues && (
         <div className="flex flex-col gap-3">
-          {billTypes.map(billType => (
+          {billTypes.map((billType) => (
             <React.Fragment key={`${billType.name}-multiselect`}>
               <p className="font-semibold">{billType.name}</p>
-              <Select
+              <ReactSelect
                 isMulti
                 name={billType.name}
-                options={allBillTypeValues[billType.name]?.map(data => ({
+                options={allBillTypeValues[billType.name]?.map((data) => ({
                   value: data.id,
                   label: data.name,
                 }))}
@@ -424,7 +484,7 @@ function ReviewTreatmentCall({
               {billType.name === 'Pharmacy' &&
                 defaultLineBillValues?.['3']?.length > 0 && (
                   <div className="h-48 border flex flex-col items-center p-2 overflow-y-auto gap-2 bg-primary/10 rounded-lg">
-                    {defaultLineBillValues['3'].map(prescription => (
+                    {defaultLineBillValues['3'].map((prescription) => (
                       <RenderPrescriptionPharmacy
                         key={`prescription-${prescription.id}`}
                         prescriptionId={prescription.id}
