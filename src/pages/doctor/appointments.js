@@ -73,6 +73,7 @@ import PatientHistory from '@/components/PatientHistory'
 import VitalsInformation from '@/components/VitalsInformation'
 import InfoItem from '@/components/InfoItem'
 import Prescription from '@/components/Prescription'
+import TreatmentCycleHistoryView from '@/components/TreatmentCycleHistoryView'
 import PatientDetailsSkeleton from '@/fallbacks/PatientDetailsSkeleton'
 import { toast } from 'react-toastify'
 import s from 'aws-s3'
@@ -816,12 +817,19 @@ function ConsultationsAndTreatments({
                   <AccordionDetails>
                     {clickedConsultationOrTreatment.type == 'Treatment' &&
                       eachTreatment.treatmentCycleId ==
-                        clickedConsultationOrTreatment.id &&
-                      renderRespectiveAppointments(
-                        clickedConsultationOrTreatment.type,
-                        'Treatment',
-                        clickedConsultationOrTreatment.id,
-                        eachTreatment.treatmentCycleId,
+                        clickedConsultationOrTreatment.id && (
+                        <div className="flex flex-col gap-3">
+                          {renderRespectiveAppointments(
+                            clickedConsultationOrTreatment.type,
+                            'Treatment',
+                            clickedConsultationOrTreatment.id,
+                            eachTreatment.treatmentCycleId,
+                          )}
+                          <Divider className="my-2" />
+                          <TreatmentCycleHistoryView
+                            treatmentCycleId={eachTreatment.treatmentCycleId}
+                          />
+                        </div>
                       )}
                   </AccordionDetails>
                 </Accordion>
