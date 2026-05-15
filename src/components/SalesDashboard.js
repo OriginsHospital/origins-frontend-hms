@@ -12,6 +12,7 @@ import {
   MenuItem,
   Select,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import { Edit, Delete } from '@mui/icons-material'
@@ -22,6 +23,11 @@ import SalesChart from './charts/SalesChart'
 import FilteredDataGrid from './FilteredDataGrid'
 import { updateRevenueNewEntry, deleteRevenueNewEntry } from '@/constants/apis'
 import { toastconfig } from '@/utils/toastconfig'
+import {
+  getRevenueBranchDisplayCode,
+  getRevenueBranchFullName,
+} from '@/utils/branchMapping'
+import { roundCurrency } from '@/utils/currencyFormat'
 
 const SERVICE_COLORS = {
   'IVF PACKAGE': '#27ae60',
@@ -173,6 +179,9 @@ const SalesDashboard = ({
   branchName,
   filters: reportFilters,
   showRevenueRowActions = false,
+  showBranchColumn = false,
+  branchCatalog = [],
+  dropdownBranches = [],
   accessToken,
   onRevenueMutationSuccess,
 }) => {
@@ -291,40 +300,51 @@ const SalesDashboard = ({
   }, [])
 
   // Normalize incoming rows to ensure consistent fields for display and export
-  const normalizeRow = (row) => {
-    if (!row) return row
-    const lastNameFromDb = row.last_name ?? row.lastName ?? ''
-    const firstNameFromDb = row.first_name ?? row.firstName ?? ''
+  const normalizeRow = useCallback(
+    (row) => {
+      if (!row) return row
+      const lastNameFromDb = row.last_name ?? row.lastName ?? ''
+      const firstNameFromDb = row.first_name ?? row.firstName ?? ''
 
-    let lastName = lastNameFromDb
-    let firstName = firstNameFromDb
+      let lastName = lastNameFromDb
+      let firstName = firstNameFromDb
 
-    // If DB fields are missing, try to derive from existing patientName (fallback)
-    if ((!lastName || !firstName) && row.patientName) {
-      const parts = String(row.patientName).trim().split(/\s+/)
-      if (parts.length > 0) {
-        firstName = parts[0] // First part is the first name
-        if (parts.length > 1) {
-          // Rest of the parts combine to form the last name
-          lastName = parts.slice(1).join(' ')
+      // If DB fields are missing, try to derive from existing patientName (fallback)
+      if ((!lastName || !firstName) && row.patientName) {
+        const parts = String(row.patientName).trim().split(/\s+/)
+        if (parts.length > 0) {
+          firstName = parts[0] // First part is the first name
+          if (parts.length > 1) {
+            // Rest of the parts combine to form the last name
+            lastName = parts.slice(1).join(' ')
+          }
         }
       }
-    }
 
-    // Create the patient name in the format: last_name + ' ' + first_name (surname first)
-    const combinedPatientName = [lastName, firstName]
-      .filter(Boolean)
-      .join(' ')
-      .trim()
+      // Create the patient name in the format: last_name + ' ' + first_name (surname first)
+      const combinedPatientName = [lastName, firstName]
+        .filter(Boolean)
+        .join(' ')
+        .trim()
 
-    return {
-      ...row,
-      lastName: lastName || '',
-      firstName: firstName || '',
-      patientName: combinedPatientName,
-      reportBranchId: getReportBranchId(row),
-    }
-  }
+      return {
+        ...row,
+        lastName: lastName || '',
+        firstName: firstName || '',
+        patientName: combinedPatientName,
+        amount: roundCurrency(row.amount),
+        discountAmount: roundCurrency(row.discountAmount),
+        reportBranchId: getReportBranchId(row),
+        branchDisplayCode: getRevenueBranchDisplayCode(
+          row,
+          branchCatalog,
+          dropdownBranches,
+        ),
+        branchFullName: getRevenueBranchFullName(row, branchCatalog),
+      }
+    },
+    [branchCatalog, dropdownBranches],
+  )
 
   const dataNormalizedSales = (data?.salesData || []).map(normalizeRow)
   const dataNormalizedReturns = (data?.returnData || []).map(normalizeRow)
@@ -395,6 +415,43 @@ const SalesDashboard = ({
   )
 
   const columns = useMemo(() => {
+    const branchColumn = showBranchColumn
+      ? [
+          {
+            field: 'branchDisplayCode',
+            headerName: 'Branch',
+            flex: 0.6,
+            minWidth: 72,
+            align: 'left',
+            headerAlign: 'left',
+            valueGetter: (params) =>
+              params?.row?.branchDisplayCode ||
+              getRevenueBranchDisplayCode(
+                params?.row,
+                branchCatalog,
+                dropdownBranches,
+              ),
+            renderCell: (params) => {
+              const code =
+                params?.row?.branchDisplayCode ||
+                getRevenueBranchDisplayCode(
+                  params?.row,
+                  branchCatalog,
+                  dropdownBranches,
+                )
+              const fullName =
+                params?.row?.branchFullName ||
+                getRevenueBranchFullName(params?.row, branchCatalog)
+              return (
+                <Tooltip title={fullName || code}>
+                  <span className="truncate">{code}</span>
+                </Tooltip>
+              )
+            },
+          },
+        ]
+      : []
+
     const baseColumns = [
       {
         field: 'date',
@@ -407,6 +464,7 @@ const SalesDashboard = ({
         ),
         filterField: 'date',
       },
+      ...branchColumn,
       {
         field: 'patientName',
         headerName: 'Patient Name',
@@ -474,13 +532,10 @@ const SalesDashboard = ({
         align: 'left',
         headerAlign: 'left',
         renderCell: (params) => {
-          const amount = params?.row?.amount
-          return <div>{amount ? Math.round(amount) : 0}</div>
+          const amount = roundCurrency(params?.row?.amount)
+          return <div>{amount}</div>
         },
-        valueFormatter: (params) => {
-          const amount = params?.value
-          return amount ? Math.round(amount) : 0
-        },
+        valueFormatter: (params) => roundCurrency(params?.value),
         sortComparator: (v1, v2) => v1 - v2,
       },
       {
@@ -490,6 +545,11 @@ const SalesDashboard = ({
         flex: 1,
         align: 'left',
         headerAlign: 'left',
+        renderCell: (params) => {
+          const discount = roundCurrency(params?.row?.discountAmount)
+          return <div>{discount}</div>
+        },
+        valueFormatter: (params) => roundCurrency(params?.value),
       },
     ]
 
@@ -549,7 +609,12 @@ const SalesDashboard = ({
         },
       },
     ]
-  }, [showRevenueActionsColumn])
+  }, [
+    showRevenueActionsColumn,
+    showBranchColumn,
+    branchCatalog,
+    dropdownBranches,
+  ])
 
   // Function to filter data based on current filters
   // const getFilteredData = rawData => {
@@ -765,7 +830,9 @@ const SalesDashboard = ({
       return totalsByCategory[b] - totalsByCategory[a]
     })
 
-    const amounts = labels.map((label) => totalsByCategory[label])
+    const amounts = labels.map((label) =>
+      roundCurrency(totalsByCategory[label]),
+    )
 
     const assignedColors = labels.map((label) => {
       if (categoryColors[label]) {

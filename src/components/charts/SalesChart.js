@@ -2,12 +2,15 @@ import React, { useMemo } from 'react'
 import { Pie } from 'react-chartjs-2'
 import { Chart as ChartJS, ArcElement, Title, Tooltip, Legend } from 'chart.js'
 import { CircularProgress } from '@mui/material'
+import { roundCurrency } from '@/utils/currencyFormat'
 
 ChartJS.register(ArcElement, Title, Tooltip, Legend)
 
 const SalesChart = ({ dataset, isLoading, hasData }) => {
   const totalAmount = useMemo(() => {
-    return (dataset?.amounts || []).reduce((sum, amount) => sum + amount, 0)
+    return roundCurrency(
+      (dataset?.amounts || []).reduce((sum, amount) => sum + amount, 0),
+    )
   }, [dataset])
 
   const pieData = useMemo(() => {
@@ -44,7 +47,7 @@ const SalesChart = ({ dataset, isLoading, hasData }) => {
 
     return labels
       .map((label, index) => {
-        const amount = Number(amounts[index]) || 0
+        const amount = roundCurrency(amounts[index])
         return {
           label,
           amount,
@@ -101,8 +104,7 @@ const SalesChart = ({ dataset, isLoading, hasData }) => {
                       <span className="chart-legend__value">
                         ₹
                         {item.amount.toLocaleString('en-IN', {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
+                          maximumFractionDigits: 0,
                         })}{' '}
                         ({item.percentage})
                       </span>
@@ -152,11 +154,10 @@ const createPieOptions = ({ totalAmount }) => ({
     tooltip: {
       callbacks: {
         label: (context) => {
-          const amount = context.raw || 0
-          return `₹${amount.toLocaleString('en-IN')} (${computePercentage(
-            amount,
-            totalAmount,
-          )})`
+          const amount = roundCurrency(context.raw)
+          return `₹${amount.toLocaleString('en-IN', {
+            maximumFractionDigits: 0,
+          })} (${computePercentage(amount, totalAmount)})`
         },
       },
     },

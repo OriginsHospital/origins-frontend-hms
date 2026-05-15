@@ -460,7 +460,12 @@ export const deleteDonorFile = async (token, payload) => {
       credentials: 'include',
     },
   )
-  return response.json()
+  const data = await response.json()
+  return {
+    ...data,
+    status: data?.status ?? response.status,
+    httpOk: response.ok,
+  }
 }
 
 export const getDropdowns = async (token) => {

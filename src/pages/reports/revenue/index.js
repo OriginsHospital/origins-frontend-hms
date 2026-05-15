@@ -1,7 +1,7 @@
 import Breadcrumb from '@/components/Breadcrumb'
 import SalesDashboard from '@/components/SalesDashboard'
 import { withPermission } from '@/components/withPermission'
-import { SalesReportDashboard } from '@/constants/apis'
+import { getBranches, SalesReportDashboard } from '@/constants/apis'
 import { ACCESS_TYPES } from '@/constants/constants'
 import {
   Card,
@@ -66,6 +66,16 @@ function Sales() {
       setAppliedToDate(toDate)
     }
   }, [branchId, fromDate, toDate])
+
+  const { data: branchCatalog = [] } = useQuery({
+    queryKey: ['revenueBranchCatalog', userDetails?.accessToken],
+    queryFn: async () => {
+      const result = await getBranches(userDetails?.accessToken)
+      return Array.isArray(result?.data) ? result.data : []
+    },
+    enabled: Boolean(userDetails?.accessToken),
+    staleTime: 5 * 60 * 1000,
+  })
 
   const {
     data: salesDashboardData,
@@ -321,6 +331,9 @@ function Sales() {
       <SalesDashboard
         data={filteredData || salesDashboardData}
         branchId={appliedBranchId}
+        showBranchColumn={appliedBranchId === 'ALL'}
+        branchCatalog={branchCatalog}
+        dropdownBranches={dropdowns?.branches || []}
         reportName="Revenue_Report"
         reportType="revenue"
         branchName={

@@ -1,7 +1,7 @@
 import Breadcrumb from '@/components/Breadcrumb'
 import SalesDashboard from '@/components/SalesDashboard'
 import { withPermission } from '@/components/withPermission'
-import { SalesReportDashboard } from '@/constants/apis'
+import { getBranches, SalesReportDashboard } from '@/constants/apis'
 import { ACCESS_TYPES } from '@/constants/constants'
 import {
   Card,
@@ -26,6 +26,7 @@ import {
   hasRevenueNewAccess,
   hasRevenueNewRowActionsAccess,
 } from '@/utils/revenueAccess'
+import { formatRupeeRounded, roundCurrency } from '@/utils/currencyFormat'
 
 const getReportBranchId = (item) => {
   if (!item) return null
@@ -154,6 +155,16 @@ function SalesNew() {
       return
     }
   }, [userDetails?.email, router])
+
+  const { data: branchCatalog = [] } = useQuery({
+    queryKey: ['revenueBranchCatalog', userDetails?.accessToken],
+    queryFn: async () => {
+      const result = await getBranches(userDetails.accessToken)
+      return Array.isArray(result?.data) ? result.data : []
+    },
+    enabled: Boolean(userDetails?.accessToken),
+    staleTime: 5 * 60 * 1000,
+  })
 
   // Set initial branch to ALL
   useEffect(() => {
@@ -305,8 +316,8 @@ function SalesNew() {
           salesData: dedupeRevenueRows(combinedSalesData),
           returnData: dedupeRevenueRows(combinedReturnData),
           salesDashboard: {
-            totalSales,
-            totalReturns,
+            totalSales: roundCurrency(totalSales),
+            totalReturns: roundCurrency(totalReturns),
           },
         }
       } catch (error) {
@@ -482,14 +493,18 @@ function SalesNew() {
       }
 
       // Safely calculate totals
-      const totalSales = filteredSalesData.reduce(
-        (sum, item) => sum + (Number(item?.amount) || 0),
-        0,
+      const totalSales = roundCurrency(
+        filteredSalesData.reduce(
+          (sum, item) => sum + (Number(item?.amount) || 0),
+          0,
+        ),
       )
 
-      const totalReturns = filteredReturnData.reduce(
-        (sum, item) => sum + (Math.abs(Number(item?.amount)) || 0),
-        0,
+      const totalReturns = roundCurrency(
+        filteredReturnData.reduce(
+          (sum, item) => sum + (Math.abs(Number(item?.amount)) || 0),
+          0,
+        ),
       )
 
       console.log('Filtered data stats:', {
@@ -576,11 +591,11 @@ function SalesNew() {
           >
             <SummaryCard
               title="Total Sales"
-              value={`₹${(
+              value={formatRupeeRounded(
                 filteredData?.salesDashboard?.totalSales ??
-                salesDashboardData?.salesDashboard?.totalSales ??
-                0
-              ).toLocaleString('en-IN')}`}
+                  salesDashboardData?.salesDashboard?.totalSales ??
+                  0,
+              )}
               isActive={activeView === 'sales'}
               minWidth="125px"
             />
@@ -591,11 +606,11 @@ function SalesNew() {
           >
             <SummaryCard
               title={'Total Refunds'}
-              value={`₹${(
+              value={formatRupeeRounded(
                 filteredData?.salesDashboard?.totalReturns ??
-                salesDashboardData?.salesDashboard?.totalReturns ??
-                0
-              ).toLocaleString('en-IN')}`}
+                  salesDashboardData?.salesDashboard?.totalReturns ??
+                  0,
+              )}
               isActive={activeView === 'refunds'}
               minWidth="125px"
             />
@@ -767,6 +782,9 @@ function SalesNew() {
       <SalesDashboard
         data={filteredData || salesDashboardData}
         branchId="ALL"
+        showBranchColumn
+        branchCatalog={branchCatalog}
+        dropdownBranches={dropdowns?.branches || []}
         reportName="Revenue_New_Report"
         reportType="revenue"
         branchName={

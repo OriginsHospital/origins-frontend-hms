@@ -989,7 +989,7 @@ export default function Appointments() {
         dispatch(showLoader())
         const responsejson = await getAppointmentsForDoctor(
           user.accessToken,
-          `${date.$y}-${date.$M + 1}-${date.$D}`,
+          date.format('YYYY-MM-DD'),
         )
         dispatch(hideLoader())
         if (responsejson.status == 200) {

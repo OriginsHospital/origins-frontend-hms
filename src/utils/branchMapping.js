@@ -3,6 +3,86 @@
  */
 
 /**
+ * Resolves branch code for revenue report rows (e.g. HYD, HNK — not full name).
+ * @param {Object} row - Revenue report row
+ * @param {Array} branchCatalog - Branches from getBranches ({ id, name, branchCode? })
+ * @param {Array} dropdownBranches - Dropdown branches (name field holds branchCode)
+ * @returns {string}
+ */
+export const getRevenueBranchDisplayCode = (
+  row,
+  branchCatalog = [],
+  dropdownBranches = [],
+) => {
+  if (!row) return '—'
+
+  const branchId =
+    row.branchId ??
+    row.reportBranchId ??
+    row.branchDetails?.id ??
+    row.branch?.id ??
+    null
+
+  if (row.branchCode) {
+    return String(row.branchCode).trim()
+  }
+
+  if (branchId != null) {
+    const catalogMatch = branchCatalog.find(
+      (b) => String(b.id) === String(branchId),
+    )
+    const dropdownMatch = dropdownBranches.find(
+      (b) => String(b.id) === String(branchId),
+    )
+
+    const code = String(
+      catalogMatch?.branchCode || dropdownMatch?.name || '',
+    ).trim()
+    if (code) return code
+  }
+
+  const apiBranch =
+    typeof row.branch === 'string'
+      ? row.branch.trim()
+      : row.branch?.branchCode
+        ? String(row.branch.branchCode).trim()
+        : ''
+
+  if (apiBranch) return apiBranch
+  if (row.branchName) return String(row.branchName).trim()
+  return '—'
+}
+
+/** Full branch name for tooltips / export context */
+export const getRevenueBranchFullName = (row, branchCatalog = []) => {
+  if (!row) return ''
+
+  const branchId =
+    row.branchId ??
+    row.reportBranchId ??
+    row.branchDetails?.id ??
+    row.branch?.id ??
+    null
+
+  if (branchId != null && branchCatalog.length > 0) {
+    const match = branchCatalog.find((b) => String(b.id) === String(branchId))
+    if (match?.name) return String(match.name).trim()
+  }
+
+  const apiBranch =
+    typeof row.branch === 'string'
+      ? row.branch.trim()
+      : row.branch?.name
+        ? String(row.branch.name).trim()
+        : ''
+
+  return apiBranch || ''
+}
+
+/** @deprecated Use getRevenueBranchDisplayCode */
+export const getRevenueBranchDisplayName = getRevenueBranchDisplayCode
+
+/**
  * Gets branch name from various possible data structures
  * @param {Object} row - Row data from the report
  * @param {Array} branches - Available branches from dropdowns
@@ -79,5 +159,8 @@ export const mapBranchData = (rows, branches = []) => {
 export default {
   getBranchName,
   getBranchNameWithDebug,
+  getRevenueBranchDisplayCode,
+  getRevenueBranchFullName,
+  getRevenueBranchDisplayName,
   mapBranchData,
 }
