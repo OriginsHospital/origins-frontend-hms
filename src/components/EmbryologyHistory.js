@@ -24,7 +24,7 @@ import dayjs from 'dayjs'
 import noImage from '@/assets/no-image.png'
 
 function EmbryologyHistory({ patientId }) {
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const [selectedType, setSelectedType] = useState(0)
   const [expandedAccordion, setExpandedAccordion] = useState(false)
   const dispatch = useDispatch()
@@ -38,7 +38,7 @@ function EmbryologyHistory({ patientId }) {
   const handleTypeChange = (event, newValue) => {
     setSelectedType(newValue)
   }
-  const handleOpenTemplate = template => {
+  const handleOpenTemplate = (template) => {
     if (!template) return
 
     // Create a new window/tab
@@ -49,10 +49,16 @@ function EmbryologyHistory({ patientId }) {
     newWindow.document.close()
   }
 
-  const handleAccordionChange = panel => (event, isExpanded) => {
+  const handleAccordionChange = (panel) => (event, isExpanded) => {
     setExpandedAccordion(isExpanded ? panel : false)
     setSelectedType(0)
   }
+
+  const getReportNamesLabel = (embryologyDetails) =>
+    embryologyDetails
+      ?.map((type) => type.embryologyName)
+      .filter(Boolean)
+      .join(', ')
 
   return (
     <div className="p-4">
@@ -77,18 +83,34 @@ function EmbryologyHistory({ patientId }) {
               expandIcon={<ExpandMore />}
               className="bg-gray-50 hover:bg-gray-100"
             >
-              <div className="flex w-full  items-center gap-4">
-                <Typography className="font-medium">
+              <div className="flex w-full items-center gap-3 flex-wrap pr-2">
+                <Typography className="font-medium shrink-0">
                   {dayjs(record.appointmentDate).format('DD/MM/YYYY')}
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  className="shrink-0"
+                >
                   {record.doctorName}
                 </Typography>
                 <Chip
                   label={record.type}
-                  className={'bg-secondary text-white'}
+                  className="bg-secondary text-white shrink-0"
                   size="small"
                 />
+                {getReportNamesLabel(record.embryologyDetails) ? (
+                  <Typography
+                    variant="body2"
+                    className="font-medium text-gray-800 capitalize"
+                  >
+                    {getReportNamesLabel(record.embryologyDetails)}
+                  </Typography>
+                ) : (
+                  <Typography variant="body2" color="text.disabled">
+                    No reports
+                  </Typography>
+                )}
               </div>
             </AccordionSummary>
 
@@ -105,7 +127,6 @@ function EmbryologyHistory({ patientId }) {
                       {record.embryologyDetails.map((type, idx) => (
                         <Tab
                           key={idx}
-                          // value={index + type.embryologyName}
                           label={`${type.embryologyName}`}
                           className="capitalize"
                         />
@@ -117,7 +138,6 @@ function EmbryologyHistory({ patientId }) {
                     <div
                       key={typeIdx}
                       role="tabpanel"
-                      // value={index + type.embryologyName}
                       hidden={selectedType !== typeIdx}
                     >
                       {selectedType === typeIdx && (
@@ -138,11 +158,6 @@ function EmbryologyHistory({ patientId }) {
                                     alt={detail.categoryType}
                                     loading="lazy"
                                     className="w-full h-48 object-cover bg-white border-b-2"
-                                    // onError={(e) => {
-                                    //   console.log(e)
-                                    //   e.target.src = noImage
-                                    //   e.target.onerror = null
-                                    // }}
                                   />
                                   <div className="p-2 bg-white">
                                     <div className="flex justify-between items-center">
