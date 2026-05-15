@@ -35,6 +35,13 @@ import { toastconfig } from '@/utils/toastconfig'
 import { Close } from '@mui/icons-material'
 import { getMultipleForQuatityCalculation } from '@/constants/utils'
 import dayjs from 'dayjs'
+import {
+  buildPharmacySelectOption,
+  enrichPharmacySelectValue,
+  formatPharmacyOptionLabel,
+  pharmacySelectStyles,
+  PrescriptionPharmacyLowStockLegend,
+} from '@/utils/prescriptionPharmacySelect'
 
 // Medicine Kit Configurations
 const CLEO_SHOT_KIT = {
@@ -1099,10 +1106,11 @@ function PatientPrescription({
 
                   // Add medicine kits as special options for Pharmacy
                   let selectOptions =
-                    allBillTypeValues?.[billType.name]?.map((data) => ({
-                      value: data.id,
-                      label: data.name,
-                    })) ?? []
+                    allBillTypeValues?.[billType.name]?.map((data) =>
+                      billType.name === 'Pharmacy'
+                        ? buildPharmacySelectOption(data)
+                        : { value: data.id, label: data.name },
+                    ) ?? []
 
                   if (billType.name === 'Lab Test') {
                     selectOptions = selectOptions.filter(
@@ -1139,22 +1147,43 @@ function PatientPrescription({
                     </div>
                   )
 
+                  const isPharmacyBillType = billType.name === 'Pharmacy'
                   const selectBlock = (
-                    <Select
-                      isMulti
-                      name={billType.name}
-                      value={defaultValues.filter(
-                        (item) => item.status !== 'PAID',
+                    <>
+                      <Select
+                        isMulti
+                        name={billType.name}
+                        value={defaultValues
+                          .filter((item) => item.status !== 'PAID')
+                          .map((item) =>
+                            isPharmacyBillType
+                              ? enrichPharmacySelectValue(
+                                  item,
+                                  allBillTypeValues,
+                                )
+                              : item,
+                          )}
+                        options={selectOptions}
+                        onChange={setSelectedValues(billType.name)}
+                        classNamePrefix={`select-${billType.name.toLowerCase()}`}
+                        filterOption={
+                          isPharmacyBillType
+                            ? pharmacyStartsWithFilter
+                            : undefined
+                        }
+                        styles={
+                          isPharmacyBillType ? pharmacySelectStyles : undefined
+                        }
+                        formatOptionLabel={
+                          isPharmacyBillType
+                            ? formatPharmacyOptionLabel
+                            : undefined
+                        }
+                      />
+                      {isPharmacyBillType && (
+                        <PrescriptionPharmacyLowStockLegend />
                       )}
-                      options={selectOptions}
-                      onChange={setSelectedValues(billType.name)}
-                      classNamePrefix={`select-${billType.name.toLowerCase()}`}
-                      filterOption={
-                        billType.name === 'Pharmacy'
-                          ? pharmacyStartsWithFilter
-                          : undefined
-                      }
-                    />
+                    </>
                   )
 
                   if (billType.name === 'Pharmacy') {

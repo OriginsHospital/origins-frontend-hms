@@ -19,6 +19,13 @@ import { toastconfig } from '@/utils/toastconfig'
 import dynamic from 'next/dynamic'
 import { Close } from '@mui/icons-material'
 import dayjs from 'dayjs'
+import {
+  buildPharmacySelectOption,
+  enrichPharmacySelectValue,
+  formatPharmacyOptionLabel,
+  pharmacySelectStyles,
+  PrescriptionPharmacyLowStockLegend,
+} from '@/utils/prescriptionPharmacySelect'
 
 const JoditEditor = dynamic(() => import('jodit-react'), {
   ssr: false,
@@ -692,10 +699,11 @@ function SpousePrescription({
                 })) ?? []
 
               let selectOptions =
-                allBillTypeValues?.[billType.name]?.map((data) => ({
-                  value: data.id,
-                  label: data.name,
-                })) ?? []
+                allBillTypeValues?.[billType.name]?.map((data) =>
+                  billType.name === 'Pharmacy'
+                    ? buildPharmacySelectOption(data)
+                    : { value: data.id, label: data.name },
+                ) ?? []
 
               // Add NAPO SHOT kit as a special option for spouse Pharmacy
               if (billType.name === 'Pharmacy') {
@@ -733,9 +741,13 @@ function SpousePrescription({
                   <Select
                     isMulti
                     name={billType.name}
-                    value={defaultValues.filter(
-                      (item) => item.status !== 'PAID',
-                    )}
+                    value={defaultValues
+                      .filter((item) => item.status !== 'PAID')
+                      .map((item) =>
+                        billType.name === 'Pharmacy'
+                          ? enrichPharmacySelectValue(item, allBillTypeValues)
+                          : item,
+                      )}
                     options={selectOptions}
                     onChange={setSelectedValues(billType.name)}
                     classNamePrefix={`select-${billType.name.toLowerCase()}`}
@@ -744,7 +756,20 @@ function SpousePrescription({
                         ? pharmacyStartsWithFilter
                         : undefined
                     }
+                    styles={
+                      billType.name === 'Pharmacy'
+                        ? pharmacySelectStyles
+                        : undefined
+                    }
+                    formatOptionLabel={
+                      billType.name === 'Pharmacy'
+                        ? formatPharmacyOptionLabel
+                        : undefined
+                    }
                   />
+                  {billType.name === 'Pharmacy' && (
+                    <PrescriptionPharmacyLowStockLegend />
+                  )}
 
                   {/* Pharmacy Section */}
                   {billType.name === 'Pharmacy' && (
