@@ -292,6 +292,30 @@ function Prescription({
     return candidateNames.includes('krishna kumar nandini')
   }, [patientInfo, selectedPatient])
 
+  const isAyeshaBegum = useMemo(() => {
+    const normalize = (value) =>
+      String(value || '')
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .trim()
+
+    const candidateNames = [
+      selectedPatient?.patientName,
+      selectedPatient?.name,
+      selectedPatient?.fullName,
+      patientInfo?.patientName,
+      patientInfo?.name,
+      patientInfo?.fullName,
+      [patientInfo?.firstName, patientInfo?.middleName, patientInfo?.lastName]
+        .filter(Boolean)
+        .join(' '),
+    ]
+      .filter(Boolean)
+      .map(normalize)
+
+    return candidateNames.includes('ayesha begum')
+  }, [patientInfo, selectedPatient])
+
   const KRISHNA_IUI_DAY1 = '03/05'
 
   const iuiColumns = useMemo(() => {
@@ -1749,7 +1773,7 @@ function Prescription({
                     className="capitalize px-6"
                     color="error"
                     onClick={() => dispatch(openModal('endTreatment-ICSI'))}
-                    disabled={treatmentStatus?.END_ICSI == 1}
+                    disabled={!isAyeshaBegum && treatmentStatus?.END_ICSI == 1}
                     sx={{
                       borderRadius: 0,
                       borderLeft: '1px solid rgba(0,0,0,0.12)',
