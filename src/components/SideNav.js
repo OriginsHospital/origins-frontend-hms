@@ -583,7 +583,7 @@ function SideNav(props) {
         path: '/scan',
         name: 'Scan',
         Iconn: TbChecklist,
-        relatedModule: 'scanModule',
+        relatedModule: null,
         icon: <ScannerOutlined className="text-secondary" />,
         subRoutes: [
           {
@@ -595,6 +595,11 @@ function SideNav(props) {
             path: '/scan/prescription',
             name: 'Prescription',
             relatedModule: 'scanModule',
+          },
+          {
+            path: '/scan/opu-sheet',
+            name: 'OPU Sheet',
+            relatedModule: null,
           },
         ],
       },

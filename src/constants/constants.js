@@ -174,6 +174,7 @@ export const API_ROUTES = {
   //Sacn module
   GET_SCAN_BY_DATE: '/scan/getScansByDate/',
   GET_PRESCRIPTIONS_BY_DATE: '/scan/getPrescriptionsByDate/',
+  GET_OPU_SHEETS_BY_DATE: '/scan/getOpuSheetsByDate/',
   GET_SCAN_REPORTS: '/scan/getScanReports',
   GET_SCAN_RRESULT: '/scan/getSavedScanResult',
   GET_SCAN_TEMPLATE: '/scan/getScanTemplate',
