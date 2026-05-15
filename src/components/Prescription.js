@@ -231,6 +231,7 @@ function Prescription({
   const [medicationFormData, setMedicationFormData] = useState({})
   const [scanFormData, setScanFormData] = useState({})
   const migrationDoneRef = useRef(false) // Track if migration has been done for this template
+  const krishnaIuiColumnsFixedRef = useRef(false)
   const [scanFetFormData, setScanFetFormData] = useState({})
   const [scanEraFormData, setScanEraFormData] = useState({})
   const [fetFormData, setFETFormData] = useState({})
@@ -291,15 +292,75 @@ function Prescription({
     return candidateNames.includes('krishna kumar nandini')
   }, [patientInfo, selectedPatient])
 
+  const KRISHNA_IUI_DAY1 = '03/05'
+
   const iuiColumns = useMemo(() => {
     const cols = follicularTemplate?.columns
     if (!isKrishnaKumarNandini || !Array.isArray(cols) || cols.length === 0)
-      return cols
+      return null
 
-    const updated = [...cols]
-    updated[0] = '03/05'
-    return updated
+    const start = dayjs(KRISHNA_IUI_DAY1, 'DD/MM')
+    return cols.map((_, index) => start.add(index, 'day').format('DD/MM'))
   }, [follicularTemplate?.columns, isKrishnaKumarNandini])
+
+  const remapTreatmentSheetKeys = (data, oldCols, newCols) => {
+    if (
+      !data ||
+      typeof data !== 'object' ||
+      !oldCols?.length ||
+      !newCols?.length
+    ) {
+      return data
+    }
+
+    const remapped = {}
+    Object.entries(data).forEach(([key, value]) => {
+      let newKey = key
+      for (let i = 0; i < oldCols.length; i++) {
+        const oldCol = oldCols[i]
+        const newCol = newCols[i]
+        if (!oldCol || !newCol || oldCol === newCol) continue
+        if (key === `${oldCol}-note` || key.startsWith(`${oldCol}-`)) {
+          newKey = key.replace(oldCol, newCol)
+          break
+        }
+      }
+      remapped[newKey] = value
+    })
+    return remapped
+  }
+
+  useEffect(() => {
+    krishnaIuiColumnsFixedRef.current = false
+  }, [treatmentCycleId, isKrishnaKumarNandini])
+
+  useEffect(() => {
+    if (!isKrishnaKumarNandini || krishnaIuiColumnsFixedRef.current) return
+
+    const oldCols = follicularTemplate?.columns
+    if (!Array.isArray(oldCols) || oldCols.length === 0 || !iuiColumns) return
+
+    if (oldCols.join('|') === iuiColumns.join('|')) {
+      krishnaIuiColumnsFixedRef.current = true
+      return
+    }
+
+    krishnaIuiColumnsFixedRef.current = true
+
+    setFolicularFormData((prev) =>
+      remapTreatmentSheetKeys(prev, oldCols, iuiColumns),
+    )
+    setMedicationFormData((prev) =>
+      remapTreatmentSheetKeys(prev, oldCols, iuiColumns),
+    )
+    setScanFormData((prev) =>
+      remapTreatmentSheetKeys(prev, oldCols, iuiColumns),
+    )
+    setFolicularTemplate((prev) => ({
+      ...(prev || {}),
+      columns: iuiColumns,
+    }))
+  }, [isKrishnaKumarNandini, iuiColumns, follicularTemplate?.columns])
 
   const { data: treatmentStatus, isLoading: isTreatmentStatusLoading } =
     useQuery({
@@ -398,7 +459,7 @@ function Prescription({
         id: treatmentCycleId,
         template: JSON.stringify({
           follicularSheet: folicularFormData,
-          columns: follicularTemplate?.columns,
+          columns: iuiColumns || follicularTemplate?.columns,
           rows: follicularTemplate?.rows,
           medicationRows: medicationFormData?.rows,
           medicationSheet: medicationFormData,
