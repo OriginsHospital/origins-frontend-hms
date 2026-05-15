@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Typography, Paper, Button } from '@mui/material'
+import PrintIcon from '@mui/icons-material/Print'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useDispatch, useSelector } from 'react-redux'
 import dynamic from 'next/dynamic'
@@ -10,17 +11,22 @@ import {
 import { toastconfig } from '@/utils/toastconfig'
 import { closeModal } from '@/redux/modalSlice'
 import { toast } from 'react-toastify'
+import { printOpuSheet } from '@/utils/opuSheetPrint'
 
 const JoditEditor = dynamic(() => import('jodit-react'), {
   ssr: false,
 })
 
 function PickupSheet({ TreatmentCycleId }) {
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const [template, setTemplate] = useState('')
   const dispatch = useDispatch()
 
-  const { data: pickupTemplate, isLoading, error } = useQuery({
+  const {
+    data: pickupTemplate,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ['pickupTemplate', TreatmentCycleId],
     queryFn: () => getPickupSheetTemplate(user.accessToken, TreatmentCycleId),
     enabled: !!TreatmentCycleId && !!user.accessToken,
@@ -31,9 +37,11 @@ function PickupSheet({ TreatmentCycleId }) {
       setTemplate(pickupTemplate.data.template)
     }
   }, [pickupTemplate])
-  const handleTemplateChange = value => {
+
+  const handleTemplateChange = (value) => {
     setTemplate(value)
   }
+
   const handleUpdate = useMutation({
     mutationFn: async () => {
       const res = await updatePickupSheetTemplate(
@@ -47,6 +55,22 @@ function PickupSheet({ TreatmentCycleId }) {
       return res
     },
   })
+
+  const handlePrint = useCallback(
+    (page) => {
+      const printed = printOpuSheet(template, page)
+      if (!printed) {
+        toast.error(
+          page === 2
+            ? 'Instructions page is empty or pop-up was blocked.'
+            : 'Unable to print. Allow pop-ups and try again.',
+          toastconfig,
+        )
+      }
+    },
+    [template],
+  )
+
   if (isLoading) {
     return <Typography>Loading OPU Sheet...</Typography>
   }
@@ -64,7 +88,31 @@ function PickupSheet({ TreatmentCycleId }) {
       <Typography variant="h6" gutterBottom>
         OPU Sheet
       </Typography>
-      <div className="flex justify-end gap-3">
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button
+          color="secondary"
+          variant="outlined"
+          startIcon={<PrintIcon />}
+          onClick={() => handlePrint(1)}
+        >
+          Print Operation Sheet
+        </Button>
+        <Button
+          color="secondary"
+          variant="outlined"
+          startIcon={<PrintIcon />}
+          onClick={() => handlePrint(2)}
+        >
+          Print Instructions
+        </Button>
+        <Button
+          color="secondary"
+          variant="contained"
+          startIcon={<PrintIcon />}
+          onClick={() => handlePrint('all')}
+        >
+          Print Both Pages
+        </Button>
         <Button
           color="primary"
           variant="outlined"
@@ -80,7 +128,6 @@ function PickupSheet({ TreatmentCycleId }) {
           Close
         </Button>
       </div>
-
       <Paper className="m-4 p-4">
         <JoditEditor value={template} onBlur={handleTemplateChange} />
       </Paper>
