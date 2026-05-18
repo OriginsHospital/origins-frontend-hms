@@ -298,6 +298,7 @@ function SaleReturnPage() {
               usedQuantity: aggregatedDetails.usedQuantity || 0,
               // Total cost (matching invoice)
               totalCost: totalCost,
+              discountMultiplier,
               // Store all purchase details for reference
               allPurchaseDetails: item.purchaseDetails || [],
             })
@@ -627,12 +628,52 @@ const PurchaseDetails = ({
       lines.forEach((line) => {
         const refId = line?.refId || line?.itemRefId || line?.itemId
         if (!refId) return
-        const qty = Number(line?.returnQuantity || line?.returnedQuantity || 0)
+        let qty = Number(line?.returnQuantity || line?.returnedQuantity || 0)
+        if (!qty && Array.isArray(line?.returnInfo)) {
+          qty = line.returnInfo.reduce(
+            (sum, row) => sum + Number(row?.returnQuantity || 0),
+            0,
+          )
+        }
         map[refId] = (map[refId] || 0) + (Number.isFinite(qty) ? qty : 0)
       })
     })
     return map
   }, [returnHistory])
+
+  const getRefundUnitPrice = (item, purchaseDetail = null) => {
+    const purchaseQty = Number(item?.purchaseQuantity || 0)
+    const multiplier = Number(item?.discountMultiplier ?? 1)
+
+    if (purchaseDetail?.mrpPerTablet != null) {
+      return Number(purchaseDetail.mrpPerTablet) * multiplier
+    }
+
+    // ratePerUnit / totalCost are already discounted when items are mapped from the order.
+    if (item?.ratePerUnit) {
+      return Number(item.ratePerUnit)
+    }
+    if (purchaseQty > 0 && item?.totalCost) {
+      return Number(item.totalCost) / purchaseQty
+    }
+
+    return Number(item?.mrpPerTablet || 0) * multiplier
+  }
+
+  const computeRefundAmountForItem = (item, returnQty, returnInfoRows = []) => {
+    if (Array.isArray(returnInfoRows) && returnInfoRows.length > 0) {
+      return returnInfoRows.reduce((sum, row) => {
+        const pd = (item?.allPurchaseDetails || []).find(
+          (p) => Number(p.grnId) === Number(row.grnId),
+        )
+        return (
+          sum + getRefundUnitPrice(item, pd) * Number(row.returnQuantity || 0)
+        )
+      }, 0)
+    }
+    const rate = item.ratePerUnit || item.mrpPerTablet || 0
+    return Number(rate) * returnQty
+  }
 
   const getRemainingReturnQty = (item) => {
     const historyReturned = Number(returnedByRefId?.[item?.refId] || 0)
@@ -649,7 +690,10 @@ const PurchaseDetails = ({
         )
         return sum + detailQty
       }, 0)
-      return Math.max(0, sold - historyReturned)
+      if (sold > 0) {
+        return Math.max(0, sold - historyReturned)
+      }
+      // GRN rows exist but sold qty missing in API — use line-bill quantity.
     }
 
     const purchased = Number(item?.purchaseQuantity || 0)
@@ -714,10 +758,6 @@ const PurchaseDetails = ({
         // Reset return quantities after successful return
         setReturnQuantities({})
       } else {
-        toast.error(
-          res.message || res.error || 'Failed to return items',
-          toastconfig,
-        )
         throw new Error(res.message || res.error || 'Failed to return items')
       }
       return res
@@ -727,10 +767,7 @@ const PurchaseDetails = ({
       toast.info('Processing return...', toastconfig)
     },
     onError: (error) => {
-      toast.error(
-        'Error: ' + (error.message || 'Failed to return items'),
-        toastconfig,
-      )
+      toast.error(error.message || 'Failed to return items', toastconfig)
       dispatch(hideLoader())
     },
     onSettled: () => {
@@ -746,7 +783,6 @@ const PurchaseDetails = ({
   }, [isPending])
   const clickSaveAndCallApi = () => {
     let error = 0
-    let totAmount = 0
     let atleastOneObjFound = false
 
     // Group return quantities by refId (matching invoice structure - one row per item)
@@ -763,9 +799,6 @@ const PurchaseDetails = ({
         } else if (returnQty > remainingQty) {
           error = 1
         } else {
-          // Use ratePerUnit if available, otherwise use mrpPerTablet
-          const rate = item.ratePerUnit || item.mrpPerTablet || 0
-          totAmount = totAmount + rate * returnQty
           atleastOneObjFound = true
 
           if (!returnDetailsByRefId[refId]) {
@@ -776,10 +809,11 @@ const PurchaseDetails = ({
             }
           }
 
-          // If item has multiple purchaseDetails (multiple GRNs), distribute return quantity
-          // in a deterministic way so payload always contains at least one returnInfo row.
+          // Let backend derive GRN split when details are incomplete; only send
+          // returnInfo when we have a reliable per-GRN sold quantity map.
           if (item.allPurchaseDetails && item.allPurchaseDetails.length > 0) {
             let remainingQty = returnQty
+            let mappedAny = false
             item.allPurchaseDetails.forEach((purchaseDetail, detailIndex) => {
               if (remainingQty <= 0) return
               const detailQty = Math.max(
@@ -790,6 +824,8 @@ const PurchaseDetails = ({
                     0,
                 ),
               )
+              if (detailQty <= 0) return
+              mappedAny = true
               const alreadyReturned = Math.max(
                 0,
                 Number(purchaseDetail.returnedQuantity || 0),
@@ -809,8 +845,9 @@ const PurchaseDetails = ({
               }
             })
 
-            // Fallback: if distribution could not map to detailed rows, map full qty to primary GRN.
-            if (
+            if (!mappedAny) {
+              returnDetailsByRefId[refId].returnInfo = []
+            } else if (
               returnDetailsByRefId[refId].returnInfo.length === 0 &&
               item.grnId
             ) {
@@ -820,7 +857,6 @@ const PurchaseDetails = ({
               })
             }
           } else if (item.grnId) {
-            // Single GRN case
             returnDetailsByRefId[refId].returnInfo.push({
               grnId: item.grnId,
               returnQuantity: returnQty,
@@ -843,11 +879,19 @@ const PurchaseDetails = ({
     } else if (!atleastOneObjFound) {
       toast.error('Please add at least one return quantity', toastconfig)
     } else {
+      let totAmount = 0
+      Object.values(returnDetailsByRefId).forEach((row) => {
+        const item = details.find((d) => String(d.refId) === String(row.refId))
+        if (!item) return
+        const returnQty = Number(returnQuantities[row.refId] || 0)
+        totAmount += computeRefundAmountForItem(item, returnQty, row.returnInfo)
+      })
+
       const resolvedType = type || headerDetails?.purchaseType || 'Consultation'
       const payload = {
         orderId: orderId,
         patientId: headerDetails?.patientId,
-        totalAmount: Math.round(totAmount * 100) / 100, // Round to 2 decimal places
+        totalAmount: Math.round(totAmount * 100) / 100,
         type: resolvedType,
         returnDetails: Object.values(returnDetailsByRefId).map((row) => ({
           ...row,
@@ -893,9 +937,7 @@ const PurchaseDetails = ({
     const refId = item.refId
     const qty = parseFloat(returnQuantities[refId] || 0)
     if (qty > 0) {
-      // Use ratePerUnit if available, otherwise use mrpPerTablet
-      const rate = item.ratePerUnit || item.mrpPerTablet || 0
-      return sum + rate * qty
+      return sum + computeRefundAmountForItem(item, qty)
     }
     return sum
   }, 0)
@@ -969,9 +1011,11 @@ const PurchaseDetails = ({
                   const refId = item.refId
                   const returnQty = parseFloat(returnQuantities[refId] || 0)
                   const remainingQty = getRemainingReturnQty(item)
-                  // Use ratePerUnit if available, otherwise use mrpPerTablet
-                  const rate = item.ratePerUnit || item.mrpPerTablet || 0
-                  const refundAmount = returnQty * rate
+                  const rate = getRefundUnitPrice(item)
+                  const refundAmount = computeRefundAmountForItem(
+                    item,
+                    returnQty,
+                  )
                   const isSelected = selectedItems[refId] || returnQty > 0
 
                   return (

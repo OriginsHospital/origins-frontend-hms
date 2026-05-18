@@ -57,6 +57,7 @@ import {
   DeleteOutline,
   Edit,
   LocalOffer,
+  Undo,
 } from '@mui/icons-material'
 import { withPermission } from '@/components/withPermission'
 import { ACCESS_TYPES } from '@/constants/constants'
@@ -67,6 +68,22 @@ const columns = [
   { label: 'PACKED' },
   { label: 'PAID' },
 ]
+
+const PHARMACIST_ROLE_ID = 3
+
+const isPharmacistRole = (roleDetails) => {
+  const roleName = (
+    roleDetails?.roleName ||
+    roleDetails?.name ||
+    roleDetails?.role ||
+    ''
+  )
+    .toString()
+    .toLowerCase()
+  return (
+    roleDetails?.id === PHARMACIST_ROLE_ID || roleName.includes('pharmacist')
+  )
+}
 const toastconfig = {
   position: 'top-right',
   autoClose: 800,
@@ -841,6 +858,65 @@ function RenderAccordianDetails({
       queryClient.invalidateQueries(['pharmacyModuleInfoByDate'])
     },
   })
+
+  const canMoveBackToPrescribed =
+    column.label === 'PACKED' && isPharmacistRole(user?.roleDetails)
+
+  const moveToPrescribedMutation = useMutation({
+    mutationFn: async (payload) => {
+      const res = await savePharmacyItems(user.accessToken, {
+        movetopackedstage: payload,
+      })
+      return res
+    },
+    onSuccess: (res, variables) => {
+      if (res?.status === 200) {
+        const count = variables.length
+        toast.success(
+          `${count} item(s) moved to Prescribed successfully`,
+          toastconfig,
+        )
+        const movedIds = variables.map((item) => item.id)
+        setDetails((prev) => prev.filter((med) => !movedIds.includes(med.id)))
+        setGrnRows((prev) => {
+          const next = { ...prev }
+          movedIds.forEach((id) => delete next[id])
+          return next
+        })
+        queryClient.invalidateQueries(['pharmacyModuleInfoByDate'])
+      } else {
+        toast.error(res?.message || 'Failed to move items', toastconfig)
+      }
+    },
+    onError: () => {
+      toast.error('Failed to move items to Prescribed', toastconfig)
+    },
+  })
+
+  const buildMoveToPrescribedPayload = (items) =>
+    items.map((item) => ({
+      id: item.id,
+      type,
+      purchaseQuantity: 0,
+      itemPurchaseInformation: [],
+    }))
+
+  const handleMoveToPrescribed = (items) => {
+    if (!items?.length) return
+    const itemNames = items.map((item) => item.itemName).join(', ')
+    if (
+      confirm(
+        `Move ${items.length} item(s) back to Prescribed? This will reset packed quantities for: ${itemNames}`,
+      )
+    ) {
+      moveToPrescribedMutation.mutate(buildMoveToPrescribedPayload(items))
+    }
+  }
+
+  const handleMoveAllToPrescribed = () => {
+    if (!details?.length) return
+    handleMoveToPrescribed(details)
+  }
   const [selectedCoupon, setSelectedCoupon] = useState(null)
   const [discountedAmount, setDiscountedAmount] = useState()
   // Single payment mode state for Packed → Pay popup
@@ -1031,12 +1107,21 @@ function RenderAccordianDetails({
     }
   }
   useEffect(() => {
-    if (isPending || paymentBreakup?.isLoading) {
+    if (
+      isPending ||
+      paymentBreakup?.isLoading ||
+      moveToPrescribedMutation.isPending
+    ) {
       dispatch(showLoader())
     } else {
       dispatch(hideLoader())
     }
-  }, [isPending, itemDetails, paymentBreakup?.isLoading])
+  }, [
+    isPending,
+    itemDetails,
+    paymentBreakup?.isLoading,
+    moveToPrescribedMutation.isPending,
+  ])
   useEffect(() => {
     let data = itemDetails.map((itemInfo) => {
       let items = JSON.parse(itemInfo.itemPurchaseInformation)
@@ -1606,6 +1691,14 @@ function RenderAccordianDetails({
                       Price
                     </Tooltip>
                   </TableCell>
+                  {canMoveBackToPrescribed && (
+                    <TableCell
+                      align="center"
+                      className="font-bold border-0 rounder-lg"
+                    >
+                      Action
+                    </TableCell>
+                  )}
                 </>
               )}
             </TableRow>
@@ -1860,6 +1953,25 @@ function RenderAccordianDetails({
                         )}
                       </div>
                     </TableCell>
+                    {canMoveBackToPrescribed && (
+                      <TableCell align="center" className="border-0">
+                        <Tooltip
+                          title="Move back to Prescribed"
+                          placement="top"
+                        >
+                          <span>
+                            <IconButton
+                              size="small"
+                              color="warning"
+                              disabled={moveToPrescribedMutation.isPending}
+                              onClick={() => handleMoveToPrescribed([med])}
+                            >
+                              <Undo fontSize="small" />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      </TableCell>
+                    )}
                   </>
                 )}
               </TableRow>
@@ -1941,17 +2053,32 @@ function RenderAccordianDetails({
               </div>
             ))}
 
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center flex-wrap gap-2">
             <span className=" font-medium">
               Tot. Amount: ₹{calculateAmount().toFixed(2)}
             </span>
-            <Button
-              variant="contained"
-              className="self-end h-10 text-white"
-              onClick={() => handleButtonAction(saveEnabled)}
-            >
-              {saveEnabled ? 'Save' : 'Pay'}
-            </Button>
+            <div className="flex gap-2 flex-wrap">
+              {canMoveBackToPrescribed && details?.length > 0 && (
+                <Button
+                  variant="outlined"
+                  color="warning"
+                  className="h-10 capitalize"
+                  disabled={moveToPrescribedMutation.isPending}
+                  onClick={handleMoveAllToPrescribed}
+                >
+                  {moveToPrescribedMutation.isPending
+                    ? 'Moving...'
+                    : 'Move to Prescribed'}
+                </Button>
+              )}
+              <Button
+                variant="contained"
+                className="h-10 text-white"
+                onClick={() => handleButtonAction(saveEnabled)}
+              >
+                {saveEnabled ? 'Save' : 'Pay'}
+              </Button>
+            </div>
           </div>
         </div>
       )}
