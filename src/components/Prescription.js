@@ -61,7 +61,13 @@ import SpousePrescription from './SpousePrescription'
 import HysteroscopySheet from './HysteroscopySheet'
 import ERASheet from './ERASheet'
 import HysteroscopySheetNew from './HysteroscopySheetNew'
-import HysteroscopyFormStructured from './HysteroscopyFormStructured'
+import HysteroLapOperationNotesForm from './HysteroLapOperationNotesForm'
+
+const HYSTERO_LAP_TYPE_OPTIONS = [
+  { value: 'Hysteroscopy', label: 'Hysteroscopy' },
+  { value: 'Laproscopy', label: 'Laproscopy' },
+  { value: 'Hysterolap', label: 'Hysterolap' },
+]
 
 function Prescription({
   appointmentId,
@@ -243,6 +249,8 @@ function Prescription({
   const [eraStartTime, setEraStartTime] = useState(null)
   const [hysteroscopyTemplate, setHysteroscopyTemplate] = useState(null)
   const [hysteroscopyReportId, setHysteroscopyReportId] = useState(null)
+  const [selectedHysteroLapType, setSelectedHysteroLapType] = useState(null)
+
   const resolvedHysteroscopyPatientId = Number(
     patientInfo?.id ?? patientInfo?.patientId,
   )
@@ -999,7 +1007,7 @@ function Prescription({
         treatmentType: patientInfo?.treatmentDetails?.treatmentTypeId,
       })
       if (res.status == 200) {
-        toast.success('Hysteroscopy started successfully')
+        toast.success('Hystero/Lap started successfully')
         queryClient.invalidateQueries('treatmentStatus')
         let defaultTreatmentTemplate = res.data
         if (defaultTreatmentTemplate) {
@@ -1095,6 +1103,12 @@ function Prescription({
       Number.isFinite(resolvedHysteroscopyVisitId),
   })
 
+  useEffect(() => {
+    if (hysteroscopyReport?.formType) {
+      setSelectedHysteroLapType(hysteroscopyReport.formType)
+    }
+  }, [hysteroscopyReport?.formType])
+
   // Mutations for structured hysteroscopy report
   const createHysteroscopyReportMutation = useMutation({
     mutationFn: async (payload) => {
@@ -1107,7 +1121,7 @@ function Prescription({
     onSuccess: (data) => {
       setHysteroscopyReportId(data.id)
       queryClient.invalidateQueries('hysteroscopyReport')
-      toast.success('Hysteroscopy report saved successfully', toastconfig)
+      toast.success('Hystero/Lap report saved successfully', toastconfig)
       dispatch(closeModal())
     },
     onError: (error) => {
@@ -1125,7 +1139,7 @@ function Prescription({
     },
     onSuccess: () => {
       queryClient.invalidateQueries('hysteroscopyReport')
-      toast.success('Hysteroscopy report updated successfully', toastconfig)
+      toast.success('Hystero/Lap report updated successfully', toastconfig)
       dispatch(closeModal())
     },
     onError: (error) => {
@@ -2039,15 +2053,20 @@ function Prescription({
           {treatmentStatus?.START_HYSTEROSCOPY >= 0 && (
             <ButtonGroup>
               <span className="px-4 py-2 bg-gray-100 font-medium border-r flex items-center">
-                Hysteroscopy
+                Hystero/Lap
               </span>
               <Button
                 variant="contained"
                 className="text-white capitalize"
                 onClick={() => {
+                  if (hysteroscopyReport?.formType) {
+                    setSelectedHysteroLapType(hysteroscopyReport.formType)
+                  } else if (treatmentStatus?.START_HYSTEROSCOPY != 1) {
+                    setSelectedHysteroLapType(null)
+                  }
                   if (
                     treatmentStatus?.START_HYSTEROSCOPY == 1 ||
-                    confirm('Are you sure you want to start Hysteroscopy?')
+                    confirm('Are you sure you want to start Hystero/Lap?')
                   ) {
                     dispatch(
                       openModal('HYSTEROSCOPY' + patientInfo?.activeVisitId),
@@ -2469,12 +2488,14 @@ function Prescription({
       </Modal>
       <Modal
         uniqueKey={'HYSTEROSCOPY' + patientInfo?.activeVisitId}
-        maxWidth="sm"
+        maxWidth={hysteroscopyTemplate ? 'lg' : 'sm'}
         closeOnOutsideClick={true}
       >
         <div className="flex justify-between">
           <Typography variant="h6" className="text-gray-800 mb-2">
-            Hysteroscopy
+            Hystero/Lap
+            {(selectedHysteroLapType || hysteroscopyReport?.formType) &&
+              ` — ${selectedHysteroLapType || hysteroscopyReport?.formType}`}
           </Typography>
           <IconButton onClick={() => dispatch(closeModal())}>
             <Close />
@@ -2482,102 +2503,125 @@ function Prescription({
         </div>
         <div className="">
           {hysteroscopyTemplate ? (
-            <div>
-              <HysteroscopyFormStructured
-                visitId={
-                  Number.isFinite(resolvedHysteroscopyVisitId)
-                    ? resolvedHysteroscopyVisitId
-                    : null
-                }
-                patientId={
-                  Number.isFinite(resolvedHysteroscopyPatientId)
+            <HysteroLapOperationNotesForm
+              formType={
+                selectedHysteroLapType || hysteroscopyReport?.formType || ''
+              }
+              visitId={
+                Number.isFinite(resolvedHysteroscopyVisitId)
+                  ? resolvedHysteroscopyVisitId
+                  : null
+              }
+              patientId={
+                Number.isFinite(resolvedHysteroscopyPatientId)
+                  ? resolvedHysteroscopyPatientId
+                  : null
+              }
+              initialData={hysteroscopyReport}
+              onSave={(payload) => {
+                const normalizedPayload = {
+                  ...payload,
+                  patientId: Number.isFinite(resolvedHysteroscopyPatientId)
                     ? resolvedHysteroscopyPatientId
-                    : null
+                    : payload?.patientId,
+                  visitId: Number.isFinite(resolvedHysteroscopyVisitId)
+                    ? resolvedHysteroscopyVisitId
+                    : payload?.visitId,
+                  formType:
+                    payload?.formType ||
+                    selectedHysteroLapType ||
+                    hysteroscopyReport?.formType,
                 }
-                initialData={hysteroscopyReport}
-                onSave={(payload) => {
-                  const normalizedPayload = {
-                    ...payload,
-                    patientId: Number.isFinite(resolvedHysteroscopyPatientId)
-                      ? resolvedHysteroscopyPatientId
-                      : payload?.patientId,
-                    visitId: Number.isFinite(resolvedHysteroscopyVisitId)
-                      ? resolvedHysteroscopyVisitId
-                      : payload?.visitId,
-                  }
-                  if (
-                    !Number.isFinite(Number(normalizedPayload?.patientId)) ||
-                    !Number.isFinite(Number(normalizedPayload?.visitId))
-                  ) {
-                    toast.error(
-                      'Unable to save hysteroscopy report: invalid patient or visit ID',
-                      toastconfig,
-                    )
-                    return
-                  }
-                  if (hysteroscopyReportId) {
-                    updateHysteroscopyReportMutation.mutate({
-                      id: hysteroscopyReportId,
-                      payload: normalizedPayload,
-                    })
-                  } else {
-                    createHysteroscopyReportMutation.mutate(normalizedPayload)
-                  }
-                }}
-                onPrint={(formData) => {
-                  // TODO: Implement PDF generation
-                  toast.info('PDF generation coming soon', toastconfig)
-                }}
-                onCancel={() => dispatch(closeModal())}
-                onImageUpload={async (file, visitId) => {
-                  let currentHysteroscopyId = hysteroscopyReportId
-
-                  if (!currentHysteroscopyId) {
-                    const createRes = await createHysteroscopyReport(
-                      user.accessToken,
-                      {
-                        patientId: resolvedHysteroscopyPatientId,
-                        visitId: resolvedHysteroscopyVisitId,
-                      },
-                    )
-                    if (createRes?.status !== 200 || !createRes?.data?.id) {
-                      throw new Error(
-                        createRes?.message ||
-                          'Unable to initialize hysteroscopy record for image upload',
-                      )
-                    }
-                    currentHysteroscopyId = createRes.data.id
-                    setHysteroscopyReportId(createRes.data.id)
-                    queryClient.invalidateQueries('hysteroscopyReport')
-                  }
-
-                  const uploadRes = await addHysteroscopyReferenceImages(
-                    user.accessToken,
-                    currentHysteroscopyId,
-                    [file],
+                if (
+                  !Number.isFinite(Number(normalizedPayload?.patientId)) ||
+                  !Number.isFinite(Number(normalizedPayload?.visitId))
+                ) {
+                  toast.error(
+                    'Unable to save Hystero/Lap report: invalid patient or visit ID',
+                    toastconfig,
                   )
+                  return
+                }
+                if (hysteroscopyReportId) {
+                  updateHysteroscopyReportMutation.mutate({
+                    id: hysteroscopyReportId,
+                    payload: normalizedPayload,
+                  })
+                } else {
+                  createHysteroscopyReportMutation.mutate(normalizedPayload)
+                }
+              }}
+              onCancel={() => dispatch(closeModal())}
+              onImageUpload={async (file) => {
+                let currentHysteroscopyId = hysteroscopyReportId
 
-                  if (uploadRes?.status !== 200) {
+                if (!currentHysteroscopyId) {
+                  const createRes = await createHysteroscopyReport(
+                    user.accessToken,
+                    {
+                      patientId: resolvedHysteroscopyPatientId,
+                      visitId: resolvedHysteroscopyVisitId,
+                      formType:
+                        selectedHysteroLapType || hysteroscopyReport?.formType,
+                    },
+                  )
+                  if (createRes?.status !== 200 || !createRes?.data?.id) {
                     throw new Error(
-                      uploadRes?.message ||
-                        'Failed to upload hysteroscopy image',
+                      createRes?.message ||
+                        'Unable to initialize Hystero/Lap record for image upload',
                     )
                   }
+                  currentHysteroscopyId = createRes.data.id
+                  setHysteroscopyReportId(createRes.data.id)
+                  queryClient.invalidateQueries('hysteroscopyReport')
+                }
 
-                  const uploadedUrl = uploadRes?.data?.[0]?.imageUrl
-                  if (!uploadedUrl) {
-                    throw new Error(
-                      'Upload succeeded but image URL was not returned',
-                    )
-                  }
-                  return uploadedUrl
-                }}
-              />
+                const uploadRes = await addHysteroscopyReferenceImages(
+                  user.accessToken,
+                  currentHysteroscopyId,
+                  [file],
+                )
+
+                if (uploadRes?.status !== 200) {
+                  throw new Error(
+                    uploadRes?.message || 'Failed to upload reference image',
+                  )
+                }
+
+                const uploadedUrl = uploadRes?.data?.[0]?.imageUrl
+                if (!uploadedUrl) {
+                  throw new Error(
+                    'Upload succeeded but image URL was not returned',
+                  )
+                }
+                return uploadedUrl
+              }}
+            />
+          ) : !selectedHysteroLapType ? (
+            <div className="text-center mb-6 px-4">
+              <Typography variant="subtitle1" className="mb-4 font-medium">
+                Select procedure type to start
+              </Typography>
+              <div className="flex flex-col gap-3">
+                {HYSTERO_LAP_TYPE_OPTIONS.map((option) => (
+                  <Button
+                    key={option.value}
+                    variant="outlined"
+                    className="capitalize"
+                    onClick={() => setSelectedHysteroLapType(option.value)}
+                  >
+                    {option.label}
+                  </Button>
+                ))}
+              </div>
             </div>
           ) : (
             <div className="text-center mb-6">
+              <Typography variant="body2" className="mb-4 text-gray-600">
+                Starting: <strong>{selectedHysteroLapType}</strong>
+              </Typography>
               <DateTimePicker
-                label="Hysteroscopy Time"
+                label="Hystero/Lap Time"
                 className="bg-white rounded-lg w-max-content mb-10"
                 name="hysteroscopyTime"
                 onChange={(newValue) =>
@@ -2592,18 +2636,29 @@ function Prescription({
                 }}
               />
               <h5 className="text-md font-semibold text-gray-800">
-                Please Provide Hysteroscopy Time to proceed further
+                Please provide Hystero/Lap time to proceed
               </h5>
-              <Button
-                variant="contained"
-                className="text-white capitalize mt-5"
-                disabled={!hysteroscopyTime}
-                onClick={() =>
-                  startHysteroscopyMutation.mutate(resolvedHysteroscopyVisitId)
-                }
-              >
-                Start Hysteroscopy
-              </Button>
+              <div className="flex justify-center gap-2 mt-5">
+                <Button
+                  variant="outlined"
+                  className="capitalize"
+                  onClick={() => setSelectedHysteroLapType(null)}
+                >
+                  Back
+                </Button>
+                <Button
+                  variant="contained"
+                  className="text-white capitalize"
+                  disabled={!hysteroscopyTime}
+                  onClick={() =>
+                    startHysteroscopyMutation.mutate(
+                      resolvedHysteroscopyVisitId,
+                    )
+                  }
+                >
+                  Start {selectedHysteroLapType}
+                </Button>
+              </div>
             </div>
           )}
         </div>

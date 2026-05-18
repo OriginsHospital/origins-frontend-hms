@@ -4658,42 +4658,73 @@ export const updateHysteroscopySheetByVisitId = async (token, payload) => {
   return response.json()
 }
 
-export const createHysteroscopyReport = async (token, payload) => {
-  const normalizeHysteroscopyPayload = (input = {}) => {
-    const parsedPatientId = Number(input?.patientId)
-    const parsedVisitId = Number(input?.visitId)
-    const toSafeString = (value) => {
-      if (value == null) return ''
-      if (Array.isArray(value)) return value.filter(Boolean).join(', ')
-      if (typeof value === 'object') return JSON.stringify(value)
-      return String(value)
-    }
-    return {
-      patientId: Number.isFinite(parsedPatientId)
-        ? parsedPatientId
-        : input?.patientId,
-      visitId: Number.isFinite(parsedVisitId) ? parsedVisitId : input?.visitId,
-      hospitalBranch: toSafeString(input?.branchLocation),
-      clinicalDiagnosis: toSafeString(input?.clinicalDiagnosis),
-      lmp: input?.lmpDate ?? null,
-      dayOfCycle: toSafeString(input?.dayOfCycle),
-      admissionDate: input?.admissionDate ?? null,
-      procedureDate: input?.procedureDate ?? null,
-      dischargeDate: input?.dischargeDate ?? null,
-      gynecologist: toSafeString(input?.gynaecologistName),
-      assistant: toSafeString(input?.staffNurseName),
-      anesthetist: toSafeString(input?.anesthetistName),
-      otAssistant: toSafeString(input?.otAssistantName),
-      procedureType: toSafeString(input?.procedure),
-      diagnosis: toSafeString(input?.indications),
-      entry: toSafeString(input?.chiefComplaints),
-      operativeFindings: toSafeString(input?.intraOpFindings),
-      distensionMedia: toSafeString(input?.distentionMedium),
-      postopCourse: toSafeString(input?.courseInHospital),
-      dischargeMedications: toSafeString(input?.postOpInstructions),
-      consultantName: toSafeString(input?.followUp),
-    }
+const normalizeHysteroscopyPayload = (input = {}) => {
+  const parsedPatientId = Number(input?.patientId)
+  const parsedVisitId = Number(input?.visitId)
+  const toSafeString = (value) => {
+    if (value == null || value === '') return ''
+    if (Array.isArray(value)) return value.filter(Boolean).join(', ')
+    if (typeof value === 'object') return JSON.stringify(value)
+    return String(value)
   }
+  const pickString = (...values) => {
+    for (const value of values) {
+      const normalized = toSafeString(value)
+      if (normalized) return normalized
+    }
+    return ''
+  }
+  return {
+    patientId: Number.isFinite(parsedPatientId)
+      ? parsedPatientId
+      : input?.patientId,
+    visitId: Number.isFinite(parsedVisitId) ? parsedVisitId : input?.visitId,
+    formType: pickString(input?.formType),
+    hospitalBranch: pickString(input?.hospitalBranch, input?.branchLocation),
+    clinicalDiagnosis: toSafeString(input?.clinicalDiagnosis),
+    lmp: input?.lmp ?? input?.lmpDate ?? null,
+    dayOfCycle: toSafeString(input?.dayOfCycle),
+    admissionDate: input?.admissionDate ?? null,
+    procedureDate: input?.procedureDate ?? null,
+    dischargeDate: input?.dischargeDate ?? null,
+    gynecologist: pickString(input?.gynecologist, input?.gynaecologistName),
+    assistant: pickString(input?.assistant, input?.staffNurseName),
+    anesthetist: pickString(input?.anesthetist, input?.anesthetistName),
+    otAssistant: pickString(input?.otAssistant, input?.otAssistantName),
+    procedureType: pickString(input?.procedureType),
+    anesthesiaType: pickString(input?.anesthesiaType, input?.procedure),
+    finalDiagnosisAfterOperation: pickString(
+      input?.finalDiagnosisAfterOperation,
+    ),
+    diagnosis: pickString(input?.diagnosis, input?.indications),
+    entry: pickString(input?.entry, input?.chiefComplaints),
+    uterus: toSafeString(input?.uterus),
+    endometrialThickness: toSafeString(input?.endometrialThickness),
+    operativeFindings: pickString(
+      input?.operativeFindings,
+      input?.intraOpFindings,
+    ),
+    distensionMedia: pickString(
+      input?.distensionMedia,
+      input?.distentionMedium,
+      input?.abnormality,
+    ),
+    intraopComplications: toSafeString(input?.intraopComplications),
+    postopCourse: pickString(input?.postopCourse, input?.courseInHospital),
+    reviewOn: input?.reviewOn ?? null,
+    dischargeMedications: pickString(
+      input?.dischargeMedications,
+      input?.postOpInstructions,
+    ),
+    consultantName: pickString(
+      input?.consultantName,
+      input?.expertConsultant,
+      input?.followUp,
+    ),
+  }
+}
+
+export const createHysteroscopyReport = async (token, payload) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
@@ -4713,41 +4744,6 @@ export const createHysteroscopyReport = async (token, payload) => {
 }
 
 export const updateHysteroscopyReport = async (token, idOrPayload, payload) => {
-  const normalizeHysteroscopyPayload = (input = {}) => {
-    const parsedPatientId = Number(input?.patientId)
-    const parsedVisitId = Number(input?.visitId)
-    const toSafeString = (value) => {
-      if (value == null) return ''
-      if (Array.isArray(value)) return value.filter(Boolean).join(', ')
-      if (typeof value === 'object') return JSON.stringify(value)
-      return String(value)
-    }
-    return {
-      patientId: Number.isFinite(parsedPatientId)
-        ? parsedPatientId
-        : input?.patientId,
-      visitId: Number.isFinite(parsedVisitId) ? parsedVisitId : input?.visitId,
-      hospitalBranch: toSafeString(input?.branchLocation),
-      clinicalDiagnosis: toSafeString(input?.clinicalDiagnosis),
-      lmp: input?.lmpDate ?? null,
-      dayOfCycle: toSafeString(input?.dayOfCycle),
-      admissionDate: input?.admissionDate ?? null,
-      procedureDate: input?.procedureDate ?? null,
-      dischargeDate: input?.dischargeDate ?? null,
-      gynecologist: toSafeString(input?.gynaecologistName),
-      assistant: toSafeString(input?.staffNurseName),
-      anesthetist: toSafeString(input?.anesthetistName),
-      otAssistant: toSafeString(input?.otAssistantName),
-      procedureType: toSafeString(input?.procedure),
-      diagnosis: toSafeString(input?.indications),
-      entry: toSafeString(input?.chiefComplaints),
-      operativeFindings: toSafeString(input?.intraOpFindings),
-      distensionMedia: toSafeString(input?.distentionMedium),
-      postopCourse: toSafeString(input?.courseInHospital),
-      dischargeMedications: toSafeString(input?.postOpInstructions),
-      consultantName: toSafeString(input?.followUp),
-    }
-  }
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
