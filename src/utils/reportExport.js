@@ -1,4 +1,7 @@
 import dayjs from 'dayjs'
+import * as XLSX from 'xlsx'
+import { jsPDF } from 'jspdf'
+import autoTable from 'jspdf-autotable'
 
 /**
  * Utility functions for report export with dynamic file naming
@@ -110,13 +113,12 @@ export const generateReportFileName = ({
 }
 
 /**
- * Get value from row for a column, handling nested objects
+ * Get raw cell value for export (no CSV escaping)
  * @param {Object} row - Data row
  * @param {Object} col - Column definition
  * @returns {string} - Extracted value
  */
-const getCellValue = (row, col) => {
-  // Use valueGetter if provided (MUI DataGrid feature)
+const getRawCellValue = (row, col) => {
   if (col.valueGetter && typeof col.valueGetter === 'function') {
     try {
       const result = col.valueGetter({ row, value: row[col.field] })
@@ -128,53 +130,66 @@ const getCellValue = (row, col) => {
     }
   }
 
-  // Get the raw value
   let value = row[col.field]
 
-  // Handle nested objects based on common patterns
   if (value && typeof value === 'object' && !Array.isArray(value)) {
-    // Handle city object: { name: "Hyderabad", id: 4 }
     if (col.field === 'city') {
       value = value.name || value.cityName || ''
-    }
-    // Handle patientType object: { name: "FERT", id: 1 }
-    else if (col.field === 'patientType' || col.field === 'type') {
+    } else if (col.field === 'patientType' || col.field === 'type') {
       value = value.name || value.typeName || ''
-    }
-    // Handle referralSource object: { referralSource: "Friends", id: 1 }
-    else if (col.field === 'referralSource') {
+    } else if (col.field === 'referralSource') {
       value = value.referralSource || value.name || value.source || ''
-    }
-    // Generic fallback: try common property names
-    else {
-      value = value.name || value.label || value.value || value.text || value.title || ''
+    } else {
+      value =
+        value.name ||
+        value.label ||
+        value.value ||
+        value.text ||
+        value.title ||
+        ''
     }
   }
 
-  // Handle arrays (convert to comma-separated string)
   if (Array.isArray(value)) {
-    value = value.map(item => {
-      if (typeof item === 'object' && item !== null) {
-        return item.name || item.label || item.value || String(item)
-      }
-      return String(item)
-    }).join(', ')
+    value = value
+      .map((item) => {
+        if (typeof item === 'object' && item !== null) {
+          return item.name || item.label || item.value || String(item)
+        }
+        return String(item)
+      })
+      .join(', ')
   }
 
-  // Convert to string and handle null/undefined
   if (value === null || value === undefined || value === '') {
     return ''
   }
 
-  const stringValue = String(value).trim()
+  return String(value).trim()
+}
 
-  // Escape commas and quotes in CSV
-  if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+/**
+ * Get value from row for a column, handling nested objects (CSV-safe)
+ * @param {Object} row - Data row
+ * @param {Object} col - Column definition
+ * @returns {string} - Extracted value
+ */
+const getCellValue = (row, col) => {
+  const stringValue = getRawCellValue(row, col)
+
+  if (
+    stringValue.includes(',') ||
+    stringValue.includes('"') ||
+    stringValue.includes('\n')
+  ) {
     return `"${stringValue.replace(/"/g, '""')}"`
   }
 
   return stringValue
 }
+
+const getVisibleColumns = (columns) =>
+  columns.filter((col) => col.field && col.headerName)
 
 /**
  * Converts data to CSV format
@@ -266,7 +281,7 @@ export const exportAsCSV = (data, columns, options = {}) => {
 }
 
 /**
- * Exports data as Excel (CSV format for simplicity)
+ * Exports data as Excel (.xlsx)
  * @param {Array} data - Data to export
  * @param {Array} columns - Column definitions
  * @param {Object} options - Export options
@@ -282,16 +297,23 @@ export const exportAsExcel = (data, columns, options = {}) => {
     includeUniqueId: false,
   })
 
-  const csvContent = convertToCSV(data, columns)
-  downloadFile(
-    csvContent,
-    fileName,
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  )
+  const visibleColumns = getVisibleColumns(columns)
+  const exportRows = data.map((row) => {
+    const record = {}
+    visibleColumns.forEach((col) => {
+      record[col.headerName] = getRawCellValue(row, col)
+    })
+    return record
+  })
+
+  const worksheet = XLSX.utils.json_to_sheet(exportRows)
+  const workbook = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Report')
+  XLSX.writeFile(workbook, fileName)
 }
 
 /**
- * Exports data as PDF (text format for simplicity)
+ * Exports data as PDF
  * @param {Array} data - Data to export
  * @param {Array} columns - Column definitions
  * @param {Object} options - Export options
@@ -307,9 +329,33 @@ export const exportAsPDF = (data, columns, options = {}) => {
     includeUniqueId: false,
   })
 
-  // Convert to text format for PDF
-  const textContent = convertToText(data, columns)
-  downloadFile(textContent, fileName, 'application/pdf')
+  const visibleColumns = getVisibleColumns(columns)
+  const useLandscape = visibleColumns.length > 5
+  const doc = new jsPDF({
+    orientation: useLandscape ? 'landscape' : 'portrait',
+    unit: 'mm',
+    format: 'a4',
+  })
+
+  const title = options.reportName || 'Report'
+  doc.setFontSize(14)
+  doc.text(title, 14, 12)
+  doc.setFontSize(9)
+  doc.text(`Generated: ${dayjs().format('DD MMM YYYY, hh:mm A')}`, 14, 18)
+
+  autoTable(doc, {
+    startY: 24,
+    head: [visibleColumns.map((col) => col.headerName)],
+    body: data.map((row) =>
+      visibleColumns.map((col) => getRawCellValue(row, col)),
+    ),
+    styles: { fontSize: 8, cellPadding: 2 },
+    headStyles: { fillColor: [41, 128, 185], textColor: 255 },
+    alternateRowStyles: { fillColor: [245, 245, 245] },
+    margin: { left: 10, right: 10 },
+  })
+
+  doc.save(fileName)
 }
 
 /**
@@ -321,19 +367,11 @@ export const exportAsPDF = (data, columns, options = {}) => {
 export const convertToText = (data, columns) => {
   if (!data || data.length === 0) return ''
 
-  const visibleColumns = columns.filter((col) => col.field && col.headerName)
-
-  // Create header
+  const visibleColumns = getVisibleColumns(columns)
   const headers = visibleColumns.map((col) => col.headerName).join('\t')
-
-  // Create data rows
-  const rows = data.map((row) => {
-    return visibleColumns
-      .map((col) => {
-        return row[col.field] || ''
-      })
-      .join('\t')
-  })
+  const rows = data.map((row) =>
+    visibleColumns.map((col) => getRawCellValue(row, col)).join('\t'),
+  )
 
   return [headers, ...rows].join('\n')
 }
@@ -346,6 +384,10 @@ export const convertToText = (data, columns) => {
  * @param {Object} options - Export options
  */
 export const exportReport = (data, columns, format, options = {}) => {
+  if (!data || data.length === 0) {
+    throw new Error('No data to export')
+  }
+
   switch (format.toLowerCase()) {
     case 'csv':
       exportAsCSV(data, columns, options)

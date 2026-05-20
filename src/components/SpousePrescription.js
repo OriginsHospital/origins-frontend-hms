@@ -26,6 +26,11 @@ import {
   pharmacySelectStyles,
   PrescriptionPharmacyLowStockLegend,
 } from '@/utils/prescriptionPharmacySelect'
+import {
+  applyPharmacyCompanionMedicines,
+  getCompanionMedicinesForTriggers,
+} from '@/utils/pharmacyAutoCompanions'
+import { mergeLineBillValuesOnCopy } from '@/utils/mergeLineBillValuesOnCopy'
 
 const JoditEditor = dynamic(() => import('jodit-react'), {
   ssr: false,
@@ -353,6 +358,22 @@ function SpousePrescription({
           }
         })
       }
+
+      const selectedMedicineNames = billTypeValues
+        .filter((item) => item.status !== 'PAID')
+        .map((item) => item.name)
+      const companionMedicines = getCompanionMedicinesForTriggers(
+        selectedMedicineNames,
+      )
+      if (companionMedicines.length > 0) {
+        applyPharmacyCompanionMedicines({
+          companions: companionMedicines,
+          billTypeValuesArray: allBillTypeValues[name] || [],
+          billTypeValues,
+          existingAllItems: copyOfDefaultLineBillValues[billTypeId] || [],
+          defaultLineBillValues,
+        })
+      }
     } else {
       // Non-Pharmacy bill types
       selectedOptions?.forEach((element) => {
@@ -613,10 +634,9 @@ function SpousePrescription({
           })
         }
 
-        setDefaultLineBillValues((prev) => {
-          const newState = { ...tempDefaultData }
-          return newState
-        })
+        setDefaultLineBillValues((prev) =>
+          mergeLineBillValuesOnCopy(prev, tempDefaultData),
+        )
 
         toast.success('Prescription copied successfully', toastconfig)
       } else {

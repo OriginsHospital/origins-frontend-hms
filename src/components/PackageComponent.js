@@ -25,6 +25,7 @@ import {
 } from '@/constants/apis'
 import { useQueryClient } from '@tanstack/react-query'
 import { applyPackageDiscount } from '@/constants/apis'
+import { hasPackageEditAccess } from '@/utils/packageEditAccess'
 
 function PackageComponent({
   selectedVisit,
@@ -57,6 +58,7 @@ function PackageComponent({
   const dispatch = useDispatch()
   const queryClient = useQueryClient()
   const user = useSelector((state) => state.user)
+  const canEditPackage = hasPackageEditAccess(user?.email)
   useEffect(() => {
     if (packageData && Object.keys(packageData).length > 0) {
       setNewPackageData(packageData)
@@ -205,6 +207,46 @@ function PackageComponent({
     // setIsEditing(false);
     // }
   }
+
+  const handleSavePackageChanges = () => {
+    const totalAmount = [
+      newPackageData.registrationAmount,
+      newPackageData.day1Amount,
+      newPackageData.donorBookingAmount,
+      newPackageData.pickUpAmount,
+      newPackageData.hysteroscopyAmount,
+      newPackageData.day5FreezingAmount,
+      newPackageData.fetAmount,
+      newPackageData.eraAmount,
+      newPackageData.pgtaAmount,
+      newPackageData.uptPositiveAmount,
+    ].reduce((sum, amount) => sum + (amount || 0), 0)
+
+    if (newPackageData.marketingPackage !== totalAmount || totalAmount === 0) {
+      toast.error(
+        'The marketing package amount must equal the sum of all other amounts.',
+        toastconfig,
+      )
+      return
+    }
+
+    if (!newPackageData.registrationDate) {
+      toast.error('Select Registration Date.', toastconfig)
+      return
+    }
+
+    const savePayload = { ...newPackageData }
+    delete savePayload.paidAmount
+    delete savePayload.pendingAmount
+    delete savePayload.packageDetails
+
+    if (newPackageData?.id) {
+      editPackageMutate?.mutate(savePayload)
+    } else {
+      createPackageMutate?.mutate(savePayload)
+    }
+  }
+
   const handlePayAndSave = (visitId) => {
     console.log('handlePayAndSave', visitId)
     dispatch(openModal('package' + visitId))
@@ -527,19 +569,19 @@ function PackageComponent({
               {/* <Typography variant="h5" gutterBottom>
                         {getHeading()}
                     </Typography> */}
-              {/* {!packageData?.id && (
-                        <Button
-                            variant="outlined"
-                            color="primary"
-                            onClick={() => setIsEditing(true)}
-                            startIcon={<EditOutlined />}
-                        >
-                            Edit
-                        </Button>
-                    )} */}
-              {/* {isEditing && ( */}
+              {canEditPackage && packageData?.id && !isEditing && (
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  onClick={() => setIsEditing(true)}
+                  startIcon={<EditOutlined />}
+                  className="capitalize"
+                >
+                  Edit Package
+                </Button>
+              )}
               <>
-                {isEditing && (
+                {isEditing && !packageData?.id && (
                   <Button
                     variant="contained"
                     color="primary"
@@ -548,6 +590,29 @@ function PackageComponent({
                   >
                     Pay and Save
                   </Button>
+                )}
+                {isEditing && packageData?.id && canEditPackage && (
+                  <>
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      className="text-white capitalize w-[180px] h-[40px]"
+                      onClick={handleSavePackageChanges}
+                    >
+                      Save Package
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      color="inherit"
+                      className="capitalize h-[40px]"
+                      onClick={() => {
+                        setNewPackageData(packageData)
+                        setIsEditing(false)
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </>
                 )}
                 <div className="flex justify-end gap-2 w-full items-center">
                   {packageData?.discount && (

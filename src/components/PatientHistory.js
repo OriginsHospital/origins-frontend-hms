@@ -76,6 +76,45 @@ import AppointmentDetail from '@/components/AppointmentDetail'
 import RichText from './RichText'
 import { ACCESS_TYPES } from '@/constants/constants'
 import { usePermissionCheck, withPermission } from '@/components/withPermission'
+import { exportReport } from '@/utils/reportExport'
+
+const PAYMENT_EXPORT_COLUMNS = [
+  {
+    field: 'orderDate',
+    headerName: 'Date',
+    valueGetter: ({ row }) =>
+      dayjs(row.orderDate).format('DD MMM, YYYY hh:mm A'),
+  },
+  { field: 'orderId', headerName: 'Order ID' },
+  { field: 'type', headerName: 'Type' },
+  {
+    field: 'productType',
+    headerName: 'Product',
+    valueGetter: ({ row }) => row.productType || 'CONSULTATION FEE',
+  },
+  { field: 'paymentMode', headerName: 'Payment Mode' },
+  {
+    field: 'totalOrderAmount',
+    headerName: 'Amount',
+    valueGetter: ({ row }) =>
+      `₹${Number.parseFloat(row.totalOrderAmount || 0).toLocaleString('en-IN')}`,
+  },
+  {
+    field: 'discountAmount',
+    headerName: 'Discount',
+    valueGetter: ({ row }) => {
+      const discount = row.discountAmount
+      if (discount === '0' || discount === '0.00' || !discount) return '-'
+      return `₹${Number.parseFloat(discount).toLocaleString('en-IN')}`
+    },
+  },
+  {
+    field: 'paidOrderAmount',
+    headerName: 'Paid Amount',
+    valueGetter: ({ row }) =>
+      `₹${Number.parseFloat(row.paidOrderAmount || 0).toLocaleString('en-IN')}`,
+  },
+]
 
 const getEmbryologyReportSource = (details = []) => {
   const templateReport = details.find((detail) => detail?.template)?.template
@@ -223,7 +262,7 @@ const EmbryologyTab = ({ data }) => {
 }
 
 // PaymentHistoryTab Component
-const PaymentHistoryTab = ({ data }) => {
+const PaymentHistoryTab = ({ data, patientLabel }) => {
   const user = useSelector((store) => store.user)
   const queryClient = useQueryClient()
   const [page, setPage] = useState(0)
@@ -249,6 +288,7 @@ const PaymentHistoryTab = ({ data }) => {
     productType: '',
     orderDate: '',
   })
+  const [exportAnchor, setExportAnchor] = useState(null)
 
   // Check if user is admin
   const isAdmin = user?.roleDetails?.name?.toLowerCase() === 'admin'
@@ -291,14 +331,26 @@ const PaymentHistoryTab = ({ data }) => {
     handleMenuClose()
   }
 
+  const getPaymentSource = (payment) =>
+    payment?.paymentSource ||
+    (payment?.appointmentId == null ? 'TREATMENT_ORDER' : 'ORDER_DETAILS')
+
+  const invalidatePaymentAndAppointmentQueries = () => {
+    queryClient.invalidateQueries({
+      predicate: (query) => {
+        const key = query.queryKey?.[0]
+        return key === 'paymentHistory' || key === 'allAppointments'
+      },
+    })
+  }
+
   // Update payment mutation
   const updatePaymentMutation = useMutation({
-    mutationFn: async ({ paymentId, paymentData }) => {
-      return await updatePaymentHistory(
-        user.accessToken,
-        paymentId,
-        paymentData,
-      )
+    mutationFn: async ({ paymentId, paymentData, source }) => {
+      return await updatePaymentHistory(user.accessToken, paymentId, {
+        ...paymentData,
+        source,
+      })
     },
     onSuccess: () => {
       toast.success('Payment record updated successfully')
@@ -311,12 +363,7 @@ const PaymentHistoryTab = ({ data }) => {
         productType: '',
         orderDate: '',
       })
-      // Invalidate payment history query to refresh data
-      queryClient.invalidateQueries({
-        predicate: (query) => {
-          return query.queryKey[0] === 'paymentHistory'
-        },
-      })
+      invalidatePaymentAndAppointmentQueries()
     },
     onError: (error) => {
       toast.error(
@@ -329,18 +376,13 @@ const PaymentHistoryTab = ({ data }) => {
 
   // Delete payment mutation
   const deletePaymentMutation = useMutation({
-    mutationFn: async (paymentId) => {
-      return await deletePaymentHistory(user.accessToken, paymentId)
+    mutationFn: async ({ paymentId, source }) => {
+      return await deletePaymentHistory(user.accessToken, paymentId, source)
     },
     onSuccess: () => {
       toast.success('Payment record deleted successfully')
       setDeleteConfirm(null)
-      // Invalidate payment history query to refresh data
-      queryClient.invalidateQueries({
-        predicate: (query) => {
-          return query.queryKey[0] === 'paymentHistory'
-        },
-      })
+      invalidatePaymentAndAppointmentQueries()
     },
     onError: (error) => {
       toast.error(
@@ -369,13 +411,17 @@ const PaymentHistoryTab = ({ data }) => {
     updatePaymentMutation.mutate({
       paymentId: editPayment.id,
       paymentData,
+      source: getPaymentSource(editPayment),
     })
   }
 
   // Handle delete confirm
   const handleDeleteConfirm = () => {
     if (deleteConfirm) {
-      deletePaymentMutation.mutate(deleteConfirm.id)
+      deletePaymentMutation.mutate({
+        paymentId: deleteConfirm.id,
+        source: getPaymentSource(deleteConfirm),
+      })
     }
   }
 
@@ -399,11 +445,12 @@ const PaymentHistoryTab = ({ data }) => {
       const matchesPaymentMode =
         filters.paymentMode === 'all' ||
         payment.paymentMode === filters.paymentMode
+      const searchLower = filters.search.toLowerCase()
       const matchesSearch =
-        payment.orderId.toLowerCase().includes(filters.search.toLowerCase()) ||
-        payment.productType
-          ?.toLowerCase()
-          .includes(filters.search.toLowerCase())
+        String(payment.orderId ?? '')
+          .toLowerCase()
+          .includes(searchLower) ||
+        payment.productType?.toLowerCase().includes(searchLower)
 
       // Date filtering
       const paymentDate = dayjs(payment.orderDate)
@@ -463,6 +510,27 @@ const PaymentHistoryTab = ({ data }) => {
     setPage(0)
   }
 
+  const handleExportFormat = (format) => {
+    try {
+      if (!filteredData?.length) {
+        toast.warning('No records to export')
+        return
+      }
+      exportReport(filteredData, PAYMENT_EXPORT_COLUMNS, format, {
+        reportName: 'Patient_Payment_History',
+        reportType: 'payment_history',
+        branchName: patientLabel,
+      })
+      const formatLabel = format === 'xlsx' ? 'Excel' : format.toUpperCase()
+      toast.success(`Payment history exported as ${formatLabel}`)
+    } catch (error) {
+      console.error('Payment history export failed:', error)
+      toast.error(error?.message || 'Export failed. Please try again.')
+    } finally {
+      setExportAnchor(null)
+    }
+  }
+
   // Calculate paginated data
   const paginatedData = filteredData?.slice(
     page * rowsPerPage,
@@ -475,13 +543,41 @@ const PaymentHistoryTab = ({ data }) => {
       <div className="p-4 border-b space-y-4">
         <div className="flex justify-between items-center mb-4">
           <Typography variant="h6">Filters</Typography>
-          <Button
-            size="small"
-            startIcon={<FilterAltOff />}
-            onClick={handleResetFilters}
-          >
-            Reset Filters
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            <Button
+              size="small"
+              variant="outlined"
+              startIcon={<Download />}
+              onClick={(e) => setExportAnchor(e.currentTarget)}
+              disabled={!filteredData?.length}
+            >
+              Export
+            </Button>
+            <Menu
+              anchorEl={exportAnchor}
+              open={Boolean(exportAnchor)}
+              onClose={() => setExportAnchor(null)}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+            >
+              <MenuItem onClick={() => handleExportFormat('csv')}>
+                Download as CSV
+              </MenuItem>
+              <MenuItem onClick={() => handleExportFormat('xlsx')}>
+                Download as Excel
+              </MenuItem>
+              <MenuItem onClick={() => handleExportFormat('pdf')}>
+                Download as PDF
+              </MenuItem>
+            </Menu>
+            <Button
+              size="small"
+              startIcon={<FilterAltOff />}
+              onClick={handleResetFilters}
+            >
+              Reset Filters
+            </Button>
+          </Box>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           {/* Search Filter */}
@@ -1092,6 +1188,56 @@ function normalizeChecklistLabTests(rawData) {
   return Array.isArray(list) ? list : []
 }
 
+const hasUploadedLabReport = (test) => {
+  if (test?.hasReport !== undefined && test?.hasReport !== null) {
+    return test.hasReport === 1 || test.hasReport === true
+  }
+  return false
+}
+
+const filterChecklistWithUploadedReports = (tests) =>
+  (tests || []).filter(hasUploadedLabReport)
+
+/** Constrain header/logo images in saved lab report HTML (e.g. VIRAL MARKERS, UPT). */
+const normalizeLabReportHtmlForPreview = (html) => {
+  if (!html || typeof html !== 'string') return html
+
+  return html.replace(/<img\b([^>]*)\/?>/gi, (match, attrs) => {
+    let cleaned = attrs.replace(/\s(width|height)\s*=\s*["'][^"']*["']/gi, '')
+    const sizeStyles =
+      'max-width:120px;height:auto;width:auto;object-fit:contain;display:block;'
+    const styleMatch = cleaned.match(/style\s*=\s*["']([^"']*)["']/i)
+
+    if (styleMatch) {
+      cleaned = cleaned.replace(
+        /style\s*=\s*["']([^"']*)["']/i,
+        `style="${styleMatch[1]};${sizeStyles}"`,
+      )
+    } else {
+      cleaned += ` style="${sizeStyles}"`
+    }
+
+    return `<img${cleaned}>`
+  })
+}
+
+const labReportPreviewSx = {
+  '& .ql-container': { border: 'none', fontFamily: 'inherit' },
+  '& .ql-toolbar': { display: 'none' },
+  '& .ql-editor': {
+    padding: '8px 0',
+    overflowX: 'auto',
+    minHeight: 'unset',
+  },
+  '& .ql-editor img, & img': {
+    maxWidth: '120px !important',
+    width: 'auto !important',
+    height: 'auto !important',
+    objectFit: 'contain',
+    display: 'block',
+  },
+}
+
 function PatientHistory({ patient, onClose }) {
   const dispatch = useDispatch()
   const router = useRouter()
@@ -1175,6 +1321,66 @@ function PatientHistory({ patient, onClose }) {
     },
     enabled: !!patient?.patientId && activeTab === 3,
   })
+
+  const checklistUsesHasReportFlag = useMemo(() => {
+    if (!investigationChecklist?.length) return false
+    return investigationChecklist.some(
+      (test) => test.hasReport !== undefined && test.hasReport !== null,
+    )
+  }, [investigationChecklist])
+
+  const {
+    data: investigationTestsWithReportsFallback,
+    isLoading: investigationReportsFilterLoading,
+  } = useQuery({
+    queryKey: [
+      'patientHistoryChecklistWithReports',
+      patient?.patientId,
+      investigationChecklist?.map(
+        (t) => `${t.appointmentId}-${t.billTypeValue}-${t.type}`,
+      ),
+    ],
+    queryFn: async () => {
+      const results = await Promise.all(
+        investigationChecklist.map(async (test) => {
+          try {
+            const responsejson = await getSavedLabTestResult(
+              user.accessToken,
+              test.type,
+              test.appointmentId,
+              test.billTypeValue,
+              test.isSpouse ?? 0,
+            )
+            if (responsejson.status !== 200) return null
+            const labTestResult = responsejson.data?.labTestResult
+            if (labTestResult == null || String(labTestResult).trim() === '') {
+              return null
+            }
+            return test
+          } catch {
+            return null
+          }
+        }),
+      )
+      return results.filter(Boolean)
+    },
+    enabled:
+      !!investigationChecklist?.length &&
+      activeTab === 3 &&
+      !checklistUsesHasReportFlag,
+  })
+
+  const investigationTestsWithReports = useMemo(() => {
+    if (!investigationChecklist?.length) return []
+    if (checklistUsesHasReportFlag) {
+      return filterChecklistWithUploadedReports(investigationChecklist)
+    }
+    return investigationTestsWithReportsFallback ?? []
+  }, [
+    investigationChecklist,
+    checklistUsesHasReportFlag,
+    investigationTestsWithReportsFallback,
+  ])
 
   const {
     data: notesHistory,
@@ -1482,24 +1688,33 @@ function PatientHistory({ patient, onClose }) {
   }
 
   const renderInvestigationTab = () => {
-    if (investigationChecklistLoading) return <LoadingState />
+    if (
+      investigationChecklistLoading ||
+      (!checklistUsesHasReportFlag && investigationReportsFilterLoading)
+    ) {
+      return <LoadingState />
+    }
     if (investigationChecklistError)
       return <ErrorState message={investigationChecklistError.message} />
     if (!investigationChecklist?.length)
       return <EmptyState message="No check list data found" />
+    if (!investigationTestsWithReports.length)
+      return (
+        <EmptyState message="No uploaded lab reports available for this patient" />
+      )
 
     return (
       <div className="space-y-3">
         <div className="flex justify-start gap-3 items-center flex-wrap px-1">
           <span className="font-semibold text-secondary">Check List</span>
           <Chip
-            label={`${investigationChecklist.length} tests`}
+            label={`${investigationTestsWithReports.length} tests`}
             size="small"
             className="bg-blue-100 text-blue-800"
           />
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-          {investigationChecklist.map((test, index) => (
+          {investigationTestsWithReports.map((test, index) => (
             <Box
               key={`${test.appointmentId}-${test.billTypeValue}-${index}`}
               className="flex flex-col gap-2 p-2 items-start border border-gray-200 rounded-lg justify-between bg-white"
@@ -1586,7 +1801,14 @@ function PatientHistory({ patient, onClose }) {
     if (!paymentHistory?.data?.length)
       return <EmptyState message="No payment history found" />
 
-    return <PaymentHistoryTab data={paymentHistory.data} />
+    return (
+      <PaymentHistoryTab
+        data={paymentHistory.data}
+        patientLabel={
+          patient?.Name || patient?.patientName || patient?.patientId
+        }
+      />
+    )
   }
 
   const handleAppointmentClick = (appointment) => {
@@ -1744,28 +1966,62 @@ function PatientHistory({ patient, onClose }) {
       </Modal>
 
       <Dialog
+        fullScreen
         open={!!selectedInvestigationTest}
         onClose={() => setSelectedInvestigationTest(null)}
-        maxWidth="lg"
-        fullWidth
+        PaperProps={{
+          sx: { display: 'flex', flexDirection: 'column' },
+        }}
       >
-        <DialogTitle className="flex justify-between items-center pr-2">
-          <span>Lab report</span>
+        <DialogTitle
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            py: 1.5,
+            px: 2,
+            borderBottom: 1,
+            borderColor: 'divider',
+          }}
+        >
+          <Typography variant="h6" component="span">
+            Lab report
+            {selectedInvestigationTest?.labTestName
+              ? ` — ${selectedInvestigationTest.labTestName}`
+              : ''}
+          </Typography>
           <IconButton
             aria-label="close"
             onClick={() => setSelectedInvestigationTest(null)}
+            edge="end"
           >
             <Close />
           </IconButton>
         </DialogTitle>
-        <DialogContent className="min-h-[50vh]">
+        <DialogContent
+          sx={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            p: { xs: 1, sm: 2 },
+            overflow: 'auto',
+            bgcolor: 'grey.50',
+          }}
+        >
           {investigationReportLoading && (
-            <div className="flex justify-center py-12">
+            <Box
+              sx={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
               <CircularProgress />
-            </div>
+            </Box>
           )}
           {investigationReportError && (
-            <Alert severity="error" className="my-2">
+            <Alert severity="error" sx={{ my: 2 }}>
               {investigationReportError.message}
             </Alert>
           )}
@@ -1779,16 +2035,42 @@ function PatientHistory({ patient, onClose }) {
             ) : typeof investigationReportData === 'string' &&
               (investigationReportData.includes('.pdf') ||
                 investigationReportData.startsWith('http')) ? (
-              <iframe
+              <Box
+                component="iframe"
                 title="Lab report"
                 src={investigationReportData}
-                className="w-full min-h-[60vh] border-0"
+                sx={{
+                  flex: 1,
+                  width: '100%',
+                  minHeight: 'calc(100vh - 72px)',
+                  border: 0,
+                  bgcolor: 'white',
+                }}
               />
             ) : (
-              <RichText
-                value={String(investigationReportData)}
-                readOnly={true}
-              />
+              <Box
+                className="lab-report-preview"
+                sx={{
+                  ...labReportPreviewSx,
+                  flex: 1,
+                  width: '100%',
+                  bgcolor: 'white',
+                  borderRadius: 1,
+                  p: 2,
+                  '& .ql-editor img:not([alt="Hospital Logo"])': {
+                    maxWidth: '100% !important',
+                    width: 'auto !important',
+                    height: 'auto !important',
+                  },
+                }}
+              >
+                <RichText
+                  value={normalizeLabReportHtmlForPreview(
+                    String(investigationReportData),
+                  )}
+                  readOnly={true}
+                />
+              </Box>
             ))}
         </DialogContent>
       </Dialog>

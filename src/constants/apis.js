@@ -4158,12 +4158,17 @@ export const updatePaymentHistory = async (token, paymentId, paymentData) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
+  const sourceQuery =
+    paymentData?.source != null && String(paymentData.source).trim() !== ''
+      ? `?source=${encodeURIComponent(paymentData.source)}`
+      : ''
+  const { source, ...payload } = paymentData || {}
   const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.UPDATE_PAYMENT_HISTORY}/${paymentId}`,
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.UPDATE_PAYMENT_HISTORY}/${paymentId}${sourceQuery}`,
     {
       method: 'PUT',
       headers: myHeaders,
-      body: JSON.stringify(paymentData),
+      body: JSON.stringify(payload),
       redirect: 'follow',
       credentials: 'include',
     },
@@ -4171,12 +4176,16 @@ export const updatePaymentHistory = async (token, paymentId, paymentData) => {
   return response.json()
 }
 
-export const deletePaymentHistory = async (token, paymentId) => {
+export const deletePaymentHistory = async (token, paymentId, source) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
+  const sourceQuery =
+    source != null && String(source).trim() !== ''
+      ? `?source=${encodeURIComponent(source)}`
+      : ''
   const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.DELETE_PAYMENT_HISTORY}/${paymentId}`,
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.DELETE_PAYMENT_HISTORY}/${paymentId}${sourceQuery}`,
     {
       method: 'DELETE',
       headers: myHeaders,

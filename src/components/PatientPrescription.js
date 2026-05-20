@@ -42,6 +42,11 @@ import {
   pharmacySelectStyles,
   PrescriptionPharmacyLowStockLegend,
 } from '@/utils/prescriptionPharmacySelect'
+import {
+  applyPharmacyCompanionMedicines,
+  getCompanionMedicinesForTriggers,
+} from '@/utils/pharmacyAutoCompanions'
+import { mergeLineBillValuesOnCopy } from '@/utils/mergeLineBillValuesOnCopy'
 
 // Medicine Kit Configurations
 const CLEO_SHOT_KIT = {
@@ -159,6 +164,7 @@ const OPU_KIT = {
     { name: 'K-STAT INJ', quantity: 1 },
     { name: 'NEOROF 20ML INJ', quantity: 1 },
     { name: 'PYROLATE INJ', quantity: 1 },
+    { name: 'SKINTAC 7.5GLOV', quantity: 1 },
     { name: 'SKINTAC 6.5 GLOV', quantity: 1 },
   ],
 }
@@ -745,6 +751,22 @@ function PatientPrescription({
           }
         })
       }
+
+      const selectedMedicineNames = billTypeValues
+        .filter((item) => item.status !== 'PAID')
+        .map((item) => item.name)
+      const companionMedicines = getCompanionMedicinesForTriggers(
+        selectedMedicineNames,
+      )
+      if (companionMedicines.length > 0) {
+        applyPharmacyCompanionMedicines({
+          companions: companionMedicines,
+          billTypeValuesArray: allBillTypeValues[name] || [],
+          billTypeValues,
+          existingAllItems: copyOfDefaultLineBillValues[billTypeId] || [],
+          defaultLineBillValues,
+        })
+      }
     } else {
       // Non-Pharmacy bill types
       selectedOptions?.forEach((element) => {
@@ -983,20 +1005,9 @@ function PatientPrescription({
           })
         }
 
-        // Log the processed data for debugging
-        console.log('Processed line bills:', tempDefaultData)
-
-        // Update the state
-        setDefaultLineBillValues((prev) => {
-          const newState = { ...tempDefaultData }
-          console.log('New state:', newState)
-          return newState
-        })
-
-        // Verify that the data was set correctly
-        setTimeout(() => {
-          console.log('Current defaultLineBillValues:', defaultLineBillValues)
-        }, 0)
+        setDefaultLineBillValues((prev) =>
+          mergeLineBillValuesOnCopy(prev, tempDefaultData),
+        )
 
         toast.success('Prescription copied successfully', toastconfig)
       } else {
@@ -1007,11 +1018,6 @@ function PatientPrescription({
       toast.error('Failed to fetch prescription details', toastconfig)
     }
   }
-
-  // Add this useEffect to monitor state changes
-  useEffect(() => {
-    console.log('defaultLineBillValues updated:', defaultLineBillValues)
-  }, [defaultLineBillValues])
 
   return (
     <div>
