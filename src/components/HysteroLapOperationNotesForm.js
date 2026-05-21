@@ -66,6 +66,25 @@ const emptyForm = () => ({
   expertConsultant: '',
 })
 
+const normalizeReferenceImages = (data) => {
+  if (!Array.isArray(data?.referenceImages)) return []
+  return data.referenceImages
+    .map((image) => ({
+      id: image?.id ?? image?.imageId ?? null,
+      imageUrl: image?.imageUrl ?? image?.ImageUrl ?? '',
+    }))
+    .filter((image) => image.imageUrl)
+}
+
+const toReferenceImage = (value) => {
+  if (!value) return null
+  if (typeof value === 'string') return { id: null, imageUrl: value }
+  return {
+    id: value?.id ?? value?.imageId ?? null,
+    imageUrl: value?.imageUrl ?? value?.ImageUrl ?? '',
+  }
+}
+
 function HysteroLapOperationNotesForm({
   formType,
   visitId,
@@ -74,73 +93,76 @@ function HysteroLapOperationNotesForm({
   onSave,
   onCancel,
   onImageUpload,
+  onImageDelete,
 }) {
   const printRef = useRef(null)
+  const isFormDirtyRef = useRef(false)
+  const imagesDirtyRef = useRef(false)
   const [form, setForm] = useState(emptyForm())
   const [errors, setErrors] = useState({})
   const [uploadedImages, setUploadedImages] = useState([])
   const [isUploading, setIsUploading] = useState(false)
+  const [deletingImageIndex, setDeletingImageIndex] = useState(null)
+
+  useEffect(() => {
+    isFormDirtyRef.current = false
+    imagesDirtyRef.current = false
+  }, [visitId, patientId])
+
+  const mapInitialDataToForm = (data) => {
+    const legacyFinalDiagnosis =
+      !data.finalDiagnosisAfterOperation &&
+      data.consultantName &&
+      !data.expertConsultant
+        ? data.consultantName
+        : ''
+
+    return {
+      formType: data.formType || formType || '',
+      clinicalDiagnosis: data.clinicalDiagnosis || '',
+      lmp: data.lmp ? dayjs(data.lmp) : null,
+      dayOfCycle: data.dayOfCycle || '',
+      admissionDate: data.admissionDate ? dayjs(data.admissionDate) : null,
+      procedureDate: data.procedureDate ? dayjs(data.procedureDate) : null,
+      dischargeDate: data.dischargeDate ? dayjs(data.dischargeDate) : null,
+      procedureType: data.procedureType || '',
+      finalDiagnosisAfterOperation:
+        data.finalDiagnosisAfterOperation || legacyFinalDiagnosis || '',
+      hospitalBranch: data.hospitalBranch || '',
+      gynecologist: data.gynecologist || '',
+      assistant: data.assistant || '',
+      anesthetist: data.anesthetist || '',
+      otAssistant: data.otAssistant || '',
+      diagnosis: data.diagnosis || '',
+      procedure: data.anesthesiaType || data.procedure || '',
+      entry: data.entry || '',
+      uterus: data.uterus || '',
+      endometrialThickness: data.endometrialThickness || '',
+      abnormality: data.distensionMedia || data.abnormality || '',
+      operativeFindings: data.operativeFindings || '',
+      intraopComplications: data.intraopComplications || '',
+      postopCourse: data.postopCourse || '',
+      reviewOn: data.reviewOn ? dayjs(data.reviewOn) : null,
+      dischargeMedications: data.dischargeMedications || '',
+      expertConsultant: data.consultantName || '',
+    }
+  }
 
   useEffect(() => {
     if (initialData) {
-      const legacyFinalDiagnosis =
-        !initialData.finalDiagnosisAfterOperation &&
-        initialData.consultantName &&
-        !initialData.expertConsultant
-          ? initialData.consultantName
-          : ''
-
-      setForm({
-        formType: initialData.formType || formType || '',
-        clinicalDiagnosis: initialData.clinicalDiagnosis || '',
-        lmp: initialData.lmp ? dayjs(initialData.lmp) : null,
-        dayOfCycle: initialData.dayOfCycle || '',
-        admissionDate: initialData.admissionDate
-          ? dayjs(initialData.admissionDate)
-          : null,
-        procedureDate: initialData.procedureDate
-          ? dayjs(initialData.procedureDate)
-          : null,
-        dischargeDate: initialData.dischargeDate
-          ? dayjs(initialData.dischargeDate)
-          : null,
-        procedureType: initialData.procedureType || '',
-        finalDiagnosisAfterOperation:
-          initialData.finalDiagnosisAfterOperation ||
-          legacyFinalDiagnosis ||
-          '',
-        hospitalBranch: initialData.hospitalBranch || '',
-        gynecologist: initialData.gynecologist || '',
-        assistant: initialData.assistant || '',
-        anesthetist: initialData.anesthetist || '',
-        otAssistant: initialData.otAssistant || '',
-        diagnosis: initialData.diagnosis || '',
-        procedure: initialData.anesthesiaType || initialData.procedure || '',
-        entry: initialData.entry || '',
-        uterus: initialData.uterus || '',
-        endometrialThickness: initialData.endometrialThickness || '',
-        abnormality:
-          initialData.distensionMedia || initialData.abnormality || '',
-        operativeFindings: initialData.operativeFindings || '',
-        intraopComplications: initialData.intraopComplications || '',
-        postopCourse: initialData.postopCourse || '',
-        reviewOn: initialData.reviewOn ? dayjs(initialData.reviewOn) : null,
-        dischargeMedications: initialData.dischargeMedications || '',
-        expertConsultant: initialData.consultantName || '',
-      })
-      setUploadedImages(
-        Array.isArray(initialData.referenceImages)
-          ? initialData.referenceImages
-              .map((image) => image?.imageUrl)
-              .filter(Boolean)
-          : [],
-      )
+      if (!isFormDirtyRef.current) {
+        setForm(mapInitialDataToForm(initialData))
+      }
+      if (!imagesDirtyRef.current) {
+        setUploadedImages(normalizeReferenceImages(initialData))
+      }
     } else if (formType) {
-      setForm((prev) => ({ ...prev, formType }))
+      setForm((prev) => ({ ...prev, formType: prev.formType || formType }))
     }
   }, [initialData, formType])
 
   const handleChange = (name, value) => {
+    isFormDirtyRef.current = true
     setForm((prev) => ({ ...prev, [name]: value }))
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: null }))
@@ -233,13 +255,15 @@ function HysteroLapOperationNotesForm({
 
     setIsUploading(true)
     try {
-      const uploadedUrls = []
+      const uploadedImagesList = []
       for (const file of files) {
-        const url = await onImageUpload(file, visitId)
-        if (url) uploadedUrls.push(url)
+        const result = await onImageUpload(file, visitId)
+        const image = toReferenceImage(result)
+        if (image?.imageUrl) uploadedImagesList.push(image)
       }
-      if (uploadedUrls.length) {
-        setUploadedImages((prev) => [...prev, ...uploadedUrls])
+      if (uploadedImagesList.length) {
+        imagesDirtyRef.current = true
+        setUploadedImages((prev) => [...prev, ...uploadedImagesList])
       }
     } catch (error) {
       console.error('Error uploading images:', error)
@@ -249,8 +273,30 @@ function HysteroLapOperationNotesForm({
     }
   }
 
-  const handleRemoveImage = (index) => {
+  const handleRemoveImage = async (index) => {
+    const image = uploadedImages[index]
+    if (!image) return
+
+    setDeletingImageIndex(index)
+    const previousImages = uploadedImages
+
+    imagesDirtyRef.current = true
     setUploadedImages((prev) => prev.filter((_, i) => i !== index))
+
+    if (!onImageDelete) {
+      setDeletingImageIndex(null)
+      return
+    }
+
+    try {
+      await onImageDelete(image)
+    } catch (error) {
+      console.error('Error deleting image:', error)
+      imagesDirtyRef.current = false
+      setUploadedImages(previousImages)
+    } finally {
+      setDeletingImageIndex(null)
+    }
   }
 
   const formatDate = (value) =>
@@ -647,12 +693,18 @@ function HysteroLapOperationNotesForm({
         </Button>
         {uploadedImages.length > 0 && (
           <Grid container spacing={2} sx={{ mt: 1 }}>
-            {uploadedImages.map((url, index) => (
-              <Grid item xs={12} sm={6} md={4} key={`${url}-${index}`}>
+            {uploadedImages.map((image, index) => (
+              <Grid
+                item
+                xs={12}
+                sm={6}
+                md={4}
+                key={image.id || `${image.imageUrl}-${index}`}
+              >
                 <Paper elevation={2} sx={{ position: 'relative', p: 1 }}>
                   <Box
                     component="img"
-                    src={url}
+                    src={image.imageUrl}
                     alt={`Reference ${index + 1}`}
                     sx={{
                       width: '100%',
@@ -664,6 +716,7 @@ function HysteroLapOperationNotesForm({
                   <IconButton
                     size="small"
                     color="error"
+                    disabled={deletingImageIndex === index}
                     sx={{
                       position: 'absolute',
                       top: 8,

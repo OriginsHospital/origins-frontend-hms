@@ -4820,6 +4820,23 @@ export const addHysteroscopyReferenceImages = async (
   return response.json()
 }
 
+export const deleteHysteroscopyReferenceImage = async (token, imageId) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.DELETE_HYSTEROSCOPY_REFERENCE_IMAGE}/${imageId}`,
+    {
+      method: 'DELETE',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+
+  return response.json()
+}
+
 export const getAppointmentsByPatient = async (token, patientId) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)

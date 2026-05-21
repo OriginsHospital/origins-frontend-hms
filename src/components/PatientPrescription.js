@@ -45,6 +45,7 @@ import {
 import {
   applyPharmacyCompanionMedicines,
   getCompanionMedicinesForTriggers,
+  syncPrescriptionDaysForTriggerAndCompanions,
 } from '@/utils/pharmacyAutoCompanions'
 import { mergeLineBillValuesOnCopy } from '@/utils/mergeLineBillValuesOnCopy'
 
@@ -194,6 +195,17 @@ const CERVICAL_CERCLAGE_KIT = {
   ],
 }
 
+const TRANSFER_KIT = {
+  kitName: 'TRANSFER KIT',
+  kitValue: 'TRANSFER_KIT',
+  medicines: [
+    { name: 'SKINTAC 6.5 GLOV', quantity: 1 },
+    { name: 'SKINTAC 7.5GLOV', quantity: 1 },
+    { name: 'NS 100ML', quantity: 1 },
+    { name: 'Asthalin 2 mg tab', quantity: 2 },
+  ],
+}
+
 // Array of all available kits
 const ALL_MEDICINE_KITS = [
   CLEO_SHOT_KIT,
@@ -204,6 +216,7 @@ const ALL_MEDICINE_KITS = [
   BIOPSY_KIT,
   OPU_KIT,
   CERVICAL_CERCLAGE_KIT,
+  TRANSFER_KIT,
 ]
 
 const JoditEditor = dynamic(() => import('jodit-react'), {
@@ -833,32 +846,20 @@ function PatientPrescription({
     const copyOfDefaultLineBillValues = JSON.parse(
       JSON.stringify(defaultLineBillValues),
     )
-    let tempLineBillValues = copyOfDefaultLineBillValues?.[
-      billTypeIdPrescription
-    ]?.map((lineBillValues, index) => {
-      if (index === prescriptionRowIndex) {
-        const multiple =
-          getMultipleForQuatityCalculation(
-            lineBillValues.prescriptionDetails,
-          ) || 1
-        if (days === '') {
-          lineBillValues.prescriptionDays = ''
-          lineBillValues.prescribedQuantity = ''
-          return lineBillValues
-        }
-
-        const numericDays = Number(days)
-        if (Number.isFinite(numericDays) && numericDays > 0) {
-          lineBillValues.prescriptionDays = numericDays
-          lineBillValues.prescribedQuantity = numericDays * multiple
-        }
-      }
-      return lineBillValues
-    })
-    if (copyOfDefaultLineBillValues[billTypeIdPrescription]?.length != 0) {
-      copyOfDefaultLineBillValues[billTypeIdPrescription] = tempLineBillValues
-      setDefaultLineBillValues(copyOfDefaultLineBillValues)
+    const prescriptionRows =
+      copyOfDefaultLineBillValues?.[billTypeIdPrescription] ?? []
+    if (prescriptionRows.length === 0) {
+      return
     }
+
+    copyOfDefaultLineBillValues[billTypeIdPrescription] =
+      syncPrescriptionDaysForTriggerAndCompanions({
+        prescriptionRows,
+        triggerRowIndex: prescriptionRowIndex,
+        days,
+        getMultipleForQuatityCalculation,
+      })
+    setDefaultLineBillValues(copyOfDefaultLineBillValues)
   }
   const handleIntakeChange = (prescriptionRowIndex, medIntake) => {
     const billTypeIdPrescription = '3' //bill type = prescription

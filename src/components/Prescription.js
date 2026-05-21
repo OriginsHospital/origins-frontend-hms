@@ -35,6 +35,7 @@ import {
   updateHysteroscopyReport,
   getHysteroscopyReport,
   addHysteroscopyReferenceImages,
+  deleteHysteroscopyReferenceImage,
   closeVisitInConsultation,
   closeVisitInTreatment,
   getAllActiveVisitAppointments,
@@ -2553,6 +2554,11 @@ function Prescription({
               }}
               onCancel={() => dispatch(closeModal())}
               onImageUpload={async (file) => {
+                const reportQueryKey = [
+                  'hysteroscopyReport',
+                  resolvedHysteroscopyPatientId,
+                  resolvedHysteroscopyVisitId,
+                ]
                 let currentHysteroscopyId = hysteroscopyReportId
 
                 if (!currentHysteroscopyId) {
@@ -2573,7 +2579,16 @@ function Prescription({
                   }
                   currentHysteroscopyId = createRes.data.id
                   setHysteroscopyReportId(createRes.data.id)
-                  queryClient.invalidateQueries('hysteroscopyReport')
+                  queryClient.setQueryData(reportQueryKey, (existing) => ({
+                    ...(existing || {}),
+                    ...createRes.data,
+                    id: createRes.data.id,
+                    patientId: resolvedHysteroscopyPatientId,
+                    visitId: resolvedHysteroscopyVisitId,
+                    formType:
+                      selectedHysteroLapType || hysteroscopyReport?.formType,
+                    referenceImages: existing?.referenceImages || [],
+                  }))
                 }
 
                 const uploadRes = await addHysteroscopyReferenceImages(
@@ -2588,13 +2603,64 @@ function Prescription({
                   )
                 }
 
-                const uploadedUrl = uploadRes?.data?.[0]?.imageUrl
-                if (!uploadedUrl) {
+                const uploadedImage = uploadRes?.data?.[0]
+                if (!uploadedImage?.imageUrl) {
                   throw new Error(
                     'Upload succeeded but image URL was not returned',
                   )
                 }
-                return uploadedUrl
+
+                const imageRecord = {
+                  id: uploadedImage.id ?? null,
+                  imageUrl: uploadedImage.imageUrl,
+                  imageKey: uploadedImage.imageKey,
+                }
+
+                queryClient.setQueryData(reportQueryKey, (existing) => ({
+                  ...(existing || {}),
+                  id: currentHysteroscopyId,
+                  referenceImages: [
+                    ...(existing?.referenceImages || []),
+                    imageRecord,
+                  ],
+                }))
+
+                return imageRecord
+              }}
+              onImageDelete={async (image) => {
+                const reportQueryKey = [
+                  'hysteroscopyReport',
+                  resolvedHysteroscopyPatientId,
+                  resolvedHysteroscopyVisitId,
+                ]
+                const cachedReport = queryClient.getQueryData(reportQueryKey)
+                const imageId =
+                  image?.id ||
+                  cachedReport?.referenceImages?.find(
+                    (item) => item?.imageUrl === image?.imageUrl,
+                  )?.id
+
+                if (!imageId) return
+
+                const deleteRes = await deleteHysteroscopyReferenceImage(
+                  user.accessToken,
+                  imageId,
+                )
+
+                if (deleteRes?.status !== 200) {
+                  throw new Error(
+                    deleteRes?.message || 'Failed to delete reference image',
+                  )
+                }
+
+                queryClient.setQueryData(reportQueryKey, (existing) => ({
+                  ...(existing || {}),
+                  referenceImages: (existing?.referenceImages || []).filter(
+                    (item) =>
+                      Number(item?.id) !== Number(imageId) &&
+                      item?.imageUrl !== image?.imageUrl,
+                  ),
+                }))
               }}
             />
           ) : !selectedHysteroLapType ? (

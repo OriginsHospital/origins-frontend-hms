@@ -105,6 +105,144 @@ export function findPharmacyItemByName(billTypeValuesArray, targetName) {
   )
 }
 
+export function getCompanionsForTriggerMedicine(triggerName = '') {
+  const companions = []
+  for (const rule of PHARMACY_AUTO_COMPANION_RULES) {
+    if (!pharmacyNamesMatch(triggerName, rule.trigger)) {
+      continue
+    }
+    companions.push(...rule.companions)
+  }
+  return companions
+}
+
+export function isCompanionOfTriggerMedicine(companionName, triggerName) {
+  return getCompanionsForTriggerMedicine(triggerName).some((companion) =>
+    pharmacyNamesMatch(companion.name, companionName),
+  )
+}
+
+export function getPrescriptionDaysFromTriggersForCompanion(
+  billTypeValues = [],
+  companionName,
+) {
+  for (const row of billTypeValues) {
+    if (row.status === 'PAID') {
+      continue
+    }
+    const companions = getCompanionsForTriggerMedicine(row.name)
+    if (
+      companions.some((companion) =>
+        pharmacyNamesMatch(companion.name, companionName),
+      )
+    ) {
+      const days = Number(row.prescriptionDays)
+      if (Number.isFinite(days) && days > 0) {
+        return days
+      }
+    }
+  }
+  return null
+}
+
+function resolveCompanionQuantity(companionDef, days, intakeMultiple) {
+  const perDayQty = companionDef?.quantity ?? 1
+  const multiple = intakeMultiple > 0 ? intakeMultiple : 1
+  if (days === '' || days == null) {
+    return ''
+  }
+  const numericDays = Number(days)
+  if (!Number.isFinite(numericDays) || numericDays <= 0) {
+    return ''
+  }
+  return numericDays * perDayQty * multiple
+}
+
+/**
+ * When days change on an injection trigger, mirror days (and quantity) on its auto-added companions.
+ */
+export function syncPrescriptionDaysForTriggerAndCompanions({
+  prescriptionRows = [],
+  triggerRowIndex,
+  days,
+  getMultipleForQuatityCalculation = () => 1,
+}) {
+  const triggerRow = prescriptionRows[triggerRowIndex]
+  if (!triggerRow?.name) {
+    return prescriptionRows
+  }
+
+  const triggerCompanions = getCompanionsForTriggerMedicine(triggerRow.name)
+  if (!triggerCompanions.length) {
+    return prescriptionRows.map((lineBillValues, index) => {
+      if (index !== triggerRowIndex) {
+        return lineBillValues
+      }
+      const multiple =
+        getMultipleForQuatityCalculation(lineBillValues.prescriptionDetails) ||
+        1
+      if (days === '') {
+        return {
+          ...lineBillValues,
+          prescriptionDays: '',
+          prescribedQuantity: '',
+        }
+      }
+      const numericDays = Number(days)
+      if (Number.isFinite(numericDays) && numericDays > 0) {
+        return {
+          ...lineBillValues,
+          prescriptionDays: numericDays,
+          prescribedQuantity: numericDays * multiple,
+        }
+      }
+      return lineBillValues
+    })
+  }
+
+  return prescriptionRows.map((lineBillValues, index) => {
+    const isTriggerRow = index === triggerRowIndex
+    const isLinkedCompanion =
+      !isTriggerRow &&
+      triggerCompanions.some((companion) =>
+        pharmacyNamesMatch(lineBillValues.name, companion.name),
+      )
+
+    if (!isTriggerRow && !isLinkedCompanion) {
+      return lineBillValues
+    }
+
+    const companionDef = triggerCompanions.find((companion) =>
+      pharmacyNamesMatch(lineBillValues.name, companion.name),
+    )
+    const multiple = isLinkedCompanion
+      ? 1
+      : getMultipleForQuatityCalculation(lineBillValues.prescriptionDetails) ||
+        1
+
+    if (days === '') {
+      return {
+        ...lineBillValues,
+        prescriptionDays: '',
+        prescribedQuantity: '',
+      }
+    }
+
+    const numericDays = Number(days)
+    if (!Number.isFinite(numericDays) || numericDays <= 0) {
+      return lineBillValues
+    }
+
+    return {
+      ...lineBillValues,
+      prescriptionDays: numericDays,
+      prescribedQuantity: isLinkedCompanion
+        ? resolveCompanionQuantity(companionDef, numericDays, multiple)
+        : numericDays * multiple,
+    }
+  })
+}
+
 export function getCompanionMedicinesForTriggers(selectedMedicineNames = []) {
   const companions = []
   const seen = new Set()
@@ -152,10 +290,29 @@ export function applyPharmacyCompanionMedicines({
       return
     }
 
-    const alreadyInSelection = billTypeValues.some(
+    const existingSelectionIndex = billTypeValues.findIndex(
       (item) => item.id === medicineInPharmacy.id && item.status !== 'PAID',
     )
-    if (alreadyInSelection) {
+    const triggerDaysForCompanion = getPrescriptionDaysFromTriggersForCompanion(
+      billTypeValues,
+      companion.name,
+    )
+
+    if (existingSelectionIndex >= 0 && triggerDaysForCompanion != null) {
+      const existingRow = billTypeValues[existingSelectionIndex]
+      billTypeValues[existingSelectionIndex] = {
+        ...existingRow,
+        prescriptionDays: triggerDaysForCompanion,
+        prescribedQuantity: resolveCompanionQuantity(
+          companion,
+          triggerDaysForCompanion,
+          1,
+        ),
+      }
+      return
+    }
+
+    if (existingSelectionIndex >= 0) {
       return
     }
 
@@ -167,20 +324,27 @@ export function applyPharmacyCompanionMedicines({
       (values) =>
         values.id === medicineInPharmacy.id && values.status !== 'PAID',
     )
+    const resolvedDays =
+      infoObject?.prescriptionDays ??
+      existingUnpaid?.prescriptionDays ??
+      triggerDaysForCompanion ??
+      1
+    const resolvedQuantity =
+      infoObject?.prescribedQuantity ??
+      existingUnpaid?.prescribedQuantity ??
+      resolveCompanionQuantity(companion, resolvedDays, 1)
 
     if (existingUnpaid) {
       billTypeValues.push({
         id: medicineInPharmacy.id,
         name: medicineInPharmacy.name,
         amount: parseInt(medicineInPharmacy.amount, 10),
-        prescribedQuantity:
-          existingUnpaid.prescribedQuantity ?? companion.quantity,
+        prescribedQuantity: resolvedQuantity,
         prescriptionDetails:
           infoObject?.prescriptionDetails ??
           existingUnpaid.prescriptionDetails ??
           '',
-        prescriptionDays:
-          infoObject?.prescriptionDays ?? existingUnpaid.prescriptionDays ?? 1,
+        prescriptionDays: resolvedDays,
         status: 'UNPAID',
       })
       return
@@ -190,9 +354,9 @@ export function applyPharmacyCompanionMedicines({
       id: medicineInPharmacy.id,
       name: medicineInPharmacy.name,
       amount: parseInt(medicineInPharmacy.amount, 10),
-      prescribedQuantity: infoObject?.prescribedQuantity ?? companion.quantity,
+      prescribedQuantity: resolvedQuantity,
       prescriptionDetails: infoObject?.prescriptionDetails ?? '',
-      prescriptionDays: infoObject?.prescriptionDays ?? 1,
+      prescriptionDays: resolvedDays,
       status: 'UNPAID',
     })
   })

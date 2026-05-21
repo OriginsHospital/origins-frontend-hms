@@ -29,6 +29,7 @@ import {
 import {
   applyPharmacyCompanionMedicines,
   getCompanionMedicinesForTriggers,
+  syncPrescriptionDaysForTriggerAndCompanions,
 } from '@/utils/pharmacyAutoCompanions'
 import { mergeLineBillValuesOnCopy } from '@/utils/mergeLineBillValuesOnCopy'
 
@@ -472,33 +473,20 @@ function SpousePrescription({
     const copyOfDefaultLineBillValues = JSON.parse(
       JSON.stringify(defaultLineBillValues),
     )
-    let tempLineBillValues = copyOfDefaultLineBillValues?.[
-      billTypeIdPrescription
-    ]?.map((lineBillValues, index) => {
-      if (index === prescriptionRowIndex) {
-        const multiple =
-          getMultipleForQuatityCalculation(
-            lineBillValues.prescriptionDetails,
-          ) || 1
-        if (days === '') {
-          lineBillValues.prescriptionDays = ''
-          lineBillValues.prescribedQuantity = ''
-          return lineBillValues
-        }
-
-        const numericDays = Number(days)
-        if (Number.isFinite(numericDays) && numericDays > 0) {
-          lineBillValues.prescriptionDays = numericDays
-          lineBillValues.prescribedQuantity = numericDays * multiple
-        }
-      }
-      return lineBillValues
-    })
-    if (copyOfDefaultLineBillValues[billTypeIdPrescription]?.length != 0) {
-      copyOfDefaultLineBillValues[billTypeIdPrescription] = tempLineBillValues
-      console.log(copyOfDefaultLineBillValues)
-      setDefaultLineBillValues(copyOfDefaultLineBillValues)
+    const prescriptionRows =
+      copyOfDefaultLineBillValues?.[billTypeIdPrescription] ?? []
+    if (prescriptionRows.length === 0) {
+      return
     }
+
+    copyOfDefaultLineBillValues[billTypeIdPrescription] =
+      syncPrescriptionDaysForTriggerAndCompanions({
+        prescriptionRows,
+        triggerRowIndex: prescriptionRowIndex,
+        days,
+        getMultipleForQuatityCalculation,
+      })
+    setDefaultLineBillValues(copyOfDefaultLineBillValues)
   }
   const handleIntakeChange = (prescriptionRowIndex, medIntake) => {
     const billTypeIdPrescription = '3' //bill type = prescription
