@@ -68,9 +68,9 @@ function Profile() {
     },
   })
   const [selectedTab, setSelectedTab] = useState('profile')
-  const [user, setUser] = useState()
+  const [profile, setProfile] = useState()
   useEffect(() => {
-    setUser(userprofile?.data)
+    setProfile(userprofile?.data)
   }, [userprofile?.data])
 
   // Keep header / Redux display name in sync with profile API (can differ from logged-user info)
@@ -188,8 +188,8 @@ function Profile() {
         <div className="grow h-full rounded bg-white overflow-y-auto">
           <TabPanel value="profile">
             <ProfileComp
-              profile={user}
-              setProfile={setUser}
+              profile={profile}
+              setProfile={setProfile}
               updateProfileHandler={updateProfileHandler}
             />
           </TabPanel>
