@@ -11,9 +11,11 @@ import { FaPrescriptionBottleMedical } from 'react-icons/fa6'
 import { closeModal, openModal } from '@/redux/modalSlice'
 import {
   getLineBillsAndNotesForAppointment,
+  getPharmacyMasterData,
   saveLineBillsAndNotes,
   printPrescription,
 } from '@/constants/apis'
+import { API_ROUTES } from '@/constants/constants'
 import { toast } from 'react-toastify'
 import { toastconfig } from '@/utils/toastconfig'
 import dynamic from 'next/dynamic'
@@ -37,26 +39,7 @@ const JoditEditor = dynamic(() => import('jodit-react'), {
   ssr: false,
 })
 
-// Medicine Kit Configurations
-// Spouse prescription should show only NAPO SHOT as a kit trigger in Pharmacy.
-const NAPO_SHOT_KIT = {
-  kitName: 'NAPO SHOT',
-  kitValue: 'NAPO_SHOT_KIT',
-  medicines: [
-    { name: 'MOCELL INJ 600MG', quantity: 3 },
-    { name: 'LEVO VEN', quantity: 1 },
-    { name: 'MUCONICS 2ML', quantity: 1 },
-    { name: 'DS VIT - C 1.5 INJ', quantity: 1 },
-    { name: 'Americano MVI INJ', quantity: 1 },
-    { name: 'Cynocan 12', quantity: 1 },
-    { name: 'MAXX - TRACE', quantity: 1 },
-    { name: 'NIPRO SYRINGE 10ML', quantity: 2 },
-    { name: 'IV CANNULA-22', quantity: 1 },
-    { name: 'NS 100ML', quantity: 1 },
-    { name: 'EASY FIX', quantity: 1 },
-    { name: 'IV SET', quantity: 1 },
-  ],
-}
+const NAPO_SHOT_KIT_VALUE = 'NAPO_SHOT_KIT'
 
 const pharmacyStartsWithFilter = (option, inputValue) => {
   const normalizedInput = (inputValue || '').trim().toLowerCase()
@@ -66,9 +49,6 @@ const pharmacyStartsWithFilter = (option, inputValue) => {
 
   return (option?.label || '').toLowerCase().startsWith(normalizedInput)
 }
-
-// Only the NAPO kit is allowed in SpousePrescription Pharmacy.
-const ALL_MEDICINE_KITS = [NAPO_SHOT_KIT]
 
 function SpousePrescription({
   allBillTypeValues,
@@ -83,6 +63,7 @@ function SpousePrescription({
   const [printTemplate, setPrintTemplate] = useState(null)
   const dispatch = useDispatch()
   const editor = useRef(null)
+  const modal = useSelector((store) => store.modal)
 
   const queryClient = useQueryClient()
   const billTypesMap = useMemo(() => {
@@ -93,6 +74,30 @@ function SpousePrescription({
     })
     return map
   }, [billTypes])
+
+  const { data: activePharmacyKitsResponse } = useQuery({
+    queryKey: ['activePharmacyKits', 'spouse'],
+    queryFn: () =>
+      getPharmacyMasterData(
+        user.accessToken,
+        API_ROUTES.GET_ACTIVE_PHARMACY_KITS,
+      ),
+    enabled: !!user?.accessToken && modal.key === 'addPrescription',
+  })
+
+  const medicineKits = useMemo(() => {
+    const kits = activePharmacyKitsResponse?.data
+    if (!Array.isArray(kits)) {
+      return []
+    }
+    return kits
+      .filter((kit) => kit.kitValue === NAPO_SHOT_KIT_VALUE)
+      .map((kit) => ({
+        kitName: kit.kitName,
+        kitValue: kit.kitValue,
+        medicines: Array.isArray(kit.medicines) ? kit.medicines : [],
+      }))
+  }, [activePharmacyKitsResponse])
 
   const { data: lineBillsAndNotesDataForCurrentAppointment, isLoading } =
     useQuery({
@@ -286,7 +291,7 @@ function SpousePrescription({
       // Detect which kits were selected (only NAPO_SHOT_KIT is in this screen)
       const selectedKits = []
       selectedOptions?.forEach((option) => {
-        ALL_MEDICINE_KITS.forEach((kit) => {
+        medicineKits.forEach((kit) => {
           const kitSelected =
             option.value === kit.kitValue ||
             option.label?.toUpperCase() === kit.kitName.toUpperCase()
@@ -301,8 +306,8 @@ function SpousePrescription({
 
       if (selectedKits.length > 0) {
         // Remove all kit trigger options from selected options
-        const kitValues = ALL_MEDICINE_KITS.map((k) => k.kitValue)
-        const kitNames = ALL_MEDICINE_KITS.map((k) => k.kitName.toUpperCase())
+        const kitValues = medicineKits.map((k) => k.kitValue)
+        const kitNames = medicineKits.map((k) => k.kitName.toUpperCase())
         const filteredOptions = selectedOptions.filter(
           (option) =>
             !kitValues.includes(option.value) &&
@@ -713,15 +718,12 @@ function SpousePrescription({
                     : { value: data.id, label: data.name },
                 ) ?? []
 
-              // Add NAPO SHOT kit as a special option for spouse Pharmacy
               if (billType.name === 'Pharmacy') {
-                const kitOptions = [
-                  {
-                    value: NAPO_SHOT_KIT.kitValue,
-                    label: NAPO_SHOT_KIT.kitName,
-                    isKit: true,
-                  },
-                ]
+                const kitOptions = medicineKits.map((kit) => ({
+                  value: kit.kitValue,
+                  label: kit.kitName,
+                  isKit: true,
+                }))
                 selectOptions = [...kitOptions, ...selectOptions]
               }
               // console.log(selectOptions)

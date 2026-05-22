@@ -39,6 +39,30 @@ import Breadcrumb from '@/components/Breadcrumb'
 import { toastconfig } from '@/utils/toastconfig'
 import dayjs from 'dayjs'
 
+const getUndiscountedLineTotal = (purchaseDetails) => {
+  if (!Array.isArray(purchaseDetails)) return 0
+  return purchaseDetails.reduce((sum, pd) => {
+    const qty = Number(pd?.initialUsedQuantity ?? pd?.usedQuantity ?? 0)
+    return sum + Number(pd?.mrpPerTablet || 0) * qty
+  }, 0)
+}
+
+const getPharmacyLinePaidRatio = (
+  orderSummary,
+  purchasedItems,
+  orderDiscountMultiplier,
+) => {
+  const sumLineTotals = (purchasedItems || []).reduce(
+    (sum, item) => sum + Number(item?.totalCost || 0),
+    0,
+  )
+  const paidOrderAmount = Number(orderSummary?.paidOrderAmount ?? 0)
+  if (sumLineTotals > 0 && paidOrderAmount >= 0) {
+    return paidOrderAmount / sumLineTotals
+  }
+  return orderDiscountMultiplier
+}
+
 function SaleReturnPage() {
   const router = useRouter()
   const { tab = '0', orderId: urlOrderId = '' } = router.query
@@ -180,6 +204,7 @@ function SaleReturnPage() {
         const totalOrderAmount = Number(orderSummary.totalOrderAmount || 0)
         const paidOrderAmount = Number(orderSummary.paidOrderAmount || 0)
         const discountAmount = Number(orderSummary.discountAmount || 0)
+        const orderCouponCode = orderSummary.couponCode || null
         let discountMultiplier = 1
 
         if (totalOrderAmount > 0) {
@@ -190,6 +215,15 @@ function SaleReturnPage() {
               (totalOrderAmount - discountAmount) / totalOrderAmount
           }
         }
+
+        const purchasedItemsList = Array.isArray(orderInfoData.purchasedItems)
+          ? orderInfoData.purchasedItems
+          : []
+        const linePaidRatio = getPharmacyLinePaidRatio(
+          orderSummary,
+          purchasedItemsList,
+          discountMultiplier,
+        )
 
         // Check if purchasedItems exists and is an array
         if (!orderInfoData?.purchasedItems) {
@@ -234,10 +268,24 @@ function SaleReturnPage() {
           }
 
           orderInfoData.purchasedItems.forEach((item) => {
-            // Calculate rate per unit (matching invoice structure)
             const purchaseQty = item.purchaseQuantity || 0
-            const totalCost = Number(item.totalCost || 0) * discountMultiplier
-            const ratePerUnit = purchaseQty > 0 ? totalCost / purchaseQty : 0
+            const paidLineTotal = Number(item.totalCost || 0)
+            const paidLineEffective = paidLineTotal * linePaidRatio
+            const undiscountedLineTotal = getUndiscountedLineTotal(
+              item.purchaseDetails,
+            )
+            const ratePerUnit =
+              purchaseQty > 0 ? paidLineEffective / purchaseQty : 0
+            const mrpRatePerUnit =
+              purchaseQty > 0 && undiscountedLineTotal > 0
+                ? undiscountedLineTotal / purchaseQty
+                : ratePerUnit
+            const hasItemCoupon =
+              paidLineTotal === 0 && undiscountedLineTotal > 0
+            const hasOrderDiscount =
+              !hasItemCoupon &&
+              linePaidRatio < 0.999 &&
+              Number(orderSummary.discountAmount || 0) > 0
 
             // Aggregate purchase details if available
             let aggregatedDetails = {
@@ -279,9 +327,17 @@ function SaleReturnPage() {
               grnNo: aggregatedDetails.grnIds[0] || 'N/A',
               // Purchase quantity from invoice
               purchaseQuantity: purchaseQty,
-              // Rate per unit (matching invoice "Rate" column)
-              mrpPerTablet: aggregatedDetails.mrpPerTablet || ratePerUnit,
-              ratePerUnit: ratePerUnit, // Calculated rate
+              mrpPerTablet: aggregatedDetails.mrpPerTablet || mrpRatePerUnit,
+              mrpRatePerUnit,
+              ratePerUnit,
+              paidRatePerUnit: ratePerUnit,
+              paidLineTotal,
+              paidLineEffective,
+              undiscountedLineTotal,
+              linePaidRatio,
+              hasItemCoupon,
+              hasOrderDiscount,
+              orderCouponCode,
               // Return quantity (already returned)
               returnQuantity: item.returnQuantity || 0,
               // Batch numbers (comma-separated if multiple)
@@ -296,9 +352,8 @@ function SaleReturnPage() {
                   : null,
               // Used quantity (aggregated)
               usedQuantity: aggregatedDetails.usedQuantity || 0,
-              // Total cost (matching invoice)
-              totalCost: totalCost,
-              discountMultiplier,
+              totalCost: paidLineEffective,
+              discountMultiplier: linePaidRatio,
               // Store all purchase details for reference
               allPurchaseDetails: item.purchaseDetails || [],
             })
@@ -642,22 +697,31 @@ const PurchaseDetails = ({
   }, [returnHistory])
 
   const getRefundUnitPrice = (item, purchaseDetail = null) => {
+    const paidLineEffective = Number(
+      item?.paidLineEffective ?? item?.totalCost ?? 0,
+    )
+    const undiscountedLineTotal = Number(item?.undiscountedLineTotal || 0)
+    const mrpPerTablet = Number(
+      purchaseDetail?.mrpPerTablet ?? item?.mrpPerTablet ?? 0,
+    )
     const purchaseQty = Number(item?.purchaseQuantity || 0)
-    const multiplier = Number(item?.discountMultiplier ?? 1)
 
-    if (purchaseDetail?.mrpPerTablet != null) {
-      return Number(purchaseDetail.mrpPerTablet) * multiplier
+    if (paidLineEffective <= 0) {
+      return 0
     }
-
-    // ratePerUnit / totalCost are already discounted when items are mapped from the order.
+    if (undiscountedLineTotal > 0 && mrpPerTablet > 0) {
+      return (paidLineEffective / undiscountedLineTotal) * mrpPerTablet
+    }
+    if (item?.paidRatePerUnit != null) {
+      return Number(item.paidRatePerUnit)
+    }
     if (item?.ratePerUnit) {
       return Number(item.ratePerUnit)
     }
-    if (purchaseQty > 0 && item?.totalCost) {
-      return Number(item.totalCost) / purchaseQty
+    if (purchaseQty > 0) {
+      return paidLineEffective / purchaseQty
     }
-
-    return Number(item?.mrpPerTablet || 0) * multiplier
+    return mrpPerTablet
   }
 
   const computeRefundAmountForItem = (item, returnQty, returnInfoRows = []) => {
@@ -671,7 +735,7 @@ const PurchaseDetails = ({
         )
       }, 0)
     }
-    const rate = item.ratePerUnit || item.mrpPerTablet || 0
+    const rate = getRefundUnitPrice(item)
     return Number(rate) * returnQty
   }
 
@@ -1001,7 +1065,8 @@ const PurchaseDetails = ({
                   <TableCell>Item Name</TableCell>
                   <TableCell>GRN No</TableCell>
                   <TableCell>Quantity</TableCell>
-                  <TableCell>MRP per tablet</TableCell>
+                  <TableCell>Refund rate / tablet</TableCell>
+                  <TableCell>Discount / Coupon</TableCell>
                   <TableCell>Return Quantity</TableCell>
                   <TableCell>Refund Amount</TableCell>
                 </TableRow>
@@ -1012,11 +1077,21 @@ const PurchaseDetails = ({
                   const returnQty = parseFloat(returnQuantities[refId] || 0)
                   const remainingQty = getRemainingReturnQty(item)
                   const rate = getRefundUnitPrice(item)
+                  const mrpRate = Number(
+                    item.mrpRatePerUnit ?? item.mrpPerTablet ?? 0,
+                  )
+                  const showMrpStrike =
+                    mrpRate > 0 && Math.abs(mrpRate - rate) > 0.009
                   const refundAmount = computeRefundAmountForItem(
                     item,
                     returnQty,
                   )
                   const isSelected = selectedItems[refId] || returnQty > 0
+                  const discountLabel = item.hasItemCoupon
+                    ? '100% item coupon'
+                    : item.hasOrderDiscount
+                      ? 'Order coupon applied'
+                      : '—'
 
                   return (
                     <TableRow
@@ -1038,7 +1113,22 @@ const PurchaseDetails = ({
                       <TableCell>{item.itemName || 'N/A'}</TableCell>
                       <TableCell>{item.grnNo || item.grnId || 'N/A'}</TableCell>
                       <TableCell>{item.purchaseQuantity || 0}</TableCell>
-                      <TableCell>₹{rate.toFixed(2)}</TableCell>
+                      <TableCell>
+                        {showMrpStrike && (
+                          <Typography
+                            variant="caption"
+                            className="line-through text-gray-500 block"
+                          >
+                            MRP ₹{mrpRate.toFixed(2)}
+                          </Typography>
+                        )}
+                        <Typography variant="body2">
+                          ₹{rate.toFixed(2)}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">{discountLabel}</Typography>
+                      </TableCell>
                       <TableCell>
                         <TextField
                           type="number"

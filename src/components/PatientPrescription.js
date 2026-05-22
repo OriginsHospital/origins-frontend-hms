@@ -27,9 +27,11 @@ import { closeModal, openModal } from '@/redux/modalSlice'
 import {
   getLineBillsAndNotesForAppointment,
   getPatientPharmacyHistory,
+  getPharmacyMasterData,
   saveLineBillsAndNotes,
   printPrescription,
 } from '@/constants/apis'
+import { API_ROUTES } from '@/constants/constants'
 import { toast } from 'react-toastify'
 import { toastconfig } from '@/utils/toastconfig'
 import { Close } from '@mui/icons-material'
@@ -49,175 +51,7 @@ import {
 } from '@/utils/pharmacyAutoCompanions'
 import { mergeLineBillValuesOnCopy } from '@/utils/mergeLineBillValuesOnCopy'
 
-// Medicine Kit Configurations
-const CLEO_SHOT_KIT = {
-  kitName: 'CLEO SHOT',
-  kitValue: 'CLEO_SHOT_KIT',
-  medicines: [
-    { name: 'MOCELL INJ 600MG', quantity: 3 },
-    { name: 'MUCONICS 2ML', quantity: 1 },
-    { name: 'DS VIT - C 1.5 INJ', quantity: 1 },
-    { name: 'Americano MVI INJ', quantity: 1 },
-    { name: 'Cynocan 12', quantity: 1 },
-    { name: 'MAXX - TRACE', quantity: 1 },
-    { name: 'NIPRO SYRINGE 10ML', quantity: 2 },
-    { name: 'IV CANNULA-22', quantity: 1 },
-    { name: 'NS 100ML', quantity: 1 },
-    { name: 'EASY FIX', quantity: 1 },
-    { name: 'IV SET', quantity: 1 },
-  ],
-}
-
-const NAPO_SHOT_KIT = {
-  kitName: 'NAPO SHOT',
-  kitValue: 'NAPO_SHOT_KIT',
-  medicines: [
-    { name: 'MOCELL INJ 600MG', quantity: 3 },
-    { name: 'LEVO VEN', quantity: 1 },
-    { name: 'MUCONICS 2ML', quantity: 1 },
-    { name: 'DS VIT - C 1.5 INJ', quantity: 1 },
-    { name: 'Americano MVI INJ', quantity: 1 },
-    { name: 'Cynocan 12', quantity: 1 },
-    { name: 'MAXX - TRACE', quantity: 1 },
-    { name: 'NIPRO SYRINGE 10ML', quantity: 2 },
-    { name: 'IV CANNULA-22', quantity: 1 },
-    { name: 'NS 100ML', quantity: 1 },
-    { name: 'EASY FIX', quantity: 1 },
-    { name: 'IV SET', quantity: 1 },
-  ],
-}
-
-const HYFOSY_KIT = {
-  kitName: 'HYFOSY KIT',
-  kitValue: 'HYFOSY_KIT',
-  medicines: [
-    { name: 'FOLEY CATHETER 10', quantity: 1 },
-    { name: 'LOX-2% JELLY', quantity: 1 },
-    { name: 'NIPRO SYRINGE 10ML', quantity: 1 },
-    { name: 'NS 100ML', quantity: 1 },
-    { name: 'Surgicare 6.5 Glove', quantity: 1 },
-    { name: 'BUSCOGAST INJ', quantity: 1 },
-    { name: 'NIPRO SYRINGE 2.5ML', quantity: 2 },
-    { name: 'ZADY 500MG', quantity: 5 },
-    { name: 'DROTIN-M TAB', quantity: 3 },
-  ],
-}
-
-const FLUSH_KIT = {
-  kitName: 'FLUSH KIT',
-  kitValue: 'FLUSH_KIT',
-  medicines: [
-    { name: 'EUTRIG-HP 2000 INJ', quantity: 1 },
-    { name: 'NIPRO SYRINGE 2.5ML', quantity: 2 },
-    { name: 'NIPRO SYRINGE 5ML', quantity: 1 },
-    { name: 'DISPOVAN NEEDLE 26', quantity: 1 },
-    { name: 'IUIcatheter', quantity: 1 },
-    { name: 'NS 100ML', quantity: 1 },
-    { name: 'Cleen Care Gloves', quantity: 1 },
-  ],
-}
-
-const FLUID_ASPIRATIONS_KIT = {
-  kitName: 'FLUID ASPIRATIONS KIT',
-  kitValue: 'FLUID_ASPIRATIONS_KIT',
-  medicines: [
-    { name: 'IUIcatheter', quantity: 1 },
-    { name: 'NIPRO SYRINGE 5ML', quantity: 1 },
-    { name: 'NS 100ML', quantity: 1 },
-    { name: 'Cleen Care Gloves', quantity: 1 },
-  ],
-}
-
-const BIOPSY_KIT = {
-  kitName: 'BIOPSY KIT',
-  kitValue: 'BIOPSY_KIT',
-  medicines: [
-    { name: 'ENDO-PSY CATHETER', quantity: 1 },
-    { name: 'NS 100ML', quantity: 1 },
-    { name: 'Cleen Care Gloves', quantity: 1 },
-    { name: 'BUSCOGAST INJ', quantity: 1 },
-    { name: 'NIPRO SYRINGE 2.5ML', quantity: 1 },
-  ],
-}
-
-const OPU_KIT = {
-  kitName: 'OPU KIT',
-  kitValue: 'OPU_KIT',
-  medicines: [
-    { name: 'IV CANNULA', quantity: 1 },
-    { name: 'IV CANNULA-22', quantity: 1 },
-    { name: 'IV SET', quantity: 1 },
-    { name: 'EASY FIX', quantity: 1 },
-    { name: 'NIPRO SYRINGE 2.5ML', quantity: 5 },
-    { name: 'NIPRO SYRINGE 5ML', quantity: 5 },
-    { name: 'NIPRO SYRINGE 10ML', quantity: 3 },
-    { name: 'NS 100ML', quantity: 3 },
-    { name: 'RL 500ML', quantity: 1 },
-    { name: 'NS 500ML', quantity: 1 },
-    { name: 'FACE MASK', quantity: 6 },
-    { name: 'HEAD CAPS', quantity: 6 },
-    { name: 'UNDER PADS ALL', quantity: 1 },
-    { name: 'TRIMMER', quantity: 1 },
-    { name: 'MONOSET 1GM', quantity: 1 },
-    { name: 'NEOMIT INJ', quantity: 1 },
-    { name: 'PANTOTAZ 40 INJ', quantity: 1 },
-    { name: 'TEXAKIND INJ', quantity: 1 },
-    { name: 'K-STAT INJ', quantity: 1 },
-    { name: 'NEOROF 20ML INJ', quantity: 1 },
-    { name: 'PYROLATE INJ', quantity: 1 },
-    { name: 'SKINTAC 7.5GLOV', quantity: 1 },
-    { name: 'SKINTAC 6.5 GLOV', quantity: 1 },
-  ],
-}
-
-const CERVICAL_CERCLAGE_KIT = {
-  kitName: 'CERVICAL CERCLAGE',
-  kitValue: 'CERVICAL_CERCLAGE_KIT',
-  medicines: [
-    { name: 'IV SET', quantity: 1 },
-    { name: 'IV CANNULA', quantity: 1 },
-    { name: 'EASY FIX', quantity: 1 },
-    { name: 'MONOCEF 1 GM', quantity: 1 },
-    { name: 'PANTOTAZ 40 INJ', quantity: 1 },
-    { name: 'NEOMIT INJ', quantity: 1 },
-    { name: 'NEOROF 20', quantity: 1 },
-    { name: 'PYROLATE INJ', quantity: 1 },
-    { name: 'K STAT', quantity: 1 },
-    { name: 'TEXAKIND', quantity: 1 },
-    { name: 'FACE MASK', quantity: 8 },
-    { name: 'HEAD CAPS', quantity: 8 },
-    { name: 'UNDER PADS', quantity: 1 },
-    { name: 'NIPRO SYRINGE 5ML', quantity: 5 },
-    { name: 'NIPRO SYRINGE 10ML', quantity: 5 },
-    { name: 'NIPRO SYRINGE 2.5 ML', quantity: 5 },
-    { name: 'SURGICAL GLOVE 6.5', quantity: 6 },
-    { name: 'TRUSILK', quantity: 1 },
-  ],
-}
-
-const TRANSFER_KIT = {
-  kitName: 'TRANSFER KIT',
-  kitValue: 'TRANSFER_KIT',
-  medicines: [
-    { name: 'SKINTAC 6.5 GLOV', quantity: 1 },
-    { name: 'SKINTAC 7.5GLOV', quantity: 1 },
-    { name: 'NS 100ML', quantity: 1 },
-    { name: 'Asthalin 2 mg tab', quantity: 2 },
-  ],
-}
-
-// Array of all available kits
-const ALL_MEDICINE_KITS = [
-  CLEO_SHOT_KIT,
-  NAPO_SHOT_KIT,
-  HYFOSY_KIT,
-  FLUSH_KIT,
-  FLUID_ASPIRATIONS_KIT,
-  BIOPSY_KIT,
-  OPU_KIT,
-  CERVICAL_CERCLAGE_KIT,
-  TRANSFER_KIT,
-]
+const NAPO_SHOT_KIT_VALUE = 'NAPO_SHOT_KIT'
 
 const JoditEditor = dynamic(() => import('jodit-react'), {
   ssr: false,
@@ -412,6 +246,28 @@ function PatientPrescription({
     })
     return map
   }, [billTypes])
+
+  const { data: activePharmacyKitsResponse } = useQuery({
+    queryKey: ['activePharmacyKits'],
+    queryFn: () =>
+      getPharmacyMasterData(
+        user.accessToken,
+        API_ROUTES.GET_ACTIVE_PHARMACY_KITS,
+      ),
+    enabled: !!user?.accessToken && modal.key === 'addPrescription',
+  })
+
+  const medicineKits = useMemo(() => {
+    const kits = activePharmacyKitsResponse?.data
+    if (!Array.isArray(kits)) {
+      return []
+    }
+    return kits.map((kit) => ({
+      kitName: kit.kitName,
+      kitValue: kit.kitValue,
+      medicines: Array.isArray(kit.medicines) ? kit.medicines : [],
+    }))
+  }, [activePharmacyKitsResponse])
 
   const { data: lineBillsAndNotesDataForCurrentAppointment, isLoading } =
     useQuery({
@@ -671,7 +527,7 @@ function PatientPrescription({
 
       // Check for all kits in selected options
       const selectedKits = []
-      ALL_MEDICINE_KITS.forEach((kit) => {
+      medicineKits.forEach((kit) => {
         const kitSelected = selectedOptions?.find(
           (option) =>
             option.value === kit.kitValue ||
@@ -693,8 +549,8 @@ function PatientPrescription({
 
       if (selectedKits.length > 0) {
         // Remove all kit options from selected options (they're just triggers, not actual medicines)
-        const kitValues = ALL_MEDICINE_KITS.map((k) => k.kitValue)
-        const kitNames = ALL_MEDICINE_KITS.map((k) => k.kitName.toUpperCase())
+        const kitValues = medicineKits.map((k) => k.kitValue)
+        const kitNames = medicineKits.map((k) => k.kitName.toUpperCase())
         const filteredOptions = selectedOptions.filter(
           (option) =>
             !kitValues.includes(option.value) &&
@@ -1130,13 +986,13 @@ function PatientPrescription({
                   if (billType.name === 'Pharmacy') {
                     // Pharmacy in "Prescription" should allow CLEO SHOT,
                     // but not NAPO SHOT (spouse will handle NAPO).
-                    const kitOptions = ALL_MEDICINE_KITS.filter(
-                      (kit) => kit.kitValue !== NAPO_SHOT_KIT.kitValue,
-                    ).map((kit) => ({
-                      value: kit.kitValue,
-                      label: kit.kitName,
-                      isKit: true, // Flag to identify it's a kit
-                    }))
+                    const kitOptions = medicineKits
+                      .filter((kit) => kit.kitValue !== NAPO_SHOT_KIT_VALUE)
+                      .map((kit) => ({
+                        value: kit.kitValue,
+                        label: kit.kitName,
+                        isKit: true, // Flag to identify it's a kit
+                      }))
                     selectOptions = [...kitOptions, ...selectOptions]
                   }
                   const paidItemsBlock = (

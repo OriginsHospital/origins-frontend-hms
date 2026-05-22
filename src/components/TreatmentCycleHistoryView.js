@@ -7,6 +7,7 @@ import {
   getTreatmentSheetByTreatmentCycleId,
   getDischargeSummaryTemplate,
 } from '@/constants/apis'
+import { isIuiTreatment } from '@/utils/treatmentTypeUtils'
 
 const JoditEditor = dynamic(() => import('jodit-react'), {
   ssr: false,
@@ -149,8 +150,9 @@ function FollicularReadOnlyTable({ template, formData }) {
 // Read-only viewer for a previous treatment cycle - shows the follicular sheet
 // and the cycle results (discharge summary) so the consulting doctor can review
 // historical cycles directly from the appointments timeline.
-function TreatmentCycleHistoryView({ treatmentCycleId }) {
+function TreatmentCycleHistoryView({ treatmentCycleId, treatmentType }) {
   const user = useSelector((store) => store.user)
+  const showDischargeSummary = !isIuiTreatment({ treatmentType })
 
   const {
     data: treatmentSheet,
@@ -182,7 +184,7 @@ function TreatmentCycleHistoryView({ treatmentCycleId }) {
     isError: isDischargeSummaryError,
   } = useQuery({
     queryKey: ['historyDischargeSummary', treatmentCycleId],
-    enabled: !!treatmentCycleId,
+    enabled: !!treatmentCycleId && showDischargeSummary,
     queryFn: async () => {
       const responsejson = await getDischargeSummaryTemplate(
         user.accessToken,
@@ -230,29 +232,33 @@ function TreatmentCycleHistoryView({ treatmentCycleId }) {
         )}
       </div>
 
-      <div className="border rounded-lg p-3">
-        <div className="flex justify-between items-center mb-2">
-          <span className="text-sm font-semibold text-secondary">
-            Cycle Results
-          </span>
-        </div>
-        {isDischargeSummaryLoading ? (
-          <div className="flex items-center gap-2 p-2">
-            <CircularProgress size={16} />
-            <span className="text-xs opacity-60">Loading cycle results...</span>
+      {showDischargeSummary && (
+        <div className="border rounded-lg p-3">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-sm font-semibold text-secondary">
+              Cycle Results
+            </span>
           </div>
-        ) : isDischargeSummaryError ? (
-          <span className="opacity-50 text-xs">
-            Unable to load cycle results
-          </span>
-        ) : !dischargeSummary ? (
-          <span className="opacity-50 text-xs">
-            No cycle results recorded for this cycle
-          </span>
-        ) : (
-          <ReadOnlyRichText contents={dischargeSummary} />
-        )}
-      </div>
+          {isDischargeSummaryLoading ? (
+            <div className="flex items-center gap-2 p-2">
+              <CircularProgress size={16} />
+              <span className="text-xs opacity-60">
+                Loading cycle results...
+              </span>
+            </div>
+          ) : isDischargeSummaryError ? (
+            <span className="opacity-50 text-xs">
+              Unable to load cycle results
+            </span>
+          ) : !dischargeSummary ? (
+            <span className="opacity-50 text-xs">
+              No cycle results recorded for this cycle
+            </span>
+          ) : (
+            <ReadOnlyRichText contents={dischargeSummary} />
+          )}
+        </div>
+      )}
     </div>
   )
 }

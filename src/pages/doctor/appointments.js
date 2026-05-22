@@ -74,6 +74,7 @@ import VitalsInformation from '@/components/VitalsInformation'
 import InfoItem from '@/components/InfoItem'
 import Prescription from '@/components/Prescription'
 import TreatmentCycleHistoryView from '@/components/TreatmentCycleHistoryView'
+import { isIuiTreatment } from '@/utils/treatmentTypeUtils'
 import PatientDetailsSkeleton from '@/fallbacks/PatientDetailsSkeleton'
 import { toast } from 'react-toastify'
 import s from 'aws-s3'
@@ -828,6 +829,7 @@ function ConsultationsAndTreatments({
                           <Divider className="my-2" />
                           <TreatmentCycleHistoryView
                             treatmentCycleId={eachTreatment.treatmentCycleId}
+                            treatmentType={eachTreatment.treatmentType}
                           />
                         </div>
                       )}
@@ -1049,6 +1051,23 @@ export default function Appointments() {
       return responsejson.data
     },
   })
+
+  const isCurrentTreatmentIui = useMemo(() => {
+    const activeCycle = patientDetails?.treatments?.find(
+      (t) => t.treatmentCycleId === selectedPatient?.treatmentCycleId,
+    )
+    return isIuiTreatment({
+      treatmentTypeId:
+        patientDetails?.patientInfo?.treatmentDetails?.treatmentTypeId,
+      treatementType:
+        patientDetails?.patientInfo?.treatmentDetails?.treatementType,
+      treatmentType: activeCycle?.treatmentType,
+    })
+  }, [
+    patientDetails?.patientInfo?.treatmentDetails,
+    patientDetails?.treatments,
+    selectedPatient?.treatmentCycleId,
+  ])
 
   const [searchTab, setSearchTab] = useState('date') // 'date' or 'patient'
   const [selectedSearchPatient, setSelectedSearchPatient] = useState(null)
@@ -1787,15 +1806,17 @@ export default function Appointments() {
                     >
                       View OPU sheet
                     </Button>
-                    <Button
-                      variant="outlined"
-                      className="text-secondary capitalize col-span-3 "
-                      onClick={() =>
-                        dispatch(openModal('DischargeSummarySheet'))
-                      }
-                    >
-                      Discharge Summary
-                    </Button>
+                    {!isCurrentTreatmentIui && (
+                      <Button
+                        variant="outlined"
+                        className="text-secondary capitalize col-span-3 "
+                        onClick={() =>
+                          dispatch(openModal('DischargeSummarySheet'))
+                        }
+                      >
+                        Discharge Summary
+                      </Button>
+                    )}
                     {patientDetails?.patientInfo?.activeVisitId && (
                       <Button
                         variant="outlined"
@@ -1846,15 +1867,17 @@ export default function Appointments() {
                     vitalInfo={selectedPatient?.vitalInfo}
                   />
                 </Modal>
-                <Modal
-                  uniqueKey="DischargeSummarySheet"
-                  maxWidth="xl"
-                  closeOnOutsideClick={true}
-                >
-                  <DischargeSummarSheet
-                    TreatmentCycleId={selectedPatient?.treatmentCycleId}
-                  />
-                </Modal>
+                {!isCurrentTreatmentIui && (
+                  <Modal
+                    uniqueKey="DischargeSummarySheet"
+                    maxWidth="xl"
+                    closeOnOutsideClick={true}
+                  >
+                    <DischargeSummarSheet
+                      TreatmentCycleId={selectedPatient?.treatmentCycleId}
+                    />
+                  </Modal>
+                )}
                 <Modal
                   uniqueKey="PickupSheet"
                   maxWidth="xl"

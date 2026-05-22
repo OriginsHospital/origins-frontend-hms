@@ -1981,12 +1981,25 @@ export const addPaymentDetails = async (token, payload) => {
   )
   return response.json()
 }
-export const getStockExpiryReport = async (token) => {
+export const getStockExpiryReport = async (token, params = {}) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
+  const query = new URLSearchParams()
+  if (params.branchId != null && params.branchId !== '') {
+    query.append('branchId', String(params.branchId))
+  }
+  if (params.reportType) {
+    query.append('reportType', params.reportType)
+  }
+  if (params.nearExpireDays != null) {
+    query.append('nearExpireDays', String(params.nearExpireDays))
+  }
+  const queryString = query.toString()
   const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_STOCK_EXPIRY_REPORT}`,
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_STOCK_EXPIRY_REPORT}${
+      queryString ? `?${queryString}` : ''
+    }`,
     {
       method: 'GET',
       headers: myHeaders,
@@ -3661,6 +3674,30 @@ export const getDischargeSummaryTemplate = async (token, TreatmentCycleId) => {
     {
       method: 'GET',
       headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const uploadDischargeSummaryImage = async (
+  token,
+  treatmentCycleId,
+  file,
+) => {
+  const formData = new FormData()
+  formData.append('files[0]', file)
+
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.UPLOAD_DISCHARGE_SUMMARY_IMAGE}/${treatmentCycleId}`,
+    {
+      method: 'POST',
+      headers: myHeaders,
+      body: formData,
       redirect: 'follow',
       credentials: 'include',
     },

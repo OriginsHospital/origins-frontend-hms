@@ -27,6 +27,7 @@ import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query'
 import { closeModal, openModal } from '@/redux/modalSlice'
 import { ACCESS_TYPES, API_ROUTES } from '@/constants/constants'
 import PharmacyMasterTable from '@/components/PharmacyMasterTable'
+import PharmacyKitMasterPanel from '@/components/PharmacyKitMasterPanel'
 import Modal from '@/components/Modal'
 import Accordion from '@mui/material/Accordion'
 import AccordionDetails from '@mui/material/AccordionDetails'
@@ -1068,6 +1069,10 @@ const tabs = {
     ],
     editUrl: API_ROUTES.EDIT_PHARMACY_ITEM,
   },
+  pharmacyKit: {
+    label: 'Pharmacy Kit',
+    useCustomPanel: true,
+  },
   departments: {
     label: 'Departments',
     getUrl: API_ROUTES.GET_DEPARTMENTS_LIST,
@@ -1400,6 +1405,7 @@ function Managefields() {
     queryKey: ['pharmacyMasterData', selectedTab],
     queryFn: () =>
       getPharmacyMasterData(userDetails?.accessToken, tabs[selectedTab].getUrl),
+    enabled: !!tabs[selectedTab]?.getUrl,
   })
 
   const createHandler = useMutation({
@@ -1743,6 +1749,9 @@ function Managefields() {
   }, [searchQuery])
 
   const handleOpenCreateModal = () => {
+    if (tabs[selectedTab]?.useCustomPanel || !tabs[selectedTab]?.createFields) {
+      return
+    }
     setFormData({})
     setPayload({})
     dispatch(openModal(selectedTab + 'createModal'))
@@ -1838,29 +1847,36 @@ function Managefields() {
             .sort((a, b) => tabs[a].label.localeCompare(tabs[b].label))
             .map((tab) => (
               <TabPanel value={tab} key={tab + 'tabPanel'}>
-                <div>
-                  <div className="flex justify-end">
-                    <Button
-                      variant="outlined"
-                      className="mb-3"
-                      startIcon={<Add />}
-                      onClick={handleOpenCreateModal}
-                    >
-                      Add New
-                    </Button>
-                  </div>
-                </div>
-                <PharmacyMasterTable
-                  rows={MasterData?.data}
-                  fields={tabs[selectedTab]?.fields}
-                  createFields={tabs[selectedTab]?.createFields}
-                  editRowHandler={editRowHandler}
-                  selectedRow={selectedRow}
-                  setSelectedRow={setSelectedRow}
-                  handleRowEdit={handleRowEdit}
-                  getDynamicOptions={getDynamicOptions}
-                  // getEachFieldBasedOnType={getEachFieldBasedOnType}
-                />
+                {tabs[tab]?.useCustomPanel ? (
+                  <PharmacyKitMasterPanel
+                    accessToken={userDetails?.accessToken}
+                  />
+                ) : (
+                  <>
+                    <div>
+                      <div className="flex justify-end">
+                        <Button
+                          variant="outlined"
+                          className="mb-3"
+                          startIcon={<Add />}
+                          onClick={handleOpenCreateModal}
+                        >
+                          Add New
+                        </Button>
+                      </div>
+                    </div>
+                    <PharmacyMasterTable
+                      rows={MasterData?.data}
+                      fields={tabs[selectedTab]?.fields}
+                      createFields={tabs[selectedTab]?.createFields}
+                      editRowHandler={editRowHandler}
+                      selectedRow={selectedRow}
+                      setSelectedRow={setSelectedRow}
+                      handleRowEdit={handleRowEdit}
+                      getDynamicOptions={getDynamicOptions}
+                    />
+                  </>
+                )}
               </TabPanel>
             ))}
           <TabPanel value={'categories'}>
@@ -1936,41 +1952,43 @@ function Managefields() {
           </TabPanel>
         </div>
       </TabContext>
-      <Modal
-        uniqueKey={selectedTab + 'createModal'}
-        closeOnOutsideClick={false}
-        maxWidth={'xs'}
-      >
-        <div className="flex justify-between items-center">
-          <Typography variant="h6">
-            Add New {tabs[selectedTab]?.label}
-          </Typography>
-          <IconButton onClick={() => dispatch(closeModal())}>
-            <Close />
-          </IconButton>
-        </div>
-        <div className="flex flex-col gap-5 p-3">
-          {tabs[selectedTab]?.createFields.map((field) =>
-            getEachFieldBasedOnType(
-              field,
-              formData,
-              selectedRow,
-              handleFormChange,
-              true,
-              getDynamicOptions,
-            ),
-          )}
-          <div className="flex justify-end">
-            <Button
-              onClick={handleCreate}
-              className="capitalize "
-              variant="outlined"
-            >
-              Add
-            </Button>
+      {tabs[selectedTab]?.createFields && (
+        <Modal
+          uniqueKey={selectedTab + 'createModal'}
+          closeOnOutsideClick={false}
+          maxWidth={'xs'}
+        >
+          <div className="flex justify-between items-center">
+            <Typography variant="h6">
+              Add New {tabs[selectedTab]?.label}
+            </Typography>
+            <IconButton onClick={() => dispatch(closeModal())}>
+              <Close />
+            </IconButton>
           </div>
-        </div>
-      </Modal>
+          <div className="flex flex-col gap-5 p-3">
+            {tabs[selectedTab].createFields.map((field) =>
+              getEachFieldBasedOnType(
+                field,
+                formData,
+                selectedRow,
+                handleFormChange,
+                true,
+                getDynamicOptions,
+              ),
+            )}
+            <div className="flex justify-end">
+              <Button
+                onClick={handleCreate}
+                className="capitalize "
+                variant="outlined"
+              >
+                Add
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
       <Modal
         uniqueKey="addSubcategory"
         maxWidth="xs"

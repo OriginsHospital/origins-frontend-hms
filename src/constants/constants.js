@@ -258,6 +258,7 @@ export const API_ROUTES = {
   GET_DISCHARGE_SUMMARY_TEMPLATE:
     '/patients/getDischargeSummarySheetByTreatmentId',
   SAVE_DISCHARGE_SUMMARY: '/patients/saveDischargeSummarySheet',
+  UPLOAD_DISCHARGE_SUMMARY_IMAGE: '/patients/uploadDischargeSummaryImage',
   GET_PICKUP_SHEET_TEMPLATE: '/patients/getPickUpSheetByTreatmentId',
   SAVE_PICKUP_SHEET: '/patients/savePickUpSheet',
   //coupons
@@ -325,6 +326,11 @@ export const API_ROUTES = {
   GET_ALL_PHARMACY_ITEMS: '/masterData/pharmacy/getAllPharmacyItems',
   ADD_NEW_PHARMACY_ITEM: '/masterData/pharmacy/addNewPharmacyItem',
   EDIT_PHARMACY_ITEM: '/masterData/pharmacy/editPharmacyItem',
+
+  GET_ALL_PHARMACY_KITS: '/masterData/pharmacyKit/getAllPharmacyKits',
+  GET_ACTIVE_PHARMACY_KITS: '/masterData/pharmacyKit/getActivePharmacyKits',
+  ADD_NEW_PHARMACY_KIT: '/masterData/pharmacyKit/addNewPharmacyKit',
+  EDIT_PHARMACY_KIT: '/masterData/pharmacyKit/editPharmacyKit',
   GET_ITEM_PURCHASE_HISTORY_REPORT: '/reports/itemPurchaseHistoryReport',
   ADD_NEW_INCIDENT: '/masterData/incident/addNewIncident',
   EDIT_INCIDENT: '/masterData/incident/editIncident',
