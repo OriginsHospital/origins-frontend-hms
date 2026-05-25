@@ -1724,7 +1724,7 @@ export const getPharmacyDetailsByDate = async (token, date, branch) => {
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
   const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_PHARMACYITEMS_BY_DATE}?date=${date}&&branch=${branch}`,
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_PHARMACYITEMS_BY_DATE}?date=${date}&branch=${branch}`,
     {
       method: 'GET',
       headers: myHeaders,

@@ -106,6 +106,32 @@ const hasActivePackageIndicator = (header) => {
   )
 }
 
+/** MySQL JSON_ARRAYAGG may arrive as a string; optional .forEach on strings is a no-op. */
+const parsePharmacyItemDetails = (itemDetails) => {
+  if (!itemDetails) return []
+  if (Array.isArray(itemDetails)) {
+    return itemDetails.filter(Boolean)
+  }
+  if (typeof itemDetails === 'string') {
+    try {
+      const parsed = JSON.parse(itemDetails)
+      return Array.isArray(parsed) ? parsed.filter(Boolean) : []
+    } catch {
+      return []
+    }
+  }
+  return []
+}
+
+const formatPharmacyQueryDate = (value) => {
+  if (!value) return ''
+  if (dayjs.isDayjs(value)) {
+    return value.format('YYYY-MM-DD')
+  }
+  const parsed = dayjs(value)
+  return parsed.isValid() ? parsed.format('YYYY-MM-DD') : ''
+}
+
 const ActivePackageDot = ({ show }) => {
   if (!show) return null
 
@@ -2962,80 +2988,91 @@ function Index() {
     setSelectedBranch(branchId)
     updateURL(date, branchId)
   }
-  const { data: patientData, isLoading: isValuesLoading } = useQuery({
+  const {
+    data: patientData,
+    isLoading: isValuesLoading,
+    isError,
+  } = useQuery({
     queryKey: ['pharmacyModuleInfoByDate', date, selectedbranch],
-    enabled: !!date,
+    enabled: !!date && selectedbranch != null && selectedbranch !== '',
     queryFn: async () => {
       const res = await getPharmacyDetailsByDate(
         user?.accessToken,
-        `${date.$y}-${date.$M + 1}-${date.$D}`,
+        formatPharmacyQueryDate(date),
         selectedbranch,
       )
 
       if (res.status !== 200) {
         throw new Error(
-          'Error occurred while fetching medicine details for pharmacy',
+          res?.message ||
+            'Error occurred while fetching medicine details for pharmacy',
         )
       }
 
       const obj = {}
-      const fetchedData = res.data
+      const fetchedData = Array.isArray(res.data) ? res.data : []
 
-      fetchedData?.forEach((patientHeader) => {
-        patientHeader?.itemDetails?.forEach((itemDetails) => {
-          const stage = itemDetails?.itemStage
-          const appointmentId = patientHeader?.appointmentId
-          const orderGroupKey =
-            stage === 'PAID'
-              ? itemDetails?.orderDbId ||
-                itemDetails?.orderId ||
-                `legacy-${appointmentId}`
-              : 'NA'
-          const groupKey =
-            stage === 'PAID'
-              ? `${appointmentId}-${orderGroupKey}`
-              : `${appointmentId}`
-
-          if (!obj[stage]) {
-            obj[stage] = []
-          }
-
-          const existingPatientIndex = obj[stage].findIndex(
-            (item) => item[groupKey],
-          )
-
-          if (existingPatientIndex !== -1) {
-            // Add to existing patient's items
-            obj[stage][existingPatientIndex][groupKey].itemDetails.push(
-              itemDetails,
-            )
-            if (stage === 'PAID') {
-              obj[stage][existingPatientIndex][groupKey].header = {
-                ...obj[stage][existingPatientIndex][groupKey].header,
-                invoiceOrderId:
-                  obj[stage][existingPatientIndex][groupKey].header
-                    ?.invoiceOrderId || itemDetails?.orderId,
-                invoiceDbId:
-                  obj[stage][existingPatientIndex][groupKey].header
-                    ?.invoiceDbId || itemDetails?.orderDbId,
-              }
+      fetchedData.forEach((patientHeader) => {
+        parsePharmacyItemDetails(patientHeader?.itemDetails).forEach(
+          (itemDetails) => {
+            const stage = itemDetails?.itemStage
+            if (!stage || !['PRESCRIBED', 'PACKED', 'PAID'].includes(stage)) {
+              return
             }
-          } else {
-            // Create new patient entry
-            const { itemDetails: _, ...headerInfo } = patientHeader
-            obj[stage].push({
-              [groupKey]: {
-                header: {
-                  ...headerInfo,
+            const appointmentId = patientHeader?.appointmentId
+            const orderGroupKey =
+              stage === 'PAID'
+                ? itemDetails?.orderDbId ||
+                  itemDetails?.orderId ||
+                  `legacy-${appointmentId}`
+                : 'NA'
+            const groupKey =
+              stage === 'PAID'
+                ? `${appointmentId}-${orderGroupKey}`
+                : `${appointmentId}`
+
+            if (!obj[stage]) {
+              obj[stage] = []
+            }
+
+            const existingPatientIndex = obj[stage].findIndex(
+              (item) => item[groupKey],
+            )
+
+            if (existingPatientIndex !== -1) {
+              // Add to existing patient's items
+              obj[stage][existingPatientIndex][groupKey].itemDetails.push(
+                itemDetails,
+              )
+              if (stage === 'PAID') {
+                obj[stage][existingPatientIndex][groupKey].header = {
+                  ...obj[stage][existingPatientIndex][groupKey].header,
                   invoiceOrderId:
-                    stage === 'PAID' ? itemDetails?.orderId : null,
-                  invoiceDbId: stage === 'PAID' ? itemDetails?.orderDbId : null,
+                    obj[stage][existingPatientIndex][groupKey].header
+                      ?.invoiceOrderId || itemDetails?.orderId,
+                  invoiceDbId:
+                    obj[stage][existingPatientIndex][groupKey].header
+                      ?.invoiceDbId || itemDetails?.orderDbId,
+                }
+              }
+            } else {
+              // Create new patient entry
+              const { itemDetails: _, ...headerInfo } = patientHeader
+              obj[stage].push({
+                [groupKey]: {
+                  header: {
+                    ...headerInfo,
+                    invoiceOrderId:
+                      stage === 'PAID' ? itemDetails?.orderId : null,
+                    invoiceDbId:
+                      stage === 'PAID' ? itemDetails?.orderDbId : null,
+                  },
+                  itemDetails: [itemDetails],
                 },
-                itemDetails: [itemDetails],
-              },
-            })
-          }
-        })
+              })
+            }
+          },
+        )
       })
 
       return obj
@@ -3092,22 +3129,25 @@ function Index() {
 
   // Handle URL parameters and set initial values
   useEffect(() => {
+    if (!router.isReady) return
+
     const { date: urlDate, branch: urlBranch } = router.query
 
     if (urlDate && urlBranch) {
-      // URL has both parameters, use them
-      setDate(dayjs(urlDate))
-      setSelectedBranch(urlBranch)
-    } else if (defaultBranch?.id) {
-      // Set defaults and update URL only if we have branch data
-      const today = dayjs(new Date())
-      const firstBranch = defaultBranch.id
+      const parsedDate = dayjs(urlDate)
+      if (parsedDate.isValid()) {
+        setDate(parsedDate)
+      }
+      setSelectedBranch(Number(urlBranch))
+      return
+    }
 
+    if (defaultBranch?.id) {
+      const today = dayjs()
+      const firstBranch = defaultBranch.id
       setDate(today)
       setSelectedBranch(firstBranch)
-
-      // Update URL with default values
-      router.push(
+      router.replace(
         {
           pathname: router.pathname,
           query: {
@@ -3119,14 +3159,7 @@ function Index() {
         { shallow: true },
       )
     }
-  }, [router.query, defaultBranch?.id])
-
-  // Set initial date if not set from URL
-  useEffect(() => {
-    if (!router.query.date && !date) {
-      setDate(dayjs(new Date()))
-    }
-  }, [])
+  }, [router.isReady, router.query, defaultBranch?.id])
   return (
     <div>
       <div className="flex justify-between flex-row p-3">
@@ -3169,7 +3202,17 @@ function Index() {
                 </Typography>
               </Box>
               <Stack spacing={2} style={{ overflowY: 'auto', height: '100%' }}>
-                {patientData && patientData[column?.label] ? (
+                {isValuesLoading ? (
+                  <div className="w-full h-full flex justify-center items-center">
+                    <span className="opacity-50">Loading...</span>
+                  </div>
+                ) : isError ? (
+                  <div className="w-full h-full flex justify-center items-center">
+                    <span className="opacity-50">
+                      Failed to load pharmacy details
+                    </span>
+                  </div>
+                ) : patientData && patientData[column?.label] ? (
                   <RenderAccordianComponent
                     key={column?.label + 'indexAccordion'}
                     patientDetails={patientData[column?.label]}

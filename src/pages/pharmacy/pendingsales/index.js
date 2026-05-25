@@ -96,9 +96,14 @@ function PendingSalesPage() {
     queryKey: ['pendingSalesByDate', date, selectedbranch],
     enabled: !!date && !!selectedbranch,
     queryFn: async () => {
+      const dateStr = dayjs.isDayjs(date)
+        ? date.format('YYYY-MM-DD')
+        : dayjs(date).isValid()
+          ? dayjs(date).format('YYYY-MM-DD')
+          : ''
       const res = await getPharmacyDetailsByDate(
         user?.accessToken,
-        `${date.$y}-${date.$M + 1}-${date.$D}`,
+        dateStr,
         selectedbranch,
       )
 
@@ -108,12 +113,28 @@ function PendingSalesPage() {
         )
       }
 
-      const fetchedData = res.data || []
+      const fetchedData = Array.isArray(res.data) ? res.data : []
+
+      const parseItemDetails = (itemDetails) => {
+        if (!itemDetails) return []
+        if (Array.isArray(itemDetails)) return itemDetails.filter(Boolean)
+        if (typeof itemDetails === 'string') {
+          try {
+            const parsed = JSON.parse(itemDetails)
+            return Array.isArray(parsed) ? parsed.filter(Boolean) : []
+          } catch {
+            return []
+          }
+        }
+        return []
+      }
 
       // Filter items with balance > 0 (prescribedQuantity - purchaseQuantity > 0)
       const pendingItems = []
-      fetchedData?.forEach((patientHeader) => {
-        const filteredItems = patientHeader?.itemDetails?.filter((item) => {
+      fetchedData.forEach((patientHeader) => {
+        const filteredItems = parseItemDetails(
+          patientHeader?.itemDetails,
+        ).filter((item) => {
           const purchaseQty = item.purchaseQuantity || 0
           const prescribedQty = item.prescribedQuantity || 0
           const balance = prescribedQty - purchaseQty
