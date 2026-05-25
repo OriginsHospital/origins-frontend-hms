@@ -95,6 +95,9 @@ function PendingSalesPage() {
   const { data: patientData, isLoading: isValuesLoading } = useQuery({
     queryKey: ['pendingSalesByDate', date, selectedbranch],
     enabled: !!date && !!selectedbranch,
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const dateStr = dayjs.isDayjs(date)
         ? date.format('YYYY-MM-DD')

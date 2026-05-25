@@ -3010,6 +3010,10 @@ function Index() {
   } = useQuery({
     queryKey: ['pharmacyModuleInfoByDate', date, selectedbranch],
     enabled: !!date && selectedbranch != null && selectedbranch !== '',
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
     queryFn: async () => {
       const res = await getPharmacyDetailsByDate(
         user?.accessToken,
