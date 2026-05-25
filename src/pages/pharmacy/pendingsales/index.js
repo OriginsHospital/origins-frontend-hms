@@ -372,7 +372,13 @@ function PendingSalesPage() {
                 >
                   <div className="flex flex-nowrap w-full items-center gap-4 py-2">
                     <Avatar
-                      src={patient.photoPath}
+                      src={
+                        patient.photoPath &&
+                        patient.photoPath !== 'null' &&
+                        patient.photoPath !== 'undefined'
+                          ? patient.photoPath
+                          : undefined
+                      }
                       alt={patient.patientName}
                       sx={{ width: 56, height: 56 }}
                     />

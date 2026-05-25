@@ -132,6 +132,19 @@ const formatPharmacyQueryDate = (value) => {
   return parsed.isValid() ? parsed.format('YYYY-MM-DD') : ''
 }
 
+/** Avoid src="null" — on /pharmacy/* routes the browser requests /pharmacy/null (404). */
+const getPatientPhotoSrc = (photoPath) => {
+  if (
+    !photoPath ||
+    photoPath === 'null' ||
+    photoPath === 'undefined' ||
+    photoPath === 'NULL'
+  ) {
+    return undefined
+  }
+  return photoPath
+}
+
 const ActivePackageDot = ({ show }) => {
   if (!show) return null
 
@@ -2768,7 +2781,9 @@ function RenderAccordianComponent({
               const key = Object.keys(patient)[0]
               const appointmentID = patient[key].header?.appointmentId
               const groupId = key
-              const photo = patient[key].header?.photoPath
+              const photoSrc = getPatientPhotoSrc(
+                patient[key].header?.photoPath,
+              )
               const hasActivePackage = hasActivePackageIndicator(
                 patient[key].header,
               )
@@ -2791,7 +2806,7 @@ function RenderAccordianComponent({
                       <div className="relative">
                         <Avatar
                           alt={patient[key].header?.patientName}
-                          src={photo}
+                          src={photoSrc}
                           sx={{
                             width: 60,
                             height: 60,
@@ -2856,7 +2871,7 @@ function RenderAccordianComponent({
             const key = Object.keys(patient)[0]
             const appointmentID = patient[key].header?.appointmentId
             const groupId = key
-            const photo = patient[key].header?.photoPath
+            const photoSrc = getPatientPhotoSrc(patient[key].header?.photoPath)
             const hasActivePackage = hasActivePackageIndicator(
               patient[key].header,
             )
@@ -2879,7 +2894,7 @@ function RenderAccordianComponent({
                     <div className="relative">
                       <Avatar
                         alt={patient[key].header?.patientName}
-                        src={photo}
+                        src={photoSrc}
                         sx={{
                           width: 60,
                           height: 60,
