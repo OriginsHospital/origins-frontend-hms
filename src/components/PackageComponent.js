@@ -58,7 +58,7 @@ function PackageComponent({
   const dispatch = useDispatch()
   const queryClient = useQueryClient()
   const user = useSelector((state) => state.user)
-  const canEditPackage = hasPackageEditAccess(user?.email)
+  const canEditPackage = hasPackageEditAccess(user)
   useEffect(() => {
     if (packageData && Object.keys(packageData).length > 0) {
       setNewPackageData(packageData)
@@ -581,7 +581,7 @@ function PackageComponent({
                 </Button>
               )}
               <>
-                {isEditing && !packageData?.id && (
+                {isEditing && !packageData?.id && canEditPackage && (
                   <Button
                     variant="contained"
                     color="primary"
@@ -696,7 +696,10 @@ function PackageComponent({
                       Number(e.target.value),
                     )
                   }
-                  InputProps={{ readOnly: !isEditing }}
+                  InputProps={{
+                    readOnly:
+                      !isEditing || (packageData?.id && !canEditPackage),
+                  }}
                 />
               </Grid>
               {/* doctorSuggestedPackage */}
@@ -763,7 +766,11 @@ function PackageComponent({
                       renderInput={(params) => (
                         <TextField {...params} fullWidth />
                       )}
-                      readOnly={date !== 'registrationDate' || !isEditing}
+                      readOnly={
+                        date !== 'registrationDate' ||
+                        !isEditing ||
+                        (packageData?.id && !canEditPackage)
+                      }
                     />
                   </Grid>
                   <Grid item xs={12} sm={3}>
@@ -775,7 +782,10 @@ function PackageComponent({
                       onChange={(e) =>
                         handleInputChange(amount, Number(e.target.value))
                       }
-                      InputProps={{ readOnly: !isEditing }}
+                      InputProps={{
+                        readOnly:
+                          !isEditing || (packageData?.id && !canEditPackage),
+                      }}
                     />
                   </Grid>
                 </React.Fragment>

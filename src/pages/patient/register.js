@@ -46,6 +46,7 @@ import Treatments from '@/components/Treatments'
 import VisitPatientInfo from '@/components/VisitPatientInfo'
 import { closeModal, openModal } from '@/redux/modalSlice'
 import PackageComponent from '@/components/PackageComponent'
+import { hasPackageEditAccess } from '@/utils/packageEditAccess'
 import ConsentCRUD from '@/components/ConsentCRUD'
 import { useRouter } from 'next/router'
 import { CONSENT_TYPES, PATIENT_FORMS_TYPES } from '@/constants/consentTypes'
@@ -258,7 +259,9 @@ export default function Register() {
       if (res.status === 400) {
         toast.error(res.message)
       } else if (res.status === 200) {
-        setIsEditing(!!res.data.registrationDate ? false : true)
+        const canEdit = hasPackageEditAccess(userDetails)
+        const needsRegistration = !res.data?.registrationDate
+        setIsEditing(canEdit && (needsRegistration || !res.data?.id))
         return res
       }
     },
