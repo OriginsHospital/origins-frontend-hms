@@ -326,6 +326,44 @@ export const getPatientTreatmentCycles = async (token, searchValue) => {
   return response.json()
 }
 
+export const getFutureCycles = async (token, filters = {}) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const params = new URLSearchParams()
+  if (filters.branchId) params.append('branchId', filters.branchId)
+  if (filters.cycleMonth) params.append('cycleMonth', filters.cycleMonth)
+  if (filters.cycleYear) params.append('cycleYear', filters.cycleYear)
+  const query = params.toString() ? `?${params.toString()}` : ''
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_FUTURE_CYCLES}${query}`,
+    {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
+export const saveFutureCycle = async (token, payload) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.SAVE_FUTURE_CYCLE}`,
+    {
+      method: 'POST',
+      headers: myHeaders,
+      body: JSON.stringify(payload),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
 export const getNewPatientTracker = async (token, branch) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)

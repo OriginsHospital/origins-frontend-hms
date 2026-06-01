@@ -17,6 +17,7 @@ import { requestInterceptor } from '@/utils/requestInterceptor'
 import { setCoupon } from '@/redux/couponSlice'
 import TabBar from './TabBar'
 import TabManager from './TabManager'
+import FutureCycleModalGlobal from './FutureCycleModal'
 
 /** Prefer profile fullName / userName for header when they differ from users table (getUserInfo). */
 async function mergeUserWithProfileDetails(token, userObject) {
@@ -202,6 +203,7 @@ export default function PageMiddleware(props) {
 
   return (
     <TabManager>
+      <FutureCycleModalGlobal />
       <div className="flex flex-row ">
         <SideNav />
         <div className="pt-[60px] self-stretch h-screen overflow-hidden grow relative flex flex-col">

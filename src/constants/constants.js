@@ -23,6 +23,8 @@ export const API_ROUTES = {
   GET_MODULES: '/modules/getModules',
   GET_PATIENTS: '/patients/getPatients',
   GET_PATIENT_TREATMENTCYCLES: '/patients/getPatientTreatmentCycles',
+  GET_FUTURE_CYCLES: '/patients/futureCycles',
+  SAVE_FUTURE_CYCLE: '/patients/futureCycles',
   GET_NEW_PATIENT_TRACKER: '/patients/new-tracker',
   GET_ALL_PATIENT_TRACKER: '/patient-tracker/all',
   GET_DONAR_INFORMATION: '/visits/getDonarInformation',

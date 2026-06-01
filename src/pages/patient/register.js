@@ -55,6 +55,11 @@ import dayjs from 'dayjs'
 import Modal from '@/components/Modal'
 import AdvancePayments from '@/components/AdvancePayments'
 import PatientHistory from '@/components/PatientHistory'
+import {
+  getPatientMasterId,
+  openFutureCycleForPatient,
+} from '@/components/FutureCycleModal'
+import { activeVisitHasTreatments } from '@/utils/patientTreatmentUtils'
 import PreviousPrescriptionTab from '@/components/PreviousPrescriptionTab'
 
 const toastconfig = {
@@ -892,7 +897,22 @@ export default function Register() {
             }`}
           >
             <div className="flex flex-col col-span-2">
-              <div className="flex justify-end">
+              <div className="flex justify-end gap-2">
+                {getPatientMasterId(formData) &&
+                  !activeVisitHasTreatments(visitInfo?.data) && (
+                    <Button
+                      type="button"
+                      variant="outlined"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        openFutureCycleForPatient(dispatch, formData)
+                      }}
+                      className="capitalize text-secondary"
+                    >
+                      Future Cycle
+                    </Button>
+                  )}
                 {formData?.patientId && (
                   <Button
                     variant="text"

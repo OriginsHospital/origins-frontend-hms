@@ -476,6 +476,11 @@ function SideNav(props) {
             relatedModule: 'donorModule',
           },
           {
+            path: '/patient/futurecycles',
+            name: 'Future Cycles',
+            relatedModule: 'Patients',
+          },
+          {
             path: '/reports/newPatientTracker',
             name: 'New Patient Tracker',
             relatedModule: 'reportsModule',

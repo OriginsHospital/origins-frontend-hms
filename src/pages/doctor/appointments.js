@@ -76,6 +76,8 @@ import Prescription from '@/components/Prescription'
 import TreatmentCycleHistoryView from '@/components/TreatmentCycleHistoryView'
 import { isIuiTreatment } from '@/utils/treatmentTypeUtils'
 import PatientDetailsSkeleton from '@/fallbacks/PatientDetailsSkeleton'
+import { openFutureCycleForDoctorPatient } from '@/components/FutureCycleModal'
+import { canScheduleFutureCycle } from '@/utils/patientTreatmentUtils'
 import { toast } from 'react-toastify'
 import s from 'aws-s3'
 
@@ -1692,7 +1694,7 @@ export default function Appointments() {
               </div>
               <div className="flex flex-col gap-5">
                 {/* <span className="text-lg font-semibold">Vitals Information</span> */}
-                <div className="flex justify-between gap-3">
+                <div className="flex flex-wrap justify-between gap-3">
                   <Button
                     variant="outlined"
                     className="text-secondary capitalize"
@@ -1700,6 +1702,23 @@ export default function Appointments() {
                   >
                     Embryology
                   </Button>
+                  {canScheduleFutureCycle(patientDetails?.patientInfo) && (
+                    <Button
+                      type="button"
+                      variant="outlined"
+                      className="text-secondary capitalize"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        openFutureCycleForDoctorPatient(
+                          dispatch,
+                          patientDetails?.patientInfo,
+                        )
+                      }}
+                    >
+                      Future Cycle
+                    </Button>
+                  )}
                   <div className="flex">
                     <Button
                       variant="outlined"

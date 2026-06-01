@@ -7,6 +7,7 @@ import { ModalReducer } from './modalSlice'
 import { searchReducer } from './searchSlice'
 import { couponReducer } from './couponSlice'
 import tabsReducer from './tabsSlice'
+import { futureCycleReducer } from './futureCycleSlice'
 export const store = configureStore({
   reducer: {
     user: userReducer,
@@ -17,5 +18,6 @@ export const store = configureStore({
     search: searchReducer,
     coupon: couponReducer,
     tabs: tabsReducer,
+    futureCycle: futureCycleReducer,
   },
 })

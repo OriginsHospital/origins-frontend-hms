@@ -28,33 +28,13 @@ export default function Modal({
   // Cleanup effect when modal closes - always runs
   React.useEffect(() => {
     if (modal.key !== uniqueKey) {
-      // Modal is closed, cleanup immediately
-      const cleanup = () => {
-        // Remove any backdrops that don't have an open dialog
-        const backdrops = document.querySelectorAll(
-          '[class*="MuiBackdrop-root"]',
-        )
-        backdrops.forEach((backdrop) => {
-          const dialog =
-            backdrop.parentElement?.querySelector('[role="dialog"]')
-          const isOpen =
-            dialog &&
-            window.getComputedStyle(dialog).display !== 'none' &&
-            window.getComputedStyle(dialog).visibility !== 'hidden'
-          if (!isOpen) {
-            backdrop.remove()
-          }
-        })
-        // Remove body lock
-        document.body.style.overflow = ''
-        document.body.style.paddingRight = ''
-        document.body.classList.remove('MuiModal-open')
-      }
+      return
+    }
 
-      // Run cleanup immediately and after a short delay
-      cleanup()
-      const timer = setTimeout(cleanup, 100)
-      return () => clearTimeout(timer)
+    return () => {
+      document.body.style.overflow = ''
+      document.body.style.paddingRight = ''
+      document.body.classList.remove('MuiModal-open')
     }
   }, [modal.key, uniqueKey])
 
