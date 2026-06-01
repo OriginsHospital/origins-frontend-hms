@@ -62,7 +62,7 @@ const ViewButton = ({ row, router }) => {
         router.push(
           {
             pathname: router.pathname + '/register',
-            query: { search: row.aadhaarNo },
+            query: { search: row.patientId },
           },
           undefined,
           { shallow: true },

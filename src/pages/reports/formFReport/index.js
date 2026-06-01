@@ -13,7 +13,7 @@ import Link from 'next/link'
 import { Button } from '@mui/material'
 import { useRouter } from 'next/router'
 const Index = () => {
-  const userDetails = useSelector(store => store.user)
+  const userDetails = useSelector((store) => store.user)
   const router = useRouter()
   const [fromDate, setFromDate] = useState(new Date())
   const [toDate, setToDate] = useState(new Date())
@@ -52,7 +52,7 @@ const Index = () => {
               router.push(
                 {
                   pathname: '/patient/register',
-                  query: { search: row.patientAadhaarNo },
+                  query: { search: row.patientId },
                 },
                 undefined,
                 { shallow: true },
@@ -72,11 +72,11 @@ const Index = () => {
       field: 'formFDetails',
       headerName: 'Form F Details',
       width: 400,
-      renderCell: params => {
+      renderCell: (params) => {
         const links = params.row?.formFDetails
-          .filter(formF => formF?.uploadLink)
+          .filter((formF) => formF?.uploadLink)
           .map(
-            formF =>
+            (formF) =>
               `<a href="${formF?.uploadLink}" target="_blank" rel="noopener noreferrer" class="text-blue-500 underline">View Form (${formF?.scanName})</a>`,
           )
         return <div dangerouslySetInnerHTML={{ __html: links.join(', ') }} />
@@ -84,8 +84,8 @@ const Index = () => {
     },
   ]
 
-  const transformDataToRows = data => {
-    return data.map(item => ({
+  const transformDataToRows = (data) => {
+    return data.map((item) => ({
       id: item?.appointmentId,
       patientId: item?.patientDetails?.patientId,
       patientName: item?.patientDetails?.patientName,
@@ -112,7 +112,7 @@ const Index = () => {
           value={fromDate ? dayjs(fromDate) : null}
           name="fromDate"
           format="DD/MM/YYYY"
-          onChange={newValue => setFromDate(newValue)}
+          onChange={(newValue) => setFromDate(newValue)}
         />
         <DatePicker
           label="To Date"
@@ -120,7 +120,7 @@ const Index = () => {
           className="bg-white rounded-lg"
           value={toDate ? dayjs(toDate) : null}
           name="fromDate"
-          onChange={newValue => setToDate(newValue)}
+          onChange={(newValue) => setToDate(newValue)}
         />
       </div>
       <div className="h-[600px] gap-5 p-5 w-full">

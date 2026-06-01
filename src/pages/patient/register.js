@@ -358,16 +358,12 @@ export default function Register() {
     setTab(newTab)
   }
 
-  const fetchPatient = async (aadhar) => {
-    // console.log(String(aadhar).length)
-    if (
-      String(aadhar).trim().length == 12
-      // ||
-      // String(searchValue).trim().length == 12
-    ) {
+  const fetchPatient = async (searchTerm) => {
+    const trimmedSearch = String(searchTerm).trim()
+    if (trimmedSearch.length > 0) {
       const patientRecord = await getPatientByAadharOrMobile(
         userDetails.accessToken,
-        aadhar,
+        trimmedSearch,
       )
       if (patientRecord.status == 200) {
         console.log(patientRecord.data)
@@ -397,7 +393,6 @@ export default function Register() {
       }
     } else {
       resetForm()
-      toast.error('Aadhar Number should be 12 digits')
     }
   }
   const resetForm = () => {
@@ -815,7 +810,7 @@ export default function Register() {
     <div className="pb-14 ">
       <div className="px-3 py-10 flex items-center justify-center gap-5">
         <TextField
-          placeholder="Enter Aadhaar Number"
+          placeholder="Search by Patient ID / Mobile / Aadhaar"
           className="w-[300px] bg-white"
           type="search"
           value={searchValue}

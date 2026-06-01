@@ -292,7 +292,7 @@ function NewPatientTracker() {
   const handlePatientClick = (patientId, aadhaarNo) => {
     router.push({
       pathname: '/patient/register',
-      query: { search: aadhaarNo || patientId },
+      query: { search: patientId || aadhaarNo },
     })
   }
 
