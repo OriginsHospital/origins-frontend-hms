@@ -25,11 +25,14 @@ import {
   buildPharmacySelectOption,
   enrichPharmacySelectValue,
   formatPharmacyOptionLabel,
+  getKitMedicineQuantity,
+  parseKitMedicines,
   pharmacySelectStyles,
   PrescriptionPharmacyLowStockLegend,
 } from '@/utils/prescriptionPharmacySelect'
 import {
   applyPharmacyCompanionMedicines,
+  findPharmacyItemForKitMedicine,
   getCompanionMedicinesForTriggers,
   syncPrescriptionDaysForTriggerAndCompanions,
 } from '@/utils/pharmacyAutoCompanions'
@@ -95,7 +98,7 @@ function SpousePrescription({
       .map((kit) => ({
         kitName: kit.kitName,
         kitValue: kit.kitValue,
-        medicines: Array.isArray(kit.medicines) ? kit.medicines : [],
+        medicines: parseKitMedicines(kit.medicines),
       }))
   }, [activePharmacyKitsResponse])
 
@@ -214,11 +217,11 @@ function SpousePrescription({
         const existingAllItems = copyOfDefaultLineBillValues[billTypeId] || []
 
         kit.medicines.forEach((kitMedicine) => {
+          const kitQuantity = getKitMedicineQuantity(kitMedicine)
           // Find the medicine in the available pharmacy items (by name match)
-          const medicineInPharmacy = BillTypeValuesArray.find(
-            (item) =>
-              item.name?.toUpperCase().trim() ===
-              kitMedicine.name.toUpperCase().trim(),
+          const medicineInPharmacy = findPharmacyItemForKitMedicine(
+            BillTypeValuesArray,
+            kitMedicine.name,
           )
 
           if (medicineInPharmacy) {
@@ -242,7 +245,7 @@ function SpousePrescription({
                     existingBillTypeValuesIndex
                   ].prescribedQuantity =
                     (billTypeValues[existingBillTypeValuesIndex]
-                      .prescribedQuantity || 0) + kitMedicine.quantity
+                      .prescribedQuantity || 0) + kitQuantity
                 } else {
                   // Medicine exists but not in current billTypeValues
                   const infoObject = defaultLineBillValues['3']?.find(
@@ -254,8 +257,7 @@ function SpousePrescription({
                     name: medicineInPharmacy.name,
                     amount: parseInt(medicineInPharmacy.amount, 10),
                     prescribedQuantity:
-                      (existingMedicine.prescribedQuantity || 0) +
-                      kitMedicine.quantity,
+                      (existingMedicine.prescribedQuantity || 0) + kitQuantity,
                     prescriptionDetails:
                       infoObject?.prescriptionDetails ??
                       existingMedicine.prescriptionDetails ??
@@ -278,7 +280,7 @@ function SpousePrescription({
                 id: medicineInPharmacy.id,
                 name: medicineInPharmacy.name,
                 amount: parseInt(medicineInPharmacy.amount, 10),
-                prescribedQuantity: kitMedicine.quantity,
+                prescribedQuantity: kitQuantity,
                 prescriptionDetails: infoObject?.prescriptionDetails ?? '',
                 prescriptionDays: infoObject?.prescriptionDays ?? 1,
                 status: 'UNPAID',

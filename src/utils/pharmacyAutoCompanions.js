@@ -94,13 +94,90 @@ export function pharmacyNamesMatch(nameA, nameB) {
   return normA.includes(normB) || normB.includes(normA)
 }
 
+export function getPharmacyItemDisplayName(item) {
+  return item?.name ?? item?.itemName ?? ''
+}
+
+const PHARMACY_DOSAGE_FORM_SUFFIX =
+  /\s+(TAB|TABS|CAP|CAPS|INJ|INJECTION|AMP|AMPOULE|SYRUP|CREAM|GEL|OINT|OINTMENT|TABLET|TABLETS)\s*$/i
+
+/** Kit master names often differ from item_master (hyphens, TAB suffix, spelling). */
+export const PHARMACY_KIT_EQUIVALENT_GROUPS = [
+  [
+    'DROTIN-M TAB',
+    'DROTIN M TAB',
+    'DROTIN M',
+    'DROTIN-M',
+    'DROTVIN M',
+    'DROTVIN-M',
+    'DROTVIN M TAB',
+    'DROTVIN-M TAB',
+  ],
+]
+
+export function normalizePharmacyNameForKitMatch(name = '') {
+  let normalized = normalizePharmacyName(name)
+  normalized = normalized.replace(/[-_.]/g, ' ')
+  normalized = normalized.replace(PHARMACY_DOSAGE_FORM_SUFFIX, '')
+  normalized = normalized.replace(/\s+/g, ' ').trim()
+  return normalized.replace(/\s/g, '')
+}
+
+function isInKitEquivalentGroup(name, group) {
+  const compact = normalizePharmacyNameForKitMatch(name)
+  return group.some((term) => {
+    if (pharmacyNamesMatch(term, name)) {
+      return true
+    }
+    return normalizePharmacyNameForKitMatch(term) === compact
+  })
+}
+
+export function pharmacyKitNamesMatch(kitMedicineName, pharmacyItemName) {
+  if (pharmacyNamesMatch(kitMedicineName, pharmacyItemName)) {
+    return true
+  }
+  if (
+    normalizePharmacyNameForKitMatch(kitMedicineName) ===
+    normalizePharmacyNameForKitMatch(pharmacyItemName)
+  ) {
+    return true
+  }
+  return PHARMACY_KIT_EQUIVALENT_GROUPS.some(
+    (group) =>
+      isInKitEquivalentGroup(kitMedicineName, group) &&
+      isInKitEquivalentGroup(pharmacyItemName, group),
+  )
+}
+
 export function findPharmacyItemByName(billTypeValuesArray, targetName) {
   if (!billTypeValuesArray?.length || !targetName) {
     return null
   }
   return (
     billTypeValuesArray.find((item) =>
-      pharmacyNamesMatch(item.name, targetName),
+      pharmacyNamesMatch(getPharmacyItemDisplayName(item), targetName),
+    ) ?? null
+  )
+}
+
+/** Resolves a kit medicine row to a pharmacy inventory item (flexible name matching). */
+export function findPharmacyItemForKitMedicine(
+  billTypeValuesArray,
+  kitMedicineName,
+) {
+  if (!billTypeValuesArray?.length || !kitMedicineName) {
+    return null
+  }
+
+  const byFuzzy = findPharmacyItemByName(billTypeValuesArray, kitMedicineName)
+  if (byFuzzy) {
+    return byFuzzy
+  }
+
+  return (
+    billTypeValuesArray.find((item) =>
+      pharmacyKitNamesMatch(kitMedicineName, getPharmacyItemDisplayName(item)),
     ) ?? null
   )
 }

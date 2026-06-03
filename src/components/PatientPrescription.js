@@ -41,11 +41,14 @@ import {
   buildPharmacySelectOption,
   enrichPharmacySelectValue,
   formatPharmacyOptionLabel,
+  getKitMedicineQuantity,
+  parseKitMedicines,
   pharmacySelectStyles,
   PrescriptionPharmacyLowStockLegend,
 } from '@/utils/prescriptionPharmacySelect'
 import {
   applyPharmacyCompanionMedicines,
+  findPharmacyItemForKitMedicine,
   getCompanionMedicinesForTriggers,
   syncPrescriptionDaysForTriggerAndCompanions,
 } from '@/utils/pharmacyAutoCompanions'
@@ -265,7 +268,7 @@ function PatientPrescription({
     return kits.map((kit) => ({
       kitName: kit.kitName,
       kitValue: kit.kitValue,
-      medicines: Array.isArray(kit.medicines) ? kit.medicines : [],
+      medicines: parseKitMedicines(kit.medicines),
     }))
   }, [activePharmacyKitsResponse])
 
@@ -449,11 +452,11 @@ function PatientPrescription({
         const existingAllItems = copyOfDefaultLineBillValues[billTypeId] || []
 
         kit.medicines.forEach((kitMedicine) => {
+          const kitQuantity = getKitMedicineQuantity(kitMedicine)
           // Find the medicine in the available pharmacy items
-          const medicineInPharmacy = BillTypeValuesArray.find(
-            (item) =>
-              item.name?.toUpperCase().trim() ===
-              kitMedicine.name.toUpperCase().trim(),
+          const medicineInPharmacy = findPharmacyItemForKitMedicine(
+            BillTypeValuesArray,
+            kitMedicine.name,
           )
 
           if (medicineInPharmacy) {
@@ -476,7 +479,7 @@ function PatientPrescription({
                 // Update quantity by adding the kit quantity
                 billTypeValues[existingBillTypeValuesIndex].prescribedQuantity =
                   (billTypeValues[existingBillTypeValuesIndex]
-                    .prescribedQuantity || 0) + kitMedicine.quantity
+                    .prescribedQuantity || 0) + kitQuantity
               } else {
                 // Medicine exists but not in current billTypeValues (shouldn't happen, but handle it)
                 const infoObject = defaultLineBillValues['3']?.find(
@@ -490,8 +493,7 @@ function PatientPrescription({
                   name: medicineInPharmacy.name,
                   amount: parseInt(medicineInPharmacy.amount, 10),
                   prescribedQuantity:
-                    (existingMedicine.prescribedQuantity || 0) +
-                    kitMedicine.quantity,
+                    (existingMedicine.prescribedQuantity || 0) + kitQuantity,
                   prescriptionDetails:
                     infoObject?.prescriptionDetails ??
                     existingMedicine.prescriptionDetails ??
@@ -515,7 +517,7 @@ function PatientPrescription({
                 id: medicineInPharmacy.id,
                 name: medicineInPharmacy.name,
                 amount: parseInt(medicineInPharmacy.amount, 10),
-                prescribedQuantity: kitMedicine.quantity,
+                prescribedQuantity: kitQuantity,
                 prescriptionDetails: infoObject?.prescriptionDetails ?? '',
                 prescriptionDays: infoObject?.prescriptionDays ?? 1,
                 status: 'UNPAID',

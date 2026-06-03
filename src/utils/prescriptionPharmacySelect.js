@@ -1,5 +1,33 @@
 import React from 'react'
 
+export function parseKitMedicines(medicines) {
+  if (!medicines) {
+    return []
+  }
+  let list = medicines
+  if (typeof medicines === 'string') {
+    try {
+      list = JSON.parse(medicines)
+    } catch {
+      return []
+    }
+  }
+  if (!Array.isArray(list)) {
+    return []
+  }
+  return list
+    .map((item) => ({
+      name: String(item?.name ?? '').trim(),
+      quantity: getKitMedicineQuantity(item),
+    }))
+    .filter((item) => item.name)
+}
+
+export function getKitMedicineQuantity(kitMedicine) {
+  const qty = Number(kitMedicine?.quantity ?? kitMedicine?.qty)
+  return Number.isFinite(qty) && qty >= 1 ? Math.floor(qty) : 1
+}
+
 export const PHARMACY_LOW_STOCK_THRESHOLD = 5
 export const PHARMACY_LOW_STOCK_SKY_BLUE = '#87CEEB'
 export const PHARMACY_LOW_STOCK_SKY_BLUE_ACCENT = '#0284C7'

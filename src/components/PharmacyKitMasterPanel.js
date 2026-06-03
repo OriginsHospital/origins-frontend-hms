@@ -23,18 +23,9 @@ import { API_ROUTES } from '@/constants/constants'
 import { closeModal, openModal } from '@/redux/modalSlice'
 import { toast } from 'react-toastify'
 import { toastconfig } from '@/utils/toastconfig'
+import { parseKitMedicines } from '@/utils/prescriptionPharmacySelect'
 
 const EMPTY_MEDICINE = { name: '', quantity: 1 }
-
-const parseMedicines = (medicines) => {
-  if (!medicines) return []
-  if (Array.isArray(medicines)) return medicines
-  try {
-    return JSON.parse(medicines)
-  } catch {
-    return []
-  }
-}
 
 function PharmacyKitMasterPanel({ accessToken }) {
   const dispatch = useDispatch()
@@ -57,8 +48,8 @@ function PharmacyKitMasterPanel({ accessToken }) {
   const rows = useMemo(() => {
     return (kitsResponse?.data || []).map((row) => ({
       ...row,
-      medicines: parseMedicines(row.medicines),
-      medicineCount: parseMedicines(row.medicines).length,
+      medicines: parseKitMedicines(row.medicines),
+      medicineCount: parseKitMedicines(row.medicines).length,
     }))
   }, [kitsResponse])
 
@@ -74,6 +65,7 @@ function PharmacyKitMasterPanel({ accessToken }) {
 
   const openFormModal = (row = null) => {
     if (row) {
+      const kitMedicines = parseKitMedicines(row.medicines)
       setIsEditMode(true)
       setFormState({
         id: row.id,
@@ -81,9 +73,7 @@ function PharmacyKitMasterPanel({ accessToken }) {
         kitValue: row.kitValue || '',
         isActive: row.isActive ? 1 : 0,
         medicines:
-          parseMedicines(row.medicines).length > 0
-            ? parseMedicines(row.medicines)
-            : [{ ...EMPTY_MEDICINE }],
+          kitMedicines.length > 0 ? kitMedicines : [{ ...EMPTY_MEDICINE }],
       })
     } else {
       resetForm()
@@ -101,7 +91,8 @@ function PharmacyKitMasterPanel({ accessToken }) {
       ),
     onSuccess: (data) => {
       if (data?.status === 200) {
-        queryClient.invalidateQueries(['pharmacyKitMasterData'])
+        queryClient.invalidateQueries({ queryKey: ['pharmacyKitMasterData'] })
+        queryClient.invalidateQueries({ queryKey: ['activePharmacyKits'] })
         dispatch(closeModal())
         resetForm()
         toast.success(data?.message, toastconfig)
@@ -120,7 +111,8 @@ function PharmacyKitMasterPanel({ accessToken }) {
       ),
     onSuccess: (data) => {
       if (data?.status === 200) {
-        queryClient.invalidateQueries(['pharmacyKitMasterData'])
+        queryClient.invalidateQueries({ queryKey: ['pharmacyKitMasterData'] })
+        queryClient.invalidateQueries({ queryKey: ['activePharmacyKits'] })
         dispatch(closeModal())
         resetForm()
         toast.success(data?.message, toastconfig)
