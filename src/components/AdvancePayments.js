@@ -40,6 +40,9 @@ import {
   DialogContent,
   DialogActions,
   Box,
+  ToggleButtonGroup,
+  ToggleButton,
+  Grid,
 } from '@mui/material'
 import {
   Close,
@@ -621,6 +624,70 @@ function AdvancePayments({ formData }) {
           toast.error('Error processing UPI payment', toastconfig)
         }
       }
+    } else if (paymentMode === 'SPLIT') {
+      const cashAmount = Number(paymentData.splitPayment?.cashAmount || 0)
+      const upiAmount = Number(paymentData.splitPayment?.upiAmount || 0)
+      const totalSplitAmount = Number((cashAmount + upiAmount).toFixed(2))
+      const billAmount = Number(
+        Number(paymentData.discountedAmount || 0).toFixed(2),
+      )
+
+      if (cashAmount <= 0 || upiAmount <= 0) {
+        toast.error(
+          'Split payment requires both Cash and UPI amounts greater than 0',
+          toastconfig,
+        )
+        return
+      }
+
+      if (totalSplitAmount !== billAmount) {
+        toast.error(
+          `Split amount should be exactly ₹${billAmount.toFixed(2)}`,
+          toastconfig,
+        )
+        return
+      }
+
+      if (
+        !window.confirm(
+          'Confirm split payment: divide amount across Cash and UPI?',
+        )
+      ) {
+        return
+      }
+
+      const splitPayload = {
+        ...payload,
+        paymentMode: 'SPLIT',
+        isSplitPayment: true,
+        splitPayment: {
+          cashAmount,
+          upiAmount,
+          totalAmount: totalSplitAmount,
+        },
+        splitPaymentSummary: `Cash: ₹${cashAmount.toFixed(2)}, UPI: ₹${upiAmount.toFixed(2)}`,
+      }
+
+      try {
+        const order = await getOtherPaymentsOrderId(
+          userDetails.accessToken,
+          splitPayload,
+        )
+        if (order.status === 200) {
+          toast.success('Split payment recorded successfully', toastconfig)
+          dispatch(closeModal('payment-modal'))
+          queryClient.invalidateQueries({
+            queryKey: ['otherPaymentsStatus', formData.id],
+          })
+        } else {
+          toast.error(
+            order?.message || 'Failed to process split payment',
+            toastconfig,
+          )
+        }
+      } catch (error) {
+        toast.error('Error processing split payment', toastconfig)
+      }
     }
   }
 
@@ -971,12 +1038,15 @@ function AdvancePayments({ formData }) {
                                     <div className="flex items-center space-x-3">
                                       <div
                                         className={`w-3 h-3 rounded-full ${
-                                          history.paymentMode === 'CASH' ||
-                                          history.paymentMode === 'UPI'
-                                            ? 'bg-green-500'
-                                            : history.paymentMode === 'ONLINE'
-                                              ? 'bg-blue-500'
-                                              : 'bg-gray-500'
+                                          history.isSplitPayment ||
+                                          history.paymentMode === 'SPLIT'
+                                            ? 'bg-purple-500'
+                                            : history.paymentMode === 'CASH' ||
+                                                history.paymentMode === 'UPI'
+                                              ? 'bg-green-500'
+                                              : history.paymentMode === 'ONLINE'
+                                                ? 'bg-blue-500'
+                                                : 'bg-gray-500'
                                         }`}
                                       />
                                       <div>
@@ -984,8 +1054,19 @@ function AdvancePayments({ formData }) {
                                           variant="subtitle1"
                                           className="font-medium"
                                         >
-                                          {history.paymentMode}
+                                          {history.isSplitPayment
+                                            ? 'SPLIT'
+                                            : history.paymentMode}
                                         </Typography>
+                                        {history.isSplitPayment &&
+                                          history.splitPaymentSummary && (
+                                            <Typography
+                                              variant="caption"
+                                              color="textSecondary"
+                                            >
+                                              {history.splitPaymentSummary}
+                                            </Typography>
+                                          )}
                                         <Typography
                                           variant="body2"
                                           color="textSecondary"
@@ -1060,9 +1141,49 @@ function AdvancePayments({ formData }) {
                                           variant="body1"
                                           className="font-medium"
                                         >
-                                          {history.paymentMode}
+                                          {history.isSplitPayment
+                                            ? 'SPLIT (Cash + UPI)'
+                                            : history.paymentMode}
                                         </Typography>
                                       </div>
+                                      {history.isSplitPayment && (
+                                        <>
+                                          <div>
+                                            <Typography
+                                              variant="body2"
+                                              color="textSecondary"
+                                            >
+                                              Cash
+                                            </Typography>
+                                            <Typography
+                                              variant="body1"
+                                              className="font-medium"
+                                            >
+                                              ₹
+                                              {parseFloat(
+                                                history.splitCashAmount || 0,
+                                              ).toLocaleString()}
+                                            </Typography>
+                                          </div>
+                                          <div>
+                                            <Typography
+                                              variant="body2"
+                                              color="textSecondary"
+                                            >
+                                              UPI
+                                            </Typography>
+                                            <Typography
+                                              variant="body1"
+                                              className="font-medium"
+                                            >
+                                              ₹
+                                              {parseFloat(
+                                                history.splitUpiAmount || 0,
+                                              ).toLocaleString()}
+                                            </Typography>
+                                          </div>
+                                        </>
+                                      )}
                                       <div>
                                         <Typography
                                           variant="body2"
@@ -1450,6 +1571,7 @@ function AdvancePayments({ formData }) {
                 <MenuItem value="CASH">CASH</MenuItem>
                 <MenuItem value="ONLINE">ONLINE</MenuItem>
                 <MenuItem value="UPI">UPI</MenuItem>
+                <MenuItem value="SPLIT">SPLIT (Cash + UPI)</MenuItem>
               </Select>
             </FormControl>
 
@@ -1658,6 +1780,11 @@ const PaymentModal = ({
 }) => {
   const [selectedCoupon, setSelectedCoupon] = useState(null)
   const [discountedAmount, setDiscountedAmount] = useState(0)
+  const [paymentFlow, setPaymentFlow] = useState('single')
+  const [splitPaymentAmounts, setSplitPaymentAmounts] = useState({
+    cashAmount: '',
+    upiAmount: '',
+  })
 
   // Calculate discounted amount when coupon changes
   useEffect(() => {
@@ -1681,6 +1808,22 @@ const PaymentModal = ({
   const totalAmount = parseFloat(payment.totalAmount)
   const remainingAmount = totalAmount - payment.paidAmount
   const payableAmount = isAdmin ? editablePayableAmount : remainingAmount
+
+  const splitCashAmount = Number(splitPaymentAmounts.cashAmount || 0)
+  const splitUpiAmount = Number(splitPaymentAmounts.upiAmount || 0)
+  const splitTotalAmount = Number((splitCashAmount + splitUpiAmount).toFixed(2))
+  const splitBalanceAmount = Number(
+    (discountedAmount - splitTotalAmount).toFixed(2),
+  )
+
+  const paymentDataBase = {
+    refId: payment.refId,
+    totalAmount: payableAmount,
+    payableAmount: payableAmount,
+    discountedAmount: discountedAmount,
+    discountAmount: payableAmount - discountedAmount,
+    couponCode: selectedCoupon?.id,
+  }
 
   return (
     <Modal
@@ -1842,73 +1985,141 @@ const PaymentModal = ({
             </Box>
           )}
 
-          {/* Payment Buttons */}
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: 2,
-              mt: 1,
-            }}
-          >
-            <Button
-              variant="contained"
-              color="primary"
-              className="capitalize"
-              onClick={() =>
-                onPayment('ONLINE', {
-                  refId: payment.refId,
-                  totalAmount: payableAmount,
-                  payableAmount: payableAmount,
-                  discountedAmount: discountedAmount,
-                  discountAmount: payableAmount - discountedAmount,
-                  couponCode: selectedCoupon?.id,
-                })
-              }
-              startIcon={<CreditCard />}
-              disabled={true}
-              sx={{ height: '44px', fontSize: '0.95rem' }}
+          {/* Payment method */}
+          <Box>
+            <Typography variant="h6" sx={{ mb: 1.5 }} fontWeight={600}>
+              How do you want to pay?
+            </Typography>
+            <ToggleButtonGroup
+              exclusive
+              fullWidth
+              value={paymentFlow}
+              onChange={(e, next) => next != null && setPaymentFlow(next)}
+              size="small"
+              sx={{ mb: 2 }}
             >
-              Pay Online
-            </Button>
-            <Button
-              variant="outlined"
-              color="primary"
-              className="capitalize"
-              onClick={() =>
-                onPayment('UPI', {
-                  refId: payment.refId,
-                  totalAmount: payableAmount,
-                  payableAmount: payableAmount,
-                  discountedAmount: discountedAmount,
-                  discountAmount: payableAmount - discountedAmount,
-                  couponCode: selectedCoupon?.id,
-                })
-              }
-              startIcon={<Money />}
-              sx={{ height: '44px', fontSize: '0.95rem' }}
-            >
-              Pay UPI
-            </Button>
-            <Button
-              variant="outlined"
-              color="primary"
-              className="capitalize"
-              onClick={() =>
-                onPayment('CASH', {
-                  refId: payment.refId,
-                  totalAmount: payableAmount,
-                  payableAmount: payableAmount,
-                  discountedAmount: discountedAmount,
-                  discountAmount: payableAmount - discountedAmount,
-                  couponCode: selectedCoupon?.id,
-                })
-              }
-              startIcon={<Money />}
-              sx={{ height: '44px', fontSize: '0.95rem' }}
-            >
-              Pay Cash
-            </Button>
+              <ToggleButton value="single">Single method</ToggleButton>
+              <ToggleButton value="splitExpert">
+                Split payment (Cash + UPI)
+              </ToggleButton>
+            </ToggleButtonGroup>
+
+            {paymentFlow === 'single' && (
+              <Box
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gap: 2,
+                }}
+              >
+                <Button
+                  variant="contained"
+                  color="primary"
+                  className="capitalize"
+                  onClick={() => onPayment('ONLINE', paymentDataBase)}
+                  startIcon={<CreditCard />}
+                  disabled={true}
+                  sx={{ height: '44px', fontSize: '0.95rem' }}
+                >
+                  Pay Online
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  className="capitalize"
+                  onClick={() => onPayment('UPI', paymentDataBase)}
+                  startIcon={<Money />}
+                  sx={{ height: '44px', fontSize: '0.95rem' }}
+                >
+                  Pay UPI
+                </Button>
+                <Button
+                  variant="outlined"
+                  color="primary"
+                  className="capitalize"
+                  onClick={() => onPayment('CASH', paymentDataBase)}
+                  startIcon={<Money />}
+                  sx={{ height: '44px', fontSize: '0.95rem' }}
+                >
+                  Pay Cash
+                </Button>
+              </Box>
+            )}
+
+            {paymentFlow === 'splitExpert' && (
+              <Box className="p-3 border rounded-md bg-gray-50">
+                <Typography variant="subtitle2" gutterBottom>
+                  Divide payable amount across Cash and UPI
+                </Typography>
+                <Grid container spacing={2} sx={{ mt: 0 }}>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="Cash amount"
+                      type="number"
+                      value={splitPaymentAmounts.cashAmount}
+                      onChange={(e) =>
+                        setSplitPaymentAmounts((prev) => ({
+                          ...prev,
+                          cashAmount: e.target.value,
+                        }))
+                      }
+                      inputProps={{ min: 0, step: '0.01' }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      size="small"
+                      label="UPI amount"
+                      type="number"
+                      value={splitPaymentAmounts.upiAmount}
+                      onChange={(e) =>
+                        setSplitPaymentAmounts((prev) => ({
+                          ...prev,
+                          upiAmount: e.target.value,
+                        }))
+                      }
+                      inputProps={{ min: 0, step: '0.01' }}
+                    />
+                  </Grid>
+                </Grid>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{ mt: 1.5, mb: 1.5 }}
+                >
+                  Payable: ₹{discountedAmount.toFixed(2)} | Split total: ₹
+                  {splitTotalAmount.toFixed(2)} | Balance: ₹
+                  {splitBalanceAmount.toFixed(2)}
+                </Typography>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  fullWidth
+                  className="capitalize"
+                  disabled={
+                    discountedAmount <= 0 ||
+                    splitCashAmount <= 0 ||
+                    splitUpiAmount <= 0 ||
+                    splitBalanceAmount !== 0
+                  }
+                  onClick={() =>
+                    onPayment('SPLIT', {
+                      ...paymentDataBase,
+                      splitPayment: {
+                        cashAmount: splitCashAmount,
+                        upiAmount: splitUpiAmount,
+                        totalAmount: splitTotalAmount,
+                      },
+                    })
+                  }
+                >
+                  Pay with split (Cash + UPI)
+                </Button>
+              </Box>
+            )}
           </Box>
         </Box>
       </Box>

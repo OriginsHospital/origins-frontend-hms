@@ -12,6 +12,7 @@ import { toast } from 'react-toastify'
 import Modal from '@/components/Modal'
 import PickupSheet from '@/components/PickupSheet'
 import { openModal } from '@/redux/modalSlice'
+import { isOpuSheetExcludedTreatment } from '@/utils/treatmentTypeUtils'
 
 function ScanOpuSheetPage() {
   const router = useRouter()
@@ -101,9 +102,12 @@ function ScanOpuSheetPage() {
   })
 
   const filteredRows = useMemo(() => {
+    const opuEligibleRows = rows.filter(
+      (row) => !isOpuSheetExcludedTreatment(row),
+    )
     const query = patientSearch.trim().toLowerCase()
-    if (!query) return rows
-    return rows.filter((row) =>
+    if (!query) return opuEligibleRows
+    return opuEligibleRows.filter((row) =>
       String(row.patientName || '')
         .toLowerCase()
         .includes(query),
