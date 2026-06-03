@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { DataGrid } from '@mui/x-data-grid'
 import {
   TextField,
@@ -7,6 +7,7 @@ import {
   Box,
   Typography,
   Input,
+  Autocomplete,
 } from '@mui/material'
 import SearchIcon from '@mui/icons-material/Search'
 import { useSelector } from 'react-redux'
@@ -33,7 +34,7 @@ const UploadModal = ({ testData, user }) => {
   const dispatch = useDispatch()
 
   const { mutate: uploadMutation, isPending } = useMutation({
-    mutationFn: async formData => {
+    mutationFn: async (formData) => {
       const response = await saveOutsourcingLabTestResult(
         user.accessToken,
         formData,
@@ -47,12 +48,12 @@ const UploadModal = ({ testData, user }) => {
         throw new Error(response.message || 'Upload failed')
       }
     },
-    onError: error => {
+    onError: (error) => {
       toast.error(error.message || 'Failed to upload report', toastconfig)
     },
   })
 
-  const handleFileChange = event => {
+  const handleFileChange = (event) => {
     const selectedFile = event.target.files[0]
     if (selectedFile) {
       // Validate file type if needed
@@ -140,7 +141,7 @@ const UploadModal = ({ testData, user }) => {
 
 const ViewReportModal = ({ testData, reportData }) => {
   const dispatch = useDispatch()
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const queryClient = useQueryClient()
 
   const handleDeleteOutsourcingLabTestResult = async () => {
@@ -192,19 +193,32 @@ const ViewReportModal = ({ testData, reportData }) => {
   )
 }
 
+const ALL_BRANCHES_OPTION = {
+  id: null,
+  name: 'All Branches',
+  branchCode: 'ALL',
+}
+
 const Outsourcing = () => {
   const [searchText, setSearchText] = useState('')
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
+  const branches = user?.branchDetails
+  const branchOptions = useMemo(
+    () => [ALL_BRANCHES_OPTION, ...(branches || [])],
+    [branches],
+  )
+  const [branchId, setBranchId] = useState(null)
   const queryClient = useQueryClient()
   const [selectedTest, setSelectedTest] = useState(null)
   const dispatch = useDispatch()
 
   const { data: labTests, isLoading } = useQuery({
-    queryKey: ['outsourcingLabTests'],
+    queryKey: ['outsourcingLabTests', searchText, branchId],
     queryFn: async () => {
       const response = await getAllOutsourcingLabTests(
         user.accessToken,
         searchText,
+        branchId,
       )
       if (response.status === 200) {
         return response.data
@@ -266,23 +280,24 @@ const Outsourcing = () => {
     }
   }
 
-  const {
-    mutate: outsourcingMutate,
-    isPending: isPendingOutsourcing,
-  } = useMutation({
-    mutationFn: async payload => {
-      const res = await saveOutsourcingLabTestResult(user.accessToken, payload)
-      if (res.status === 200) {
-        if (payload?.labTestStatus == 1) {
-          toast.success('Collected Successfully', toastconfig)
-        } else {
-          toast.success('Saved Successfully', toastconfig)
+  const { mutate: outsourcingMutate, isPending: isPendingOutsourcing } =
+    useMutation({
+      mutationFn: async (payload) => {
+        const res = await saveOutsourcingLabTestResult(
+          user.accessToken,
+          payload,
+        )
+        if (res.status === 200) {
+          if (payload?.labTestStatus == 1) {
+            toast.success('Collected Successfully', toastconfig)
+          } else {
+            toast.success('Saved Successfully', toastconfig)
+          }
+          queryClient.invalidateQueries(['outsourcingLabTests'])
         }
-        queryClient.invalidateQueries(['outsourcingLabTests'])
-      }
-    },
-  })
-  const getCaptialized = text => {
+      },
+    })
+  const getCaptialized = (text) => {
     if (!text) return ''
     return text.charAt(0).toUpperCase() + text.slice(1)
   }
@@ -292,7 +307,7 @@ const Outsourcing = () => {
       field: 'appointmentDate',
       headerName: 'Appointment',
       width: 130,
-      renderCell: params => (
+      renderCell: (params) => (
         <span>{dayjs(params.row.appointmentDate).format('DD-MM-YYYY')}</span>
       ),
     },
@@ -300,7 +315,7 @@ const Outsourcing = () => {
       field: 'patientInfo',
       headerName: 'Patient',
       width: 200,
-      renderCell: params => (
+      renderCell: (params) => (
         <div className="flex items-center gap-2">
           <Avatar
             src={params.row.patientPhoto}
@@ -311,12 +326,25 @@ const Outsourcing = () => {
         </div>
       ),
     },
+    {
+      field: 'branchCode',
+      headerName: 'Branch',
+      width: 100,
+      renderCell: (params) => (
+        <span>
+          {params.row.branchCode ||
+            branches?.find((b) => b.id === params.row.branchId)?.branchCode ||
+            branches?.find((b) => b.id === params.row.branchId)?.name ||
+            '-'}
+        </span>
+      ),
+    },
     // { field: 'appointmentId', headerName: 'Appointment ID', width: 130 },
     {
       field: 'type',
       headerName: 'Type',
       width: 130,
-      renderCell: params => (
+      renderCell: (params) => (
         <span className="capitalize">
           {params.row.type == 'TREATMENT' ? 'Treatment' : 'Consultation'}
         </span>
@@ -326,7 +354,7 @@ const Outsourcing = () => {
       field: 'isSpouse',
       headerName: 'Is Spouse',
       width: 100,
-      renderCell: params => (
+      renderCell: (params) => (
         <span>{params.row.isSpouse == 1 ? 'Yes' : 'No'}</span>
       ),
     },
@@ -334,7 +362,7 @@ const Outsourcing = () => {
       field: 'labTestName',
       headerName: 'Test Name',
       width: 200,
-      renderCell: params => (
+      renderCell: (params) => (
         <span className="capitalize">{params.row.labTestName || 'N/A'}</span>
       ),
     },
@@ -345,7 +373,7 @@ const Outsourcing = () => {
       field: 'actions',
       headerName: 'Actions',
       width: 150,
-      renderCell: params => (
+      renderCell: (params) => (
         <Button
           variant="contained"
           size="small"
@@ -355,15 +383,15 @@ const Outsourcing = () => {
             params.row.status === 'RED'
               ? 'error'
               : params.row.status === 'ORANGE'
-              ? 'warning'
-              : 'success'
+                ? 'warning'
+                : 'success'
           }
         >
           {params.row.status === 'RED'
             ? 'Collect'
             : params.row.status === 'ORANGE'
-            ? 'Upload Report'
-            : 'View Report'}
+              ? 'Upload Report'
+              : 'View Report'}
         </Button>
       ),
     },
@@ -371,15 +399,34 @@ const Outsourcing = () => {
 
   return (
     <div className="p-4">
-      <div className="mb-4 flex gap-2 justify-end">
+      <div className="mb-4 flex gap-2 justify-end items-center">
+        <Autocomplete
+          className="w-48"
+          size="small"
+          options={branchOptions}
+          getOptionLabel={(option) =>
+            option?.id == null
+              ? 'All Branches'
+              : option?.branchCode || option?.name
+          }
+          isOptionEqualToValue={(option, value) => option?.id === value?.id}
+          value={
+            branchId == null
+              ? ALL_BRANCHES_OPTION
+              : branches?.find((branch) => branch.id === branchId) || null
+          }
+          onChange={(_, value) => setBranchId(value?.id ?? null)}
+          renderInput={(params) => <TextField {...params} label="Branch" />}
+          clearIcon={null}
+        />
         <TextField
           placeholder="Search by patient name"
           variant="outlined"
           size="small"
           value={searchText}
-          onChange={e => setSearchText(e.target.value)}
+          onChange={(e) => setSearchText(e.target.value)}
           className="w-80"
-          onKeyDown={e => {
+          onKeyDown={(e) => {
             if (e.key === 'Enter') {
               queryClient.invalidateQueries({
                 queryKey: ['outsourcingLabTests'],
@@ -401,7 +448,7 @@ const Outsourcing = () => {
         <DataGrid
           rows={labTests || []}
           columns={columns}
-          getRowId={row =>
+          getRowId={(row) =>
             `${row.appointmentId}-${row.labTestId}-${row.isSpouse}`
           }
           loading={isLoading}

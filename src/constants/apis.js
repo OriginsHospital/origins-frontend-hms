@@ -4946,12 +4946,19 @@ export const applyMarkAsSeenForDoctorAppointment = async (token, payload) => {
   return response.json()
 }
 
-export const getAllOutsourcingLabTests = async (token, searchQuery) => {
+export const getAllOutsourcingLabTests = async (
+  token,
+  searchQuery,
+  branchId,
+) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
+  const params = new URLSearchParams()
+  if (searchQuery) params.append('searchQuery', searchQuery)
+  if (branchId) params.append('branchId', branchId)
   const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_ALL_OUTSOURCING_LAB_TESTS}?searchQuery=${searchQuery}`,
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_ALL_OUTSOURCING_LAB_TESTS}?${params.toString()}`,
     {
       method: 'GET',
       headers: myHeaders,
