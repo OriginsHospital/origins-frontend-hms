@@ -105,7 +105,7 @@ function FutureCyclesPage() {
       headerName: 'Treatment Type',
       flex: 0.6,
       minWidth: 140,
-      valueGetter: ({ row }) => row.treatmentType || '-',
+      valueFormatter: (value) => value || '-',
     },
     {
       field: 'monthLabel',
