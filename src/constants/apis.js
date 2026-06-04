@@ -1104,17 +1104,24 @@ export const bookTreatmentAppointment = async (token, payload) => {
   )
   return response.json()
 }
-export const getDoctorsForAvailabilityConsultation = async (token, date) => {
+export const getDoctorsForAvailabilityConsultation = async (
+  token,
+  date,
+  branchId,
+) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
-  let raw = JSON.stringify({ date: date })
+  const body = { date }
+  if (branchId != null && branchId !== '') {
+    body.branchId = Number(branchId)
+  }
   const response = await fetch(
     `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_CONSULTATION_DOCTORS_FOR_AVAILABILITY}`,
     {
       method: 'POST',
       headers: myHeaders,
-      body: raw,
+      body: JSON.stringify(body),
       redirect: 'follow',
       credentials: 'include',
     },
@@ -1122,17 +1129,24 @@ export const getDoctorsForAvailabilityConsultation = async (token, date) => {
   return response.json()
 }
 
-export const getDoctorsForAvailabilityTreatment = async (token, date) => {
+export const getDoctorsForAvailabilityTreatment = async (
+  token,
+  date,
+  branchId,
+) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
-  let raw = JSON.stringify({ date: date })
+  const body = { date }
+  if (branchId != null && branchId !== '') {
+    body.branchId = Number(branchId)
+  }
   const response = await fetch(
     `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_TREATMENT_DOCTORS_FOR_AVAILABILITY}`,
     {
       method: 'POST',
       headers: myHeaders,
-      body: raw,
+      body: JSON.stringify(body),
       redirect: 'follow',
       credentials: 'include',
     },

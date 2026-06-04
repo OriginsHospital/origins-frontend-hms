@@ -65,12 +65,12 @@ export default function VerticalTabs({
 
   const queryClient = useQueryClient()
   const dispatch = useDispatch()
-  const userDetails = useSelector(store => store.user)
+  const userDetails = useSelector((store) => store.user)
 
   useEffect(() => {
     if (items && items.length > 0) {
       console.log('items ', items, selectedTab)
-      setSelectedTab(prevSelectedTab => ({
+      setSelectedTab((prevSelectedTab) => ({
         ...prevSelectedTab,
         consultation: { id: items[value]?.id },
       }))
@@ -80,7 +80,7 @@ export default function VerticalTabs({
   const handleChange = (event, newValue) => {
     console.log('handleChange', event.target.name, newValue, selectedTab)
     setValue(newValue)
-    setSelectedTab(prevSelectedTab => ({
+    setSelectedTab((prevSelectedTab) => ({
       ...prevSelectedTab,
       [event.target.name]: { id: items[newValue]?.id },
     }))
@@ -100,7 +100,7 @@ export default function VerticalTabs({
     bookingAppointment.mutate(payload)
   }
 
-  const handleChangeForm = event => {
+  const handleChangeForm = (event) => {
     setAppointmentForm({
       ...appointmentForm,
       [event.target.name]: event.target.value,
@@ -108,13 +108,14 @@ export default function VerticalTabs({
   }
 
   const { data: doctorsList } = useQuery({
-    queryKey: ['doctors', appointmentForm?.date],
+    queryKey: ['doctors', appointmentForm?.date, appointmentForm?.branchId],
     queryFn: () =>
       getDoctorsForAvailabilityConsultation(
         userDetails?.accessToken,
         appointmentForm?.date,
+        appointmentForm?.branchId,
       ),
-    enabled: !!appointmentForm?.date,
+    enabled: !!appointmentForm?.date && appointmentForm?.branchId != null,
   })
 
   const { data: availableSlots } = useQuery({
@@ -132,7 +133,7 @@ export default function VerticalTabs({
   })
 
   const bookingAppointment = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const res = await bookConsultationAppointment(
         userDetails.accessToken,
         payload,
@@ -217,9 +218,9 @@ export default function VerticalTabs({
             ))}
             <Button
               className="flex gap-2 items-center"
-              onClick={e => {
+              onClick={(e) => {
                 dispatch(openSideDrawer())
-                setSelectedTab(prevSelectedTab => ({
+                setSelectedTab((prevSelectedTab) => ({
                   ...prevSelectedTab,
                   consultation: { id: consultation?.id },
                 }))

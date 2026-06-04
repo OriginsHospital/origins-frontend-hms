@@ -59,7 +59,7 @@ import {
   getPatientMasterId,
   openFutureCycleForPatient,
 } from '@/components/FutureCycleModal'
-import { activeVisitHasTreatments } from '@/utils/patientTreatmentUtils'
+import { canScheduleFutureCycle } from '@/utils/patientTreatmentUtils'
 import PreviousPrescriptionTab from '@/components/PreviousPrescriptionTab'
 
 const toastconfig = {
@@ -894,7 +894,10 @@ export default function Register() {
             <div className="flex flex-col col-span-2">
               <div className="flex justify-end gap-2">
                 {getPatientMasterId(formData) &&
-                  !activeVisitHasTreatments(visitInfo?.data) && (
+                  canScheduleFutureCycle({
+                    patientInfo: formData,
+                    visitInfo: visitInfo?.data,
+                  }) && (
                     <Button
                       type="button"
                       variant="outlined"

@@ -124,13 +124,14 @@ export default function Consultations({
     return userDetails?.branchDetails?.[0]?.id
   }, [getConsultationAppointments?.data, userDetails?.branchDetails])
   const { data: doctorsList } = useQuery({
-    queryKey: ['doctors', appointmentForm?.date],
+    queryKey: ['doctors', appointmentForm?.date, appointmentForm?.branchId],
     queryFn: () =>
       getDoctorsForAvailabilityConsultation(
         userDetails?.accessToken,
         appointmentForm?.date,
+        appointmentForm?.branchId,
       ),
-    enabled: !!appointmentForm?.date,
+    enabled: !!appointmentForm?.date && appointmentForm?.branchId != null,
   })
   const { data: availableSlots } = useQuery({
     queryKey: [

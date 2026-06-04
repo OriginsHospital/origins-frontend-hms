@@ -18,7 +18,7 @@ import {
   AccordionDetails,
 } from '@mui/material'
 import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query'
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import Modal from './Modal'
 import VerticalTabs from './VerticalTreatmentTabs'
@@ -51,14 +51,40 @@ export default function Treatments({
     visitId: selectedVisit?.id,
     type: '', // Intial Consultation , FollowUp Consultation , Treatment Type1
   })
+  const userDetails = useSelector((state) => state.user)
+  const dropdowns = useSelector((store) => store.dropdowns)
+
+  const { data: getTreatmentAppointments } = useQuery({
+    queryKey: ['treatmentAppointments', selectedTab?.id],
+    queryFn: () =>
+      getAppointmentsById(
+        userDetails?.accessToken,
+        'Treatment',
+        selectedTab?.id,
+      ),
+    enabled: !!selectedTab?.id,
+  })
+
+  const defaultBookBranchId = useMemo(() => {
+    const appts = getTreatmentAppointments?.data
+    if (appts?.length) {
+      const latest = [...appts].sort(
+        (a, b) => new Date(b.appointmentDate) - new Date(a.appointmentDate),
+      )[0]
+      if (latest?.branchId != null) return latest.branchId
+    }
+    return userDetails?.branchDetails?.[0]?.id
+  }, [getTreatmentAppointments?.data, userDetails?.branchDetails])
+
   const { data: doctorsList } = useQuery({
-    queryKey: ['doctors', appointmentForm?.date],
+    queryKey: ['doctors', appointmentForm?.date, appointmentForm?.branchId],
     queryFn: () =>
       getDoctorsForAvailabilityTreatment(
         userDetails?.accessToken,
         appointmentForm?.date,
+        appointmentForm?.branchId,
       ),
-    enabled: !!appointmentForm?.date,
+    enabled: !!appointmentForm?.date && appointmentForm?.branchId != null,
   })
   const { data: availableSlots } = useQuery({
     queryKey: [
@@ -80,8 +106,6 @@ export default function Treatments({
       type: '', // Intial Consultation , FollowUp Consultation , Treatment Type1
     })
   }, [selectedVisit])
-  const userDetails = useSelector((state) => state.user)
-  const dropdowns = useSelector((store) => store.dropdowns)
 
   const handleNewTreatment = (e) => {
     console.log(e.target.name)
@@ -126,16 +150,6 @@ export default function Treatments({
     createTreatment.mutate(form)
   }
 
-  const { data: getTreatmentAppointments } = useQuery({
-    queryKey: ['treatmentAppointments', selectedTab?.id],
-    queryFn: () =>
-      getAppointmentsById(
-        userDetails?.accessToken,
-        'Treatment',
-        selectedTab?.id,
-      ),
-    enabled: !!selectedTab?.id,
-  })
   const bookingAppointment = useMutation({
     mutationFn: async (payload) => {
       const res = await bookTreatmentAppointment(
@@ -246,6 +260,7 @@ export default function Treatments({
               console.log(selectedTab)
               setAppointmentForm({
                 consultationId: clickedConsultationOrTreatmentType,
+                branchId: defaultBookBranchId,
               })
             }}
           >

@@ -101,6 +101,13 @@ function FutureCyclesPage() {
       ),
     },
     {
+      field: 'treatmentType',
+      headerName: 'Treatment Type',
+      flex: 0.6,
+      minWidth: 140,
+      valueGetter: ({ row }) => row.treatmentType || '-',
+    },
+    {
       field: 'monthLabel',
       headerName: 'Month',
       flex: 0.5,

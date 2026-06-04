@@ -681,14 +681,14 @@ function PackageComponent({
                 <TextField
                   fullWidth
                   label="Doctor Suggested Package Amount"
-                  value={`${newPackageData?.doctorSuggestedPackage || ''}`}
+                  value={`${newPackageData?.doctorSuggestedPackage ?? ''}`}
                 />
               </Grid>
               <Grid item xs={6}>
                 <TextField
                   fullWidth
                   label="Marketing Package Amount"
-                  value={`${newPackageData.marketingPackage || ''}`}
+                  value={`${newPackageData.marketingPackage ?? ''}`}
                   type="number"
                   onChange={(e) =>
                     handleInputChange(

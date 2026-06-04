@@ -95,6 +95,8 @@ export default function AppoinmentForm({
           setAppointmentForm({
             ...appointmentForm,
             date: dayjs(newValue).format('YYYY-MM-DD'),
+            doctorId: '',
+            timeslot: '',
           })
         }
       />
@@ -112,6 +114,8 @@ export default function AppoinmentForm({
             setAppointmentForm({
               ...appointmentForm,
               branchId: value?.id || null,
+              doctorId: '',
+              timeslot: '',
             })
           }
           renderInput={(params) => (

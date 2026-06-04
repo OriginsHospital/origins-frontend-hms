@@ -1702,7 +1702,9 @@ export default function Appointments() {
                   >
                     Embryology
                   </Button>
-                  {canScheduleFutureCycle(patientDetails?.patientInfo) && (
+                  {canScheduleFutureCycle({
+                    patientInfo: patientDetails?.patientInfo,
+                  }) && (
                     <Button
                       type="button"
                       variant="outlined"
