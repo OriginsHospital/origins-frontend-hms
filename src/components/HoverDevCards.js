@@ -93,6 +93,11 @@ const HoverDevCards = () => {
             name: 'Future Cycles',
             relatedModule: 'Patients',
           },
+          {
+            path: '/patient/referringdoctors',
+            name: 'Referring Doctors',
+            relatedModule: 'Patients',
+          },
         ],
       },
       {
