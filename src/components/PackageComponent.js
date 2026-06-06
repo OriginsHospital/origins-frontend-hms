@@ -160,52 +160,36 @@ function PackageComponent({
       newPackageData.marketingPackage !== totalAmount,
       totalAmount == 0,
     )
-    if (newPackageData.marketingPackage !== totalAmount || totalAmount == 0) {
+    if (newPackageData.marketingPackage !== totalAmount) {
       toast.error(
         'The marketing package amount must equal the sum of all other amounts.',
         toastconfig,
       )
       return
-    } else if (!newPackageData.registrationDate) {
-      toast.error('Select Registration Date.', toastconfig)
-      return
-    } else if (
-      !newPackageData.registrationAmount ||
-      newPackageData.registrationAmount <= 0
-    ) {
-      // If there's nothing to pay (registration is 0), just save package details.
-      // Payment endpoint validates schema strictly; avoid sending a 0-amount payment.
-      const savePayload = { ...newPackageData }
-      delete savePayload.paidAmount
-      delete savePayload.pendingAmount
-      delete savePayload.packageDetails
-      if (!!newPackageData?.id) {
-        editPackageMutate?.mutate(savePayload)
-      } else {
-        createPackageMutate?.mutate(savePayload)
+    }
+
+    const registrationAmount = Number(newPackageData.registrationAmount || 0)
+
+    if (registrationAmount > 0) {
+      if (!newPackageData.registrationDate) {
+        toast.error('Select Registration Date.', toastconfig)
+        return
       }
-      return
-    } else {
-      console.log(
-        'Saving package data:',
-        newPackageData.marketingPackage,
-        totalAmount,
-      )
 
       handlePayAndSave(selectedVisit?.id)
+      return
     }
-    // if (!!newPackageData?.id) {
-    //     // editPackageMutate.mutate(payload)
-    //     handlePayAndSave()
-    //     // console.log('editPackage', editPackage)
-    //     // if (editPackage.status === 200) {
-    //     //     setIsEditing(false);
-    //     // }
-    // } else {
-    // createPackageMutate.mutate(newPackageData)
-    // console.log('createPackage', createPackage)
-    // setIsEditing(false);
-    // }
+
+    // Zero registration amount — save package details without payment.
+    const savePayload = { ...newPackageData }
+    delete savePayload.paidAmount
+    delete savePayload.pendingAmount
+    delete savePayload.packageDetails
+    if (!!newPackageData?.id) {
+      editPackageMutate?.mutate(savePayload)
+    } else {
+      createPackageMutate?.mutate(savePayload)
+    }
   }
 
   const handleSavePackageChanges = () => {
@@ -222,7 +206,7 @@ function PackageComponent({
       newPackageData.uptPositiveAmount,
     ].reduce((sum, amount) => sum + (amount || 0), 0)
 
-    if (newPackageData.marketingPackage !== totalAmount || totalAmount === 0) {
+    if (newPackageData.marketingPackage !== totalAmount) {
       toast.error(
         'The marketing package amount must equal the sum of all other amounts.',
         toastconfig,
@@ -230,7 +214,8 @@ function PackageComponent({
       return
     }
 
-    if (!newPackageData.registrationDate) {
+    const registrationAmount = Number(newPackageData.registrationAmount || 0)
+    if (registrationAmount > 0 && !newPackageData.registrationDate) {
       toast.error('Select Registration Date.', toastconfig)
       return
     }
