@@ -4,6 +4,7 @@
 const REFERRING_DOCTORS_LOG_ALLOWED_EMAILS = [
   'nikhilsuvva77@gmail.com',
   'ajaysivaramburri@gmail.com',
+  'originsivf@gmail.com',
   'originsivf@outlook.com',
   'jhansi@gmail.com',
   'karun@gmail.com',

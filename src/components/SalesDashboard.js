@@ -52,6 +52,15 @@ const FALLBACK_COLORS = [
   '#7f8c8d',
 ]
 
+const sortRowsByPatientName = (rows = []) =>
+  [...rows].sort((a, b) =>
+    String(a?.patientName || '').localeCompare(
+      String(b?.patientName || ''),
+      undefined,
+      { sensitivity: 'base' },
+    ),
+  )
+
 const getReportBranchId = (row) => {
   if (!row) return null
   return (
@@ -350,29 +359,28 @@ const SalesDashboard = ({
   const dataNormalizedReturns = (data?.returnData || []).map(normalizeRow)
 
   const rowsForActiveBranch = useMemo(() => {
+    let rows = dataNormalizedSales || []
     // When branchId is "ALL", show all rows without filtering
-    if (branchId === 'ALL') {
-      return dataNormalizedSales || []
+    if (branchId !== 'ALL') {
+      rows = rows.filter(
+        (row) =>
+          row.reportBranchId === branchId ||
+          String(row.reportBranchId) === String(branchId),
+      )
     }
-    // Otherwise, filter by branchId
-    return (dataNormalizedSales || []).filter(
-      (row) =>
-        row.reportBranchId === branchId ||
-        String(row.reportBranchId) === String(branchId),
-    )
+    return sortRowsByPatientName(rows)
   }, [dataNormalizedSales, branchId])
 
   const rowsForActiveBranchReturns = useMemo(() => {
-    // When branchId is "ALL", show all rows without filtering
-    if (branchId === 'ALL') {
-      return dataNormalizedReturns || []
+    let rows = dataNormalizedReturns || []
+    if (branchId !== 'ALL') {
+      rows = rows.filter(
+        (row) =>
+          row.reportBranchId === branchId ||
+          String(row.reportBranchId) === String(branchId),
+      )
     }
-    // Otherwise, filter by branchId
-    return (dataNormalizedReturns || []).filter(
-      (row) =>
-        row.reportBranchId === branchId ||
-        String(row.reportBranchId) === String(branchId),
-    )
+    return sortRowsByPatientName(rows)
   }, [dataNormalizedReturns, branchId])
 
   const scheduleVisibleRowsUpdate = useCallback(
@@ -475,6 +483,10 @@ const SalesDashboard = ({
         filterField: 'patientName',
         renderCell: (params) => <div>{params?.row?.patientName || ''}</div>,
         valueGetter: (params) => params?.row?.patientName || '',
+        sortComparator: (v1, v2) =>
+          String(v1 || '').localeCompare(String(v2 || ''), undefined, {
+            sensitivity: 'base',
+          }),
         filterOperators: [
           {
             label: 'contains',
@@ -1128,6 +1140,11 @@ const SalesTable = ({
       branchName={branchName}
       filters={filters}
       onRowsChange={onRowsChange}
+      initialState={{
+        sorting: {
+          sortModel: [{ field: 'patientName', sort: 'asc' }],
+        },
+      }}
     />
   </div>
 )

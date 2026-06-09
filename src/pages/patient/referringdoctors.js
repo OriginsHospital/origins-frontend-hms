@@ -88,7 +88,8 @@ function ReferringDoctorsPage() {
         toast.error(res?.message || 'Failed to add doctor', toastconfig)
       }
     },
-    onError: () => toast.error('Failed to add doctor', toastconfig),
+    onError: (err) =>
+      toast.error(err?.message || 'Failed to add doctor', toastconfig),
   })
 
   const handleContactChange = (e) => {
@@ -314,6 +315,11 @@ function ReferringDoctorsPage() {
                   value={formState.contactNumber}
                   onChange={handleContactChange}
                   inputProps={{ inputMode: 'numeric', maxLength: 10 }}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">+91</InputAdornment>
+                    ),
+                  }}
                   helperText="10 digit mobile number"
                   disabled={createMutation.isPending || showSuccess}
                 />

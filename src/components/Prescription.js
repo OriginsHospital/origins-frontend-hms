@@ -63,6 +63,10 @@ import HysteroscopySheet from './HysteroscopySheet'
 import ERASheet from './ERASheet'
 import HysteroscopySheetNew from './HysteroscopySheetNew'
 import HysteroLapOperationNotesForm from './HysteroLapOperationNotesForm'
+import {
+  buildMedicationFormData,
+  mergePrescribedMedicationRows,
+} from '@/utils/medicationSheetUtils'
 
 const HYSTERO_LAP_TYPE_OPTIONS = [
   { value: 'Hysteroscopy', label: 'Hysteroscopy' },
@@ -444,7 +448,7 @@ function Prescription({
   // })
   // console.log('treatmentCycleId', treatmentCycleId)
   const { data: medicationOptionsFollicular } = useQuery({
-    queryKey: ['medicationOptionsFollicular'],
+    queryKey: ['medicationOptionsFollicular', treatmentCycleId],
     queryFn: async () => {
       const res = await getPrescriptionDetailsByTreatmentCycleId(
         user.accessToken,
@@ -762,14 +766,15 @@ function Prescription({
             : [dayjs().format('DD/MM')]
           const medicationRows = hasValidMedRows ? res?.medicationRows : []
           const scanRows = hasValidScanRows ? res?.scanRows : []
+          const fetMedicationFormData = buildMedicationFormData(
+            medicationRows,
+            res?.medicationSheet,
+          )
 
-          setFETFormData({
-            rows: medicationRows,
-            ...res?.medicationSheet,
-          })
+          setFETFormData(fetMedicationFormData)
           setFETTemplate({
             columns,
-            rows: medicationRows,
+            rows: fetMedicationFormData.rows,
           })
           setScanFetFormData({
             rows: scanRows,
@@ -797,6 +802,62 @@ function Prescription({
     },
     enabled: !!treatmentCycleId && treatmentStatus?.FET_START == 1,
   })
+
+  useEffect(() => {
+    if (
+      treatmentStatus?.FET_START != 1 ||
+      !medicationOptionsFollicular?.length
+    ) {
+      return
+    }
+
+    setFETFormData((prevData) => {
+      const mergedRows = mergePrescribedMedicationRows(
+        prevData?.rows,
+        medicationOptionsFollicular,
+      )
+      if (
+        mergedRows.length === prevData?.rows?.length &&
+        mergedRows.every(
+          (row, index) =>
+            row?.value === prevData?.rows?.[index]?.value &&
+            row?.label === prevData?.rows?.[index]?.label,
+        )
+      ) {
+        return prevData
+      }
+
+      return {
+        ...(prevData || {}),
+        rows: mergedRows,
+      }
+    })
+
+    setFETTemplate((prevTemplate) => {
+      if (!prevTemplate?.columns) return prevTemplate
+
+      const mergedRows = mergePrescribedMedicationRows(
+        prevTemplate?.rows,
+        medicationOptionsFollicular,
+      )
+      if (
+        mergedRows.length === prevTemplate?.rows?.length &&
+        mergedRows.every(
+          (row, index) =>
+            row?.value === prevTemplate?.rows?.[index]?.value &&
+            row?.label === prevTemplate?.rows?.[index]?.label,
+        )
+      ) {
+        return prevTemplate
+      }
+
+      return {
+        ...prevTemplate,
+        rows: mergedRows,
+      }
+    })
+  }, [medicationOptionsFollicular, treatmentStatus?.FET_START])
+
   const { data: treatmentERASheet } = useQuery({
     queryKey: [
       'treatmentERASheet',

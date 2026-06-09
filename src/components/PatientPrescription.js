@@ -351,6 +351,9 @@ function PatientPrescription({
           queryKey: ['medicationOptionsFollicular'],
         })
         queryClient.invalidateQueries({
+          queryKey: ['treatmentFETSheet'],
+        })
+        queryClient.invalidateQueries({
           queryKey: ['getLineBills', appointmentId],
         })
         queryClient.invalidateQueries({

@@ -107,6 +107,15 @@ const rowBelongsToSelectedBranch = (item, selectedBranch) => {
   return rowCandidates.some((rowValue) => branchCandidates.includes(rowValue))
 }
 
+const ROH_BRANCH_ID = 'ROH'
+
+const getHnkBranch = (branches = []) =>
+  branches.find(
+    (branch) =>
+      normalizeBranchValue(branch.name) === 'HNK' ||
+      normalizeBranchValue(branch.code) === 'HNK',
+  )
+
 const dedupeRevenueRows = (rows = []) => {
   const seen = new Set()
   return rows.filter((row) => {
@@ -195,13 +204,7 @@ function SalesNew() {
         toDate: dayjs(toDate).format('YYYY-MM-DD'),
       })
 
-      // When "ALL" is selected, we'll fetch data for all branches
-      // For now, set appliedBranchId to "ALL" to trigger multi-branch fetch
-      if (branchId === 'ALL') {
-        setAppliedBranchId('ALL')
-      } else {
-        setAppliedBranchId(branchId)
-      }
+      setAppliedBranchId(branchId)
       setAppliedFromDate(fromDate)
       setAppliedToDate(toDate)
       // Ensure applied payment mode is set (default ALL)
@@ -382,9 +385,34 @@ function SalesNew() {
         )
       }
 
-      // Apply branch filter only when a specific branch is selected (not 'ALL')
-      // When branchId === 'ALL': Show all branches (HNK + HYD + KMM + SPL) - NO filtering
-      if (branchId && branchId !== 'ALL') {
+      // Apply branch filter based on selection
+      // ALL: show all branches (HNK + HYD + KMM + SPL)
+      // ROH: All minus HNK
+      // Other: show only the selected branch
+      if (branchId === ROH_BRANCH_ID) {
+        const hnkBranch = getHnkBranch(dropdowns?.branches)
+        const beforeSalesCount = filteredSalesData.length
+        const beforeReturnsCount = filteredReturnData.length
+
+        filteredSalesData = filteredSalesData.filter((item) => {
+          if (!item) return false
+          return !rowBelongsToSelectedBranch(item, hnkBranch)
+        })
+
+        filteredReturnData = filteredReturnData.filter((item) => {
+          if (!item) return false
+          return !rowBelongsToSelectedBranch(item, hnkBranch)
+        })
+
+        console.log('Branch filter results (ROH = All - HNK):', {
+          branchId,
+          hnkBranchName: hnkBranch?.name,
+          beforeSalesCount,
+          afterSalesCount: filteredSalesData.length,
+          beforeReturnsCount,
+          afterReturnsCount: filteredReturnData.length,
+        })
+      } else if (branchId && branchId !== 'ALL') {
         console.log('Applying branch filter for specific branch:', branchId)
         const selectedBranch = dropdowns?.branches?.find(
           (item) => String(item.id) === String(branchId),
@@ -412,7 +440,6 @@ function SalesNew() {
           afterReturnsCount: filteredReturnData.length,
         })
       } else if (branchId === 'ALL') {
-        // When "ALL" is selected, show all data from all branches (HNK + HYD + KMM + SPL)
         console.log(
           'Branch = ALL: Showing data from all branches (no branch filtering applied)',
         )
@@ -543,12 +570,7 @@ function SalesNew() {
   const handleApplyFilters = () => {
     setAppliedFromDate(fromDate)
     setAppliedToDate(toDate)
-    // When "ALL" is selected, set appliedBranchId to "ALL" to trigger multi-branch fetch
-    if (branchId === 'ALL') {
-      setAppliedBranchId('ALL')
-    } else {
-      setAppliedBranchId(branchId)
-    }
+    setAppliedBranchId(branchId)
     setAppliedPaymentMode(paymentMode || 'ALL')
   }
 
@@ -710,6 +732,7 @@ function SalesNew() {
               placeholder="branch"
             >
               <MenuItem value="ALL">ALL</MenuItem>
+              <MenuItem value={ROH_BRANCH_ID}>ROH</MenuItem>
               {dropdowns?.branches
                 ?.filter(
                   (branch) =>
@@ -790,9 +813,11 @@ function SalesNew() {
         branchName={
           branchId === 'ALL'
             ? 'ALL'
-            : dropdowns?.branches?.find(
-                (branch) => branch.id === appliedBranchId,
-              )?.name
+            : branchId === ROH_BRANCH_ID
+              ? 'ROH'
+              : dropdowns?.branches?.find(
+                  (branch) => branch.id === appliedBranchId,
+                )?.name
         }
         filters={{
           fromDate: appliedFromDate
@@ -801,7 +826,10 @@ function SalesNew() {
           toDate: appliedToDate
             ? dayjs(appliedToDate).format('YYYY-MM-DD')
             : '',
-          branchId: branchId === 'ALL' ? 'ALL' : appliedBranchId,
+          branchId:
+            branchId === 'ALL' || branchId === ROH_BRANCH_ID
+              ? branchId
+              : appliedBranchId,
         }}
         activeView={activeView}
         showRevenueRowActions={hasRevenueNewRowActionsAccess(

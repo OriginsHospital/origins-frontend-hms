@@ -1291,8 +1291,12 @@ export const getAllAppointmentsByDate = async (token, date, branchId) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
+  const branchQuery =
+    branchId !== null && branchId !== undefined && branchId !== ''
+      ? `?branchId=${branchId}`
+      : ''
   const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_ALL_APPOINTMENTS_BY_DATE}/${date}?branchId=${branchId}`,
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_ALL_APPOINTMENTS_BY_DATE}/${date}${branchQuery}`,
     {
       method: 'GET',
       headers: myHeaders,
