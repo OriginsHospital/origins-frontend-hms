@@ -235,7 +235,7 @@ const Index = () => {
   const tabSummary =
     activeTab === EXPIRY_TABS.EXPIRED
       ? `${sortedRows.length} expired batch${sortedRows.length === 1 ? '' : 'es'} with stock`
-      : `${sortedRows.length} batch${sortedRows.length === 1 ? '' : 'es'} expiring within ${nearExpireDays} days`
+      : `${sortedRows.length} active medicine batch${sortedRows.length === 1 ? '' : 'es'} expiring within ${nearExpireDays} days`
 
   return (
     <div className="flex flex-col">
