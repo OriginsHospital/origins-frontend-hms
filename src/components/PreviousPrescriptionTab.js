@@ -29,6 +29,7 @@ import {
   getPrescriptionDetailsByTreatmentCycleId,
   getTreatmentsHistoryByVisitId,
 } from '@/constants/apis'
+import OpdSummaryDisplay from '@/components/OpdSummaryDisplay'
 
 const getOutcomeFromText = (text = '') => {
   const value = String(text).toLowerCase()
@@ -242,8 +243,11 @@ export default function PreviousPrescriptionTab({ patientDetails }) {
     )
   }
 
+  const patientId = patientDetails?.id || patientDetails?.patientId
+
   return (
     <div className="space-y-4">
+      <OpdSummaryDisplay patientId={patientId} />
       {!cycles.length && (
         <Alert severity="info">
           No previous treatment cycles found for this patient.

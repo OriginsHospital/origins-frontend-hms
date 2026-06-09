@@ -78,6 +78,7 @@ import { isIuiTreatment } from '@/utils/treatmentTypeUtils'
 import PatientDetailsSkeleton from '@/fallbacks/PatientDetailsSkeleton'
 import { openFutureCycleForDoctorPatient } from '@/components/FutureCycleModal'
 import { canScheduleFutureCycle } from '@/utils/patientTreatmentUtils'
+import OpdSummaryDisplay from '@/components/OpdSummaryDisplay'
 import { toast } from 'react-toastify'
 import s from 'aws-s3'
 
@@ -655,6 +656,7 @@ function ConsultationsAndTreatments({
 
   return (
     <div className="flex flex-col  p-2">
+      <OpdSummaryDisplay patientId={patientInfo?.id} />
       {/* Check List Accordion */}
       <Accordion defaultExpanded>
         <AccordionSummary expandIcon={<ExpandMore />}>
