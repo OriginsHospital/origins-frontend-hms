@@ -151,8 +151,7 @@ export default function Appointments({ Treatments, selectedVisit }) {
   }
 
   const appointments = visitAppointments?.data || []
-  const canBookNew = selectedVisit?.isActive == 1 && activeTreatment?.id != null
-  const hasAppointments = appointments.length > 0
+  const canBookNew = selectedVisit?.isActive == 1
 
   return (
     <div className="bg-white px-5 py-3 rounded shadow">
@@ -165,66 +164,52 @@ export default function Appointments({ Treatments, selectedVisit }) {
           </div>
         ) : null}
 
-        {hasAppointments || canBookNew ? (
-          <div className="p-4">
-            <div className="grid md:grid-cols-4 lg:grid-cols-5 gap-4">
-              {appointments.map((eachAppointment) => (
-                <div
-                  className="p-2 flex flex-col rounded-lg shadow shadow-secondary"
-                  key={`${eachAppointment.appointmentSource}-${eachAppointment.appointmentId}`}
-                >
-                  {eachAppointment.consultationType && (
-                    <span className="text-xs text-gray-500 mb-1">
-                      {eachAppointment.consultationType}
-                    </span>
-                  )}
-                  <span
-                    title={eachAppointment.doctorName}
-                    className="max-w-48 text-nowrap text-ellipsis overflow-hidden font-semibold"
-                  >
-                    {eachAppointment.doctorName}
+        <div className="p-4">
+          <div className="grid md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {appointments.map((eachAppointment) => (
+              <div
+                className="p-2 flex flex-col rounded-lg shadow shadow-secondary"
+                key={`${eachAppointment.appointmentSource}-${eachAppointment.appointmentId}`}
+              >
+                {eachAppointment.consultationType && (
+                  <span className="text-xs text-gray-500 mb-1">
+                    {eachAppointment.consultationType}
                   </span>
-                  <div className="flex justify-between font-thin">
-                    <span>{eachAppointment.timeStart}</span>
-                    <span>
-                      {dayjs(eachAppointment.appointmentDate).format(
-                        'DD-MM-YYYY',
-                      )}
-                    </span>
-                  </div>
-                </div>
-              ))}
-              {canBookNew && (
-                <Button
-                  className="flex gap-2 items-center capitalize text-sm"
-                  onClick={() => {
-                    dispatch(openSideDrawer('new_appoitments_drawer'))
-                    setAppointmentForm({
-                      consultationId: 'Treatment',
-                      branchId: defaultBookBranchId,
-                    })
-                  }}
-                  variant="outlined"
+                )}
+                <span
+                  title={eachAppointment.doctorName}
+                  className="max-w-48 text-nowrap text-ellipsis overflow-hidden font-semibold"
                 >
-                  <FaPlusCircle size={20} />
-                  <span>New Appointment</span>
-                </Button>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="p-20 text-center">
-            <h5 className="text-2 text-secondary font-semibold">
-              No Appointments Found
-            </h5>
-            {!activeTreatment && (
-              <p className="text-gray-500 mt-2 text-sm">
-                New appointments can be booked once a treatment is started for
-                this visit.
-              </p>
+                  {eachAppointment.doctorName}
+                </span>
+                <div className="flex justify-between font-thin">
+                  <span>{eachAppointment.timeStart}</span>
+                  <span>
+                    {dayjs(eachAppointment.appointmentDate).format(
+                      'DD-MM-YYYY',
+                    )}
+                  </span>
+                </div>
+              </div>
+            ))}
+            {canBookNew && (
+              <Button
+                className="flex gap-2 items-center capitalize text-sm"
+                onClick={() => {
+                  dispatch(openSideDrawer('new_appoitments_drawer'))
+                  setAppointmentForm({
+                    consultationId: 'Treatment',
+                    branchId: defaultBookBranchId,
+                  })
+                }}
+                variant="outlined"
+              >
+                <FaPlusCircle size={20} />
+                <span>New Appointment</span>
+              </Button>
             )}
           </div>
-        )}
+        </div>
 
         <SideDrawer
           closeOnOutsideClick={true}
