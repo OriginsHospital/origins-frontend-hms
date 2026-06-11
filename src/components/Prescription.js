@@ -80,7 +80,8 @@ function Prescription({
   treatmentCycleId,
   patientInfo,
   selectedPatient,
-  // setSelectedPatient,
+  setSelectedPatient,
+  onTreatmentStarted,
 }) {
   const user = useSelector((store) => store.user)
   const dispatch = useDispatch()
@@ -905,25 +906,71 @@ function Prescription({
     enabled: !!patientInfo?.activeVisitId, // Always enable the query
   })
 
+  const buildStartTreatmentPayload = (overrides = {}) => {
+    const payload = {
+      createType: 'Treatment',
+      type: treatmentForm.type,
+      treatmentTypeId: treatmentForm.treatmentTypeId,
+      visitId: patientInfo?.activeVisitId,
+      ...overrides,
+    }
+
+    if (type === 'Consultation' && appointmentId) {
+      payload.consultationAppointmentId = appointmentId
+    }
+
+    if (treatmentForm.isPackageExists) {
+      payload.packageAmount = treatmentForm.packageAmount
+    }
+
+    return payload
+  }
+
   const createTreatment = useMutation({
     mutationFn: async (payload) => {
       const res = await createConsultationOrTreatment(user.accessToken, payload)
-      console.log('under mutation fn', res)
       if (res.status === 400) {
         toast.error(res.message)
-      } else if (res.status === 200) {
-        toast.success(res.message)
-        dispatch(closeModal())
-        // Removed patientInfoForDoctor invalidation - it's managed in appointments page
-        queryClient.invalidateQueries('treatmentStatus')
+        throw new Error(res.message)
       }
-      // setViewForm(false)
-      // setIsValidUsers(1)
+      if (res.status !== 200) {
+        throw new Error(res.message || 'Failed to start treatment')
+      }
+      return res
     },
-    onSuccess: () => {
-      // queryClient.invalidateQueries(
-      //   // 'visitInfo',
-      // )
+    onSuccess: (res) => {
+      toast.success(res.message)
+      dispatch(closeModal())
+
+      const convertedAppointmentId = res?.data?.convertedAppointmentId
+      const treatmentCycleIdFromResponse = res?.data?.id
+
+      if (convertedAppointmentId && treatmentCycleIdFromResponse) {
+        const updatedPatient = {
+          ...selectedPatient,
+          type: 'Treatment',
+          treatmentCycleId: treatmentCycleIdFromResponse,
+          appointmentId: convertedAppointmentId,
+          consultationId: null,
+        }
+
+        if (onTreatmentStarted) {
+          onTreatmentStarted(updatedPatient)
+        }
+
+        if (setSelectedPatient) {
+          setSelectedPatient(updatedPatient)
+        }
+      }
+
+      queryClient.invalidateQueries('treatmentStatus')
+      queryClient.invalidateQueries('patientInfoForDoctor')
+      queryClient.invalidateQueries('appointmentsForDoctor')
+    },
+    onError: (error) => {
+      if (error?.message) {
+        toast.error(error.message)
+      }
     },
   })
 
@@ -2799,7 +2846,7 @@ function Prescription({
       >
         <div className="flex justify-between">
           <span className="text-xl font-semibold text-secondary flex items-center py-5 gap-4">
-            New Treatment
+            {type === 'Consultation' ? 'Start Treatment' : 'New Treatment'}
           </span>
           <IconButton onClick={() => dispatch(closeModal())}>
             <Close />
@@ -2863,32 +2910,12 @@ function Prescription({
                 // console.log(treatmentForm, activeVisitId)
                 if (!treatmentForm.type) {
                   toast.error('Please select a treatment type')
-                } else if (
-                  treatmentForm.isPackageExists &&
-                  // treatmentForm.packageAmount &&
-                  patientInfo?.activeVisitId
-                ) {
-                  createTreatment.mutate({
-                    createType: 'Treatment',
-                    type: treatmentForm.type,
-                    treatmentTypeId: treatmentForm.treatmentTypeId,
-                    visitId: patientInfo?.activeVisitId,
-                    packageAmount: treatmentForm.packageAmount,
-                  })
-                } else if (
-                  !treatmentForm.isPackageExists &&
-                  patientInfo?.activeVisitId
-                ) {
-                  createTreatment.mutate({
-                    createType: 'Treatment',
-                    type: treatmentForm.type,
-                    treatmentTypeId: treatmentForm.treatmentTypeId,
-                    visitId: patientInfo?.activeVisitId,
-                  })
+                } else if (patientInfo?.activeVisitId) {
+                  createTreatment.mutate(buildStartTreatmentPayload())
                 }
               }}
             >
-              Create
+              {type === 'Consultation' ? 'Start' : 'Create'}
             </Button>
           </div>
         </div>

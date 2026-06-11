@@ -986,6 +986,56 @@ export default function Appointments() {
     isReviewCall: null,
     reviewCallInfo: null,
   })
+  const selectedPatientRef = useRef(selectedPatient)
+
+  useEffect(() => {
+    selectedPatientRef.current = selectedPatient
+  }, [selectedPatient])
+
+  const resolveSelectedAppointment = (appointments, query = {}) => {
+    if (!appointments?.length) return null
+
+    const { appointmentId, type, patientId } = query
+    const currentSelection = selectedPatientRef.current
+
+    if (appointmentId && type) {
+      const matchedByQuery = appointments.find(
+        (each) =>
+          String(each.appointmentId) === String(appointmentId) &&
+          each.type === type,
+      )
+      if (matchedByQuery) return matchedByQuery
+    }
+
+    if (currentSelection?.appointmentId) {
+      const matchedByCurrentAppointment = appointments.find(
+        (each) =>
+          String(each.appointmentId) === String(currentSelection.appointmentId),
+      )
+      if (matchedByCurrentAppointment) return matchedByCurrentAppointment
+    }
+
+    const patientKey = patientId || currentSelection?.patientId
+    if (patientKey) {
+      const patientAppointments = appointments.filter(
+        (each) => each.patientId === patientKey,
+      )
+      if (patientAppointments.length === 1) {
+        return patientAppointments[0]
+      }
+      if (currentSelection?.type) {
+        const matchedByType = patientAppointments.find(
+          (each) => each.type === currentSelection.type,
+        )
+        if (matchedByType) return matchedByType
+      }
+      if (patientAppointments.length > 0) {
+        return patientAppointments[0]
+      }
+    }
+
+    return appointments[0]
+  }
 
   const { data: appointmentsData, isLoading: isAppointmentsLoading } = useQuery(
     {
@@ -1002,15 +1052,12 @@ export default function Appointments() {
           if (responsejson?.data?.length == 0) {
             setSelectedPatient(null)
           } else {
-            let { appointmentId, type } = router.query
-            if (appointmentId && type) {
-              let findPatient = responsejson.data.find(
-                (each) =>
-                  each.appointmentId == appointmentId && each.type == type,
-              )
-              setSelectedPatient(findPatient)
-            } else {
-              setSelectedPatient(responsejson.data[0])
+            const nextSelectedPatient = resolveSelectedAppointment(
+              responsejson.data,
+              router.query,
+            )
+            if (nextSelectedPatient) {
+              setSelectedPatient(nextSelectedPatient)
             }
           }
           return responsejson.data
@@ -1930,6 +1977,23 @@ export default function Appointments() {
               }}
               selectedPatient={selectedPatient}
               setSelectedPatient={setSelectedPatient}
+              onTreatmentStarted={(updatedPatient) => {
+                selectedPatientRef.current = updatedPatient
+                router.push(
+                  {
+                    pathname: router.pathname + '/',
+                    query: {
+                      ...router.query,
+                      patientId: updatedPatient.patientId,
+                      appointmentId: updatedPatient.appointmentId,
+                      type: updatedPatient.type,
+                      date: dayjs(date).format('YYYY-MM-DD'),
+                    },
+                  },
+                  undefined,
+                  { shallow: true },
+                )
+              }}
             />
             {/* {console.log(patientDetails)} */}
             <ConsultationsAndTreatments
