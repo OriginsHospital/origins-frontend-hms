@@ -11,7 +11,10 @@ import { DatePicker } from '@mui/x-date-pickers'
 import React from 'react'
 import dayjs from 'dayjs'
 import { useQuery } from '@tanstack/react-query'
-import { getAllAppointmentsReasons } from '@/constants/apis'
+import {
+  getAllAppointmentsReasons,
+  getAppointmentReasonsByPatientType,
+} from '@/constants/apis'
 import { useSelector } from 'react-redux'
 
 export default function AppoinmentForm({
@@ -22,11 +25,18 @@ export default function AppoinmentForm({
   availableSlots,
   handleBookAppointment,
   appointmentId,
+  visitTypeId,
 }) {
   const user = useSelector((store) => store.user)
   const dropdowns = useSelector((store) => store.dropdowns)
   const { branches } = dropdowns
   //getAllAppointmentsReasons using useQuery
+  const useTreatmentReasons = Boolean(
+    appointmentForm?.consultationId &&
+      appointmentId != null &&
+      appointmentId !== '',
+  )
+
   const { data: appointmentReasons } = useQuery({
     queryKey: [
       'getAllAppointmentsReasons',
@@ -44,16 +54,31 @@ export default function AppoinmentForm({
       }
       throw new Error(response?.message || 'Could not load appointment reasons')
     },
+    enabled: Boolean(user?.accessToken && useTreatmentReasons),
+  })
+
+  const { data: visitTypeReasons } = useQuery({
+    queryKey: ['appointmentReasonsByVisitType', visitTypeId],
+    queryFn: async () => {
+      const response = await getAppointmentReasonsByPatientType(
+        user?.accessToken,
+        visitTypeId,
+      )
+      if (response?.status === 200) {
+        return response.data ?? []
+      }
+      throw new Error(response?.message || 'Could not load appointment reasons')
+    },
     enabled: Boolean(
-      user?.accessToken &&
-        appointmentForm?.consultationId != null &&
-        appointmentForm?.consultationId !== '' &&
-        appointmentId != null &&
-        appointmentId !== '',
+      user?.accessToken && !useTreatmentReasons && visitTypeId != null,
     ),
   })
+
+  const resolvedAppointmentReasons = useTreatmentReasons
+    ? appointmentReasons
+    : visitTypeReasons
   const appointmentReasonOptions = React.useMemo(() => {
-    const reasons = appointmentReasons ?? []
+    const reasons = resolvedAppointmentReasons ?? []
     const hasOthers = reasons.some((reason) =>
       reason?.name?.toString().trim().toLowerCase().includes('other'),
     )
@@ -69,7 +94,7 @@ export default function AppoinmentForm({
         isSpouse: 0,
       },
     ]
-  }, [appointmentReasons])
+  }, [resolvedAppointmentReasons])
   const selectedAppointmentReason = appointmentReasonOptions.find(
     (reason) => reason.id === appointmentForm?.appointmentReasonId,
   )

@@ -229,6 +229,7 @@ export default function Appointments({ Treatments, selectedVisit }) {
               availableSlots={availableSlots}
               handleBookAppointment={handleBookAppointment}
               appointmentId={activeTreatment?.id}
+              visitTypeId={selectedVisit?.type}
             />
           </div>
         </SideDrawer>
