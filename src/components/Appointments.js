@@ -1,9 +1,11 @@
 import {
+  bookConsultationAppointment,
+  bookTreatmentAppointment,
+  createConsultationOrTreatment,
   createOtherAppointmentReason,
   getAppointmentsByVisitId,
-  getDoctorsForAvailabilityTreatment,
-  bookTreatmentAppointment,
   getAvailableTreatmentSlots,
+  getDoctorsForAvailabilityTreatment,
 } from '@/constants/apis'
 import { Button, Card } from '@mui/material'
 import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query'
@@ -18,13 +20,90 @@ import dayjs from 'dayjs'
 import { toast } from 'react-toastify'
 import { toastconfig } from '@/utils/toastconfig'
 
-export default function Appointments({ Treatments, selectedVisit }) {
+const INITIAL_CONSULTATION = 'Initial Consultation'
+const FOLLOWUP_CONSULTATION = 'FollowUp Consultation'
+
+function hasInitialConsultationAppointment(appointments = []) {
+  return appointments.some(
+    (appointment) =>
+      appointment.appointmentSource === 'Consultation' &&
+      appointment.consultationType === INITIAL_CONSULTATION,
+  )
+}
+
+function getConsultationIdForReasons(consultations = [], appointments = []) {
+  const initial = consultations.find(
+    (consultation) => consultation.type === INITIAL_CONSULTATION,
+  )
+  if (!initial) return null
+  if (!hasInitialConsultationAppointment(appointments)) {
+    return initial.id
+  }
+  const followUps = consultations.filter(
+    (consultation) => consultation.type === FOLLOWUP_CONSULTATION,
+  )
+  return followUps.length ? followUps[followUps.length - 1].id : null
+}
+
+async function ensureConsultationId({
+  token,
+  visitId,
+  consultations = [],
+  appointments = [],
+}) {
+  const initial = consultations.find(
+    (consultation) => consultation.type === INITIAL_CONSULTATION,
+  )
+
+  if (!initial) {
+    const response = await createConsultationOrTreatment(token, {
+      createType: 'Consultation',
+      visitId,
+      type: INITIAL_CONSULTATION,
+    })
+    if (response?.status !== 200 || !response?.data?.id) {
+      throw new Error(response?.message || 'Could not create consultation')
+    }
+    return response.data.id
+  }
+
+  if (!hasInitialConsultationAppointment(appointments)) {
+    return initial.id
+  }
+
+  const followUps = consultations.filter(
+    (consultation) => consultation.type === FOLLOWUP_CONSULTATION,
+  )
+  if (followUps.length) {
+    return followUps[followUps.length - 1].id
+  }
+
+  const response = await createConsultationOrTreatment(token, {
+    createType: 'Consultation',
+    visitId,
+    type: FOLLOWUP_CONSULTATION,
+  })
+  if (response?.status !== 200 || !response?.data?.id) {
+    throw new Error(
+      response?.message || 'Could not create follow-up consultation',
+    )
+  }
+  return response.data.id
+}
+
+export default function Appointments({
+  Treatments,
+  Consultations,
+  selectedVisit,
+}) {
   const QueryClient = useQueryClient()
   const dispatch = useDispatch()
   const [appointmentForm, setAppointmentForm] = React.useState({})
   const userDetails = useSelector((state) => state.user)
 
   const activeTreatment = Treatments?.length > 0 ? Treatments[0] : null
+  const isTreatmentMode = Boolean(activeTreatment?.id)
+  const consultations = Consultations || []
 
   const { data: visitAppointments } = useQuery({
     queryKey: ['visitAppointments', selectedVisit?.id],
@@ -33,16 +112,22 @@ export default function Appointments({ Treatments, selectedVisit }) {
     enabled: !!selectedVisit?.id,
   })
 
+  const appointments = visitAppointments?.data || []
+
+  const reasonCycleId = useMemo(() => {
+    if (isTreatmentMode) return activeTreatment.id
+    return getConsultationIdForReasons(consultations, appointments)
+  }, [isTreatmentMode, activeTreatment?.id, consultations, appointments])
+
   const defaultBookBranchId = useMemo(() => {
-    const appts = visitAppointments?.data
-    if (appts?.length) {
-      const latest = [...appts].sort(
+    if (appointments.length) {
+      const latest = [...appointments].sort(
         (a, b) => new Date(b.appointmentDate) - new Date(a.appointmentDate),
       )[0]
       if (latest?.branchId != null) return latest.branchId
     }
     return userDetails?.branchDetails?.[0]?.id
-  }, [visitAppointments?.data, userDetails?.branchDetails])
+  }, [appointments, userDetails?.branchDetails])
 
   const { data: doctorsList } = useQuery({
     queryKey: ['doctors', appointmentForm?.date, appointmentForm?.branchId],
@@ -76,93 +161,157 @@ export default function Appointments({ Treatments, selectedVisit }) {
     })
   }
 
+  const invalidateAppointmentQueries = () => {
+    QueryClient.invalidateQueries(['visitAppointments'])
+    QueryClient.invalidateQueries(['visitInfo'])
+  }
+
   const bookingAppointment = useMutation({
     mutationFn: async (payload) => {
-      const res = await bookTreatmentAppointment(
-        userDetails.accessToken,
-        payload,
-      )
-      if (res.status !== 400) {
-        dispatch(closeSideDrawer())
-        QueryClient.invalidateQueries(['visitAppointments'])
+      const bookFn = isTreatmentMode
+        ? bookTreatmentAppointment
+        : bookConsultationAppointment
+      const res = await bookFn(userDetails.accessToken, payload)
+      if (res.status === 400) {
+        toast.error(res.message || 'Could not book appointment', toastconfig)
+        return res
       }
+      dispatch(closeSideDrawer())
+      invalidateAppointmentQueries()
+      toast.success(
+        res.message || 'Appointment booked successfully',
+        toastconfig,
+      )
+      return res
     },
   })
 
-  const handleBookAppointment = async () => {
-    if (!activeTreatment?.id) {
+  const resolveAppointmentReasonId = async () => {
+    let appointmentReasonId = appointmentForm?.appointmentReasonId
+    if (!appointmentForm?.appointmentReasonIsOther) {
+      return appointmentReasonId
+    }
+
+    const customReason = appointmentForm?.appointmentReasonComment?.trim()
+    if (!customReason) {
+      toast.error('Please describe the reason for Others', toastconfig)
+      return null
+    }
+
+    const patientId =
+      selectedVisit?.patientId ||
+      selectedVisit?.patientID ||
+      selectedVisit?.patient?.id
+    if (!patientId) {
       toast.error(
-        'A treatment must be started before booking appointments',
+        'Patient details are missing for this appointment',
         toastconfig,
       )
+      return null
+    }
+
+    try {
+      const response = await createOtherAppointmentReason(
+        userDetails?.accessToken,
+        {
+          appointmentReasonName: customReason,
+          patientId,
+          isSpouse: 0,
+        },
+      )
+      if (response?.status !== 200 || !response?.data?.appointmentReasonId) {
+        toast.error(
+          response?.message || 'Could not save the custom appointment reason',
+          toastconfig,
+        )
+        return null
+      }
+      return response.data.appointmentReasonId
+    } catch (error) {
+      toast.error('Could not save the custom appointment reason', toastconfig)
+      return null
+    }
+  }
+
+  const handleBookAppointment = async () => {
+    const appointmentReasonId = await resolveAppointmentReasonId()
+    if (
+      appointmentReasonId == null &&
+      appointmentForm?.appointmentReasonIsOther
+    ) {
       return
     }
 
-    let appointmentReasonId = appointmentForm?.appointmentReasonId
-    if (appointmentForm?.appointmentReasonIsOther) {
-      const customReason = appointmentForm?.appointmentReasonComment?.trim()
-      if (!customReason) {
-        toast.error('Please describe the reason for Others', toastconfig)
-        return
-      }
-      const patientId =
-        selectedVisit?.patientId ||
-        selectedVisit?.patientID ||
-        selectedVisit?.patient?.id
-      if (!patientId) {
-        toast.error(
-          'Patient details are missing for this appointment',
-          toastconfig,
-        )
-        return
-      }
-      try {
-        const response = await createOtherAppointmentReason(
-          userDetails?.accessToken,
-          {
-            appointmentReasonName: customReason,
-            patientId,
-            isSpouse: 0,
-          },
-        )
-        if (response?.status !== 200 || !response?.data?.appointmentReasonId) {
-          toast.error(
-            response?.message || 'Could not save the custom appointment reason',
-            toastconfig,
-          )
-          return
-        }
-        appointmentReasonId = response.data.appointmentReasonId
-      } catch (error) {
-        toast.error('Could not save the custom appointment reason', toastconfig)
-        return
-      }
+    const timeStart = appointmentForm?.timeslot?.split('-')[0]?.trim()
+    const timeEnd = appointmentForm?.timeslot?.split('-')[1]?.trim()
+    if (
+      !appointmentForm?.date ||
+      !appointmentForm?.doctorId ||
+      !timeStart ||
+      !timeEnd ||
+      !appointmentReasonId
+    ) {
+      toast.error('Please fill in all appointment details', toastconfig)
+      return
     }
-    const payload = {
-      date: appointmentForm?.date,
-      doctorId: appointmentForm?.doctorId,
-      treatmentCycleId: activeTreatment.id,
-      timeStart: appointmentForm?.timeslot?.split('-')[0].trim(),
-      timeEnd: appointmentForm?.timeslot?.split('-')[1].trim(),
+
+    const commonPayload = {
+      date: appointmentForm.date,
+      doctorId: appointmentForm.doctorId,
+      timeStart,
+      timeEnd,
       appointmentReasonId,
-      branchId: appointmentForm?.branchId,
+      branchId: appointmentForm.branchId,
     }
-    bookingAppointment.mutate(payload)
+
+    if (isTreatmentMode) {
+      bookingAppointment.mutate({
+        ...commonPayload,
+        treatmentCycleId: activeTreatment.id,
+      })
+      return
+    }
+
+    try {
+      const consultationId = await ensureConsultationId({
+        token: userDetails.accessToken,
+        visitId: selectedVisit.id,
+        consultations,
+        appointments,
+      })
+      bookingAppointment.mutate({
+        ...commonPayload,
+        consultationId,
+      })
+    } catch (error) {
+      toast.error(
+        error.message || 'Could not prepare consultation for booking',
+        toastconfig,
+      )
+    }
   }
 
-  const appointments = visitAppointments?.data || []
   const canBookNew = selectedVisit?.isActive == 1
+  const bookingContextLabel = isTreatmentMode
+    ? activeTreatment.type
+    : 'Consultation'
+
+  const openBookingDrawer = () => {
+    dispatch(openSideDrawer('new_appoitments_drawer'))
+    setAppointmentForm({
+      consultationId: isTreatmentMode ? 'Treatment' : 'Consultation',
+      branchId: defaultBookBranchId,
+    })
+  }
 
   return (
     <div className="bg-white px-5 py-3 rounded shadow">
       <Card variant="outlined" className="m-3 border mt-5">
-        {activeTreatment ? (
-          <div className="p-4 border-b">
-            <h3 className="text-lg font-semibold text-secondary">
-              {activeTreatment.type}
-            </h3>
-          </div>
-        ) : null}
+        <div className="p-4 border-b">
+          <h3 className="text-lg font-semibold text-secondary">
+            {bookingContextLabel}
+          </h3>
+        </div>
 
         <div className="p-4">
           <div className="grid md:grid-cols-4 lg:grid-cols-5 gap-4">
@@ -195,13 +344,7 @@ export default function Appointments({ Treatments, selectedVisit }) {
             {canBookNew && (
               <Button
                 className="flex gap-2 items-center capitalize text-sm"
-                onClick={() => {
-                  dispatch(openSideDrawer('new_appoitments_drawer'))
-                  setAppointmentForm({
-                    consultationId: 'Treatment',
-                    branchId: defaultBookBranchId,
-                  })
-                }}
+                onClick={openBookingDrawer}
                 variant="outlined"
               >
                 <FaPlusCircle size={20} />
@@ -218,8 +361,7 @@ export default function Appointments({ Treatments, selectedVisit }) {
           <div>
             <p className="text-2xl font-semibold text-secondary flex items-center py-5 gap-4">
               <CalendarIcon />
-              Schedule Appointment
-              {activeTreatment ? ` (${activeTreatment.type})` : ''}
+              Schedule Appointment ({bookingContextLabel})
             </p>
             <AppoinmentForm
               appointmentForm={appointmentForm}
@@ -228,7 +370,7 @@ export default function Appointments({ Treatments, selectedVisit }) {
               setAppointmentForm={setAppointmentForm}
               availableSlots={availableSlots}
               handleBookAppointment={handleBookAppointment}
-              appointmentId={activeTreatment?.id}
+              appointmentId={reasonCycleId}
               visitTypeId={selectedVisit?.type}
             />
           </div>

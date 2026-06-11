@@ -967,6 +967,7 @@ export default function Register() {
             </h2>
             <Appointments
               Treatments={visitInfo?.data?.Treatments}
+              Consultations={visitInfo?.data?.Consultations}
               selectedVisit={selectedVisit}
             />
           </div>
