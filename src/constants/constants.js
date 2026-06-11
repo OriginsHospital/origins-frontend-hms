@@ -79,6 +79,7 @@ export const API_ROUTES = {
     '/treatment/getTreatmentSheetsByTreatmentCycleId',
 
   GET_APPOINTMENTS_BY_ID: '/appointments/getAppointmentsById',
+  GET_APPOINTMENTS_BY_VISIT_ID: '/appointments/getAppointmentsByVisitId',
   EDIT_APPOINTMENT: '/appointments/rescheduleAppointment',
   GET_ALL_APPOINTMENTS_BY_DATE: '/appointments/getAppointmentsByDate',
   CHANGE_APPOINTMENT_STAGE: '/appointments/changeAppointmentStatus',

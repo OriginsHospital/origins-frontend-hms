@@ -38,11 +38,9 @@ import TabPanel from '@mui/lab/TabPanel'
 import { TabContext } from '@mui/lab'
 import { Tab, TextField, ToggleButton } from '@mui/material'
 import VisitDetail from '@/components/VisitDetail'
-import Consultations from '@/components/Consultations'
-// import { Box } from '@mui/material';
+import Appointments from '@/components/Appointments'
 import defaultProfile from '../../../public/dummyProfile.jpg'
 import { hideLoader, showLoader } from '@/redux/loaderSlice'
-import Treatments from '@/components/Treatments'
 import VisitPatientInfo from '@/components/VisitPatientInfo'
 import { closeModal, openModal } from '@/redux/modalSlice'
 import PackageComponent from '@/components/PackageComponent'
@@ -191,11 +189,6 @@ export default function Register() {
   })
   const [imagePreview, setImagePreview] = useState(null)
   const [selectedVisit, setSelectedVisit] = useState({ id: '' })
-  const [showTab, setShowTab] = useState('consultations')
-  const [selectedTab, setSelectedTab] = useState({
-    type: null,
-    id: null,
-  })
   const [isEditing, setIsEditing] = useState(true)
 
   // Redux hooks
@@ -733,10 +726,6 @@ export default function Register() {
       setSelectedVisit(selectVisit[0])
     }
   }
-  const handleChangeSubTab = (event, newTab) => {
-    setShowTab(newTab)
-  }
-
   // Modify the search field handlers
   const handleSearchChange = (e) => {
     setSearchValue(e.target.value)
@@ -972,29 +961,15 @@ export default function Register() {
             setSelectedVisit={setSelectedVisit}
           />
           {/* <VisitPatientInfo formData={formData} photo={photo} imagePreview={imagePreview} /> */}
-          <TabContext value={showTab}>
-            <TabList onChange={handleChangeSubTab}>
-              <Tab label="Consultations" value="consultations"></Tab>
-              <Tab label="Treatments" value="treatments"></Tab>
-            </TabList>
-
-            <TabPanel value="consultations">
-              <Consultations
-                Consultations={visitInfo?.data?.Consultations}
-                selectedVisit={selectedVisit}
-                selectedTab={selectedTab}
-                setSelectedTab={setSelectedTab}
-              />
-            </TabPanel>
-            <TabPanel value="treatments">
-              <Treatments
-                Treatments={visitInfo?.data?.Treatments}
-                selectedVisit={selectedVisit}
-                selectedTab={selectedTab}
-                setSelectedTab={setSelectedTab}
-              />
-            </TabPanel>
-          </TabContext>
+          <div className="mt-4">
+            <h2 className="text-lg font-semibold text-secondary px-2 mb-2">
+              Appointments
+            </h2>
+            <Appointments
+              Treatments={visitInfo?.data?.Treatments}
+              selectedVisit={selectedVisit}
+            />
+          </div>
 
           {/* <ValidSubRow row={row} UserDetails={UserDetails} /> */}
         </TabPanel>
