@@ -19,10 +19,12 @@ import {
   deleteSubCategoryByCategoryId,
   editPharmacyMasterData,
   editSubCategoryByCategoryId,
+  getLoggedUserInfo,
   getPharmacyMasterData,
   getSubCategoryListByCategoryId,
 } from '@/constants/apis'
 import { useDispatch, useSelector } from 'react-redux'
+import { setUser } from '@/redux/userSlice'
 import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query'
 import { closeModal, openModal } from '@/redux/modalSlice'
 import { ACCESS_TYPES, API_ROUTES } from '@/constants/constants'
@@ -1477,6 +1479,23 @@ function Managefields() {
   const dispatch = useDispatch()
   const dropdowns = useSelector((store) => store.dropdowns)
 
+  const refreshBranchAccess = async () => {
+    await queryClient.invalidateQueries({ queryKey: ['dropdowns'] })
+    const token = userDetails?.accessToken
+    if (!token) return
+    const response = await getLoggedUserInfo(token)
+    if (response?.status === 200) {
+      dispatch(
+        setUser({
+          ...userDetails,
+          ...response.data,
+          accessToken: token,
+          isAuthenticated: true,
+        }),
+      )
+    }
+  }
+
   const { data: MasterData } = useQuery({
     queryKey: ['pharmacyMasterData', selectedTab],
     queryFn: () =>
@@ -1498,10 +1517,13 @@ function Managefields() {
         toast.error('Please fill all the fields', toastconfig)
       }
     },
-    onSuccess: (data, variables) => {
+    onSuccess: async (data, variables) => {
       console.log('created', data)
       if (data?.status === 200) {
         queryClient.invalidateQueries(selectedTab)
+        if (selectedTab === 'branches') {
+          await refreshBranchAccess()
+        }
         dispatch(closeModal())
         toast.success(data?.message, toastconfig)
       } else {
@@ -1553,9 +1575,12 @@ function Managefields() {
       )
       return response
     },
-    onSuccess: (data, variables) => {
+    onSuccess: async (data, variables) => {
       console.log('Edit', data)
       queryClient.invalidateQueries(selectedTab)
+      if (selectedTab === 'branches' && data?.status === 200) {
+        await refreshBranchAccess()
+      }
       if (data?.status === 200) {
         toast.success(data?.message, toastconfig)
         dispatch(closeModal())

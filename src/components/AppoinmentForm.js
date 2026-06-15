@@ -16,6 +16,7 @@ import {
   getAppointmentReasonsByPatientType,
 } from '@/constants/apis'
 import { useSelector } from 'react-redux'
+import { getSelectableBranches } from '@/utils/branchMapping'
 
 export default function AppoinmentForm({
   appointmentForm,
@@ -29,7 +30,7 @@ export default function AppoinmentForm({
 }) {
   const user = useSelector((store) => store.user)
   const dropdowns = useSelector((store) => store.dropdowns)
-  const { branches } = dropdowns
+  const branches = getSelectableBranches(user, dropdowns?.branches)
   //getAllAppointmentsReasons using useQuery
   const useTreatmentReasons = Boolean(
     appointmentForm?.consultationId &&

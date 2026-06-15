@@ -32,6 +32,7 @@ import {
 import DownloadIcon from '@mui/icons-material/Download'
 import { exportReport } from '@/utils/reportExport'
 import { toastconfig } from '@/utils/toastconfig'
+import { getSelectableBranches } from '@/utils/branchMapping'
 
 const ALL_BRANCHES_VALUE = 'all'
 const ALL_BRANCHES_OPTION = {
@@ -73,7 +74,10 @@ const Appointments = () => {
   const userDetails = useSelector((store) => store.user)
   const router = useRouter()
   const dropdowns = useSelector((store) => store.dropdowns)
-  const branches = userDetails?.branchDetails
+  const branches = useMemo(
+    () => getSelectableBranches(userDetails, dropdowns?.branches),
+    [userDetails, dropdowns?.branches],
+  )
   const [branchId, setBranchId] = useState(null)
   const [exportOpen, setExportOpen] = useState(false)
   const [exportFromDate, setExportFromDate] = useState(dayjs())
@@ -100,10 +104,10 @@ const Appointments = () => {
     if (branchId) {
       // If branchId is provided in the query, set it
       setBranchId(parseInt(branchId))
-    } else if (branches.length > 0) {
+    } else if (branches?.length > 0) {
       setBranchId(branches[0]?.id || null)
     }
-  }, [router.query.date, router.query.branchId])
+  }, [router.query.date, router.query.branchId, branches])
   const { data: allAppointmentsData } = useQuery({
     queryKey: ['allAppointments', userDetails?.accessToken, date, branchId],
     queryFn: async () => {

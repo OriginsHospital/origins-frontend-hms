@@ -57,6 +57,7 @@ export default function PageMiddleware(props) {
         throw new Error('Error occurred')
       }
     },
+    refetchOnWindowFocus: true,
   })
   const coupon = useQuery({
     queryKey: ['coupon'],

@@ -53,7 +53,6 @@ export const getRevenueBranchDisplayCode = (
   return '—'
 }
 
-/** Full branch name for tooltips / export context */
 export const getRevenueBranchFullName = (row, branchCatalog = []) => {
   if (!row) return ''
 
@@ -81,6 +80,47 @@ export const getRevenueBranchFullName = (row, branchCatalog = []) => {
 
 /** @deprecated Use getRevenueBranchDisplayCode */
 export const getRevenueBranchDisplayName = getRevenueBranchDisplayCode
+
+const ADMIN_ROLE_ID = 1
+
+const normalizeBranchOption = (branch) => ({
+  id: branch.id,
+  name: branch.name,
+  branchCode: branch.branchCode || branch.name,
+})
+
+/**
+ * Branches the current user may select (appointments, filters, booking).
+ * Admins see all active dropdown branches; others see only assigned branches.
+ */
+export const getSelectableBranches = (userDetails, dropdownBranches = []) => {
+  const userBranches = (userDetails?.branchDetails || []).map(
+    normalizeBranchOption,
+  )
+  const normalizedDropdown = (dropdownBranches || []).map(normalizeBranchOption)
+
+  if (!normalizedDropdown.length) {
+    return userBranches
+  }
+
+  const receivesAllBranches =
+    Number(userDetails?.roleDetails?.id) === ADMIN_ROLE_ID
+
+  if (receivesAllBranches) {
+    return normalizedDropdown.length ? normalizedDropdown : userBranches
+  }
+
+  const allowedIds = new Set(userBranches.map((branch) => branch.id))
+  const fromDropdown = normalizedDropdown.filter((branch) =>
+    allowedIds.has(branch.id),
+  )
+
+  if (fromDropdown.length) {
+    return fromDropdown
+  }
+
+  return userBranches
+}
 
 /**
  * Gets branch name from various possible data structures
@@ -162,5 +202,6 @@ export default {
   getRevenueBranchDisplayCode,
   getRevenueBranchFullName,
   getRevenueBranchDisplayName,
+  getSelectableBranches,
   mapBranchData,
 }
