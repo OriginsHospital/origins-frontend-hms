@@ -920,7 +920,7 @@ function Prescription({
     }
 
     if (treatmentForm.isPackageExists) {
-      payload.packageAmount = treatmentForm.packageAmount
+      payload.packageAmount = Number(treatmentForm.packageAmount)
     }
 
     return payload
@@ -2893,6 +2893,7 @@ function Prescription({
           {treatmentForm?.isPackageExists && (
             <TextField
               label="Package Amount"
+              type="number"
               value={treatmentForm.packageAmount}
               onChange={(e) =>
                 setTreatmentForm({
@@ -2906,16 +2907,32 @@ function Prescription({
           <div className="flex justify-end">
             <Button
               variant="outlined"
+              disabled={createTreatment.isPending}
               onClick={() => {
-                // console.log(treatmentForm, activeVisitId)
                 if (!treatmentForm.type) {
                   toast.error('Please select a treatment type')
-                } else if (patientInfo?.activeVisitId) {
-                  createTreatment.mutate(buildStartTreatmentPayload())
+                  return
                 }
+                if (
+                  treatmentForm.isPackageExists &&
+                  (!treatmentForm.packageAmount ||
+                    Number(treatmentForm.packageAmount) <= 0)
+                ) {
+                  toast.error('Please enter a valid package amount')
+                  return
+                }
+                if (!patientInfo?.activeVisitId) {
+                  toast.error('Active visit not found for this patient')
+                  return
+                }
+                createTreatment.mutate(buildStartTreatmentPayload())
               }}
             >
-              {type === 'Consultation' ? 'Start' : 'Create'}
+              {createTreatment.isPending
+                ? 'Starting...'
+                : type === 'Consultation'
+                  ? 'Start'
+                  : 'Create'}
             </Button>
           </div>
         </div>

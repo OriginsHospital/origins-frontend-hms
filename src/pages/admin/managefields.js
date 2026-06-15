@@ -1267,6 +1267,82 @@ const tabs = {
     ],
     editUrl: API_ROUTES.EDIT_CITY,
   },
+  branches: {
+    label: 'Branch',
+    getUrl: API_ROUTES.GET_ALL_BRANCHES_MASTER,
+    fields: [
+      {
+        headerName: 'ID',
+        field: 'id',
+        type: 'text',
+      },
+      {
+        headerName: 'Branch Name',
+        field: 'name',
+        type: 'text',
+      },
+      {
+        headerName: 'City',
+        field: 'cityName',
+        type: 'text',
+      },
+      {
+        headerName: 'Branch Code',
+        field: 'branchCode',
+        type: 'text',
+      },
+      {
+        headerName: 'Address',
+        field: 'address',
+        type: 'text',
+      },
+      {
+        headerName: 'Is Active',
+        field: 'isActive',
+        type: 'boolean',
+      },
+    ],
+    createUrl: API_ROUTES.ADD_NEW_BRANCH_MASTER,
+    createFields: [
+      {
+        label: 'Branch Name',
+        name: 'name',
+        type: 'text',
+        required: true,
+        id: 'name',
+      },
+      {
+        label: 'City',
+        name: 'cityId',
+        type: 'select',
+        required: true,
+        id: 'cityId',
+        optionsUrl: API_ROUTES.GET_ALL_CITIES,
+        selectedLabel: 'name',
+      },
+      {
+        label: 'Branch Code',
+        name: 'branchCode',
+        type: 'text',
+        required: false,
+        id: 'branchCode',
+      },
+      {
+        label: 'Address',
+        name: 'address',
+        type: 'text',
+        required: false,
+        id: 'address',
+      },
+      {
+        label: 'Is Active',
+        name: 'isActive',
+        type: 'trueOrFalse',
+        id: 'isActive',
+      },
+    ],
+    editUrl: API_ROUTES.EDIT_BRANCH_MASTER,
+  },
   referrals: {
     label: 'Referrals',
     getUrl: API_ROUTES.GET_ALL_REFERRALS,
