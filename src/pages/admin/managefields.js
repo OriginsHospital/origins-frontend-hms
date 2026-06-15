@@ -1315,7 +1315,7 @@ const tabs = {
         label: 'City',
         name: 'cityId',
         type: 'select',
-        required: true,
+        required: false,
         id: 'cityId',
         optionsUrl: API_ROUTES.GET_ALL_CITIES,
         selectedLabel: 'name',
