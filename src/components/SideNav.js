@@ -611,6 +611,11 @@ function SideNav(props) {
             name: 'OPU Sheet',
             relatedModule: null,
           },
+          {
+            path: '/scan/hystero-lap',
+            name: 'Hystero/Lap',
+            relatedModule: 'scanModule',
+          },
         ],
       },
 

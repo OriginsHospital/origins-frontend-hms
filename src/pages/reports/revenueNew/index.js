@@ -743,7 +743,7 @@ function SalesNew() {
                 )
                 ?.map((branch, idx) => (
                   <MenuItem key={branch.id} value={branch.id}>
-                    {branch.name}
+                    {branch.branchCode || branch.name}
                   </MenuItem>
                 ))}
             </Select>

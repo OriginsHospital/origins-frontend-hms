@@ -182,6 +182,7 @@ export const API_ROUTES = {
   GET_SCAN_BY_DATE: '/scan/getScansByDate/',
   GET_PRESCRIPTIONS_BY_DATE: '/scan/getPrescriptionsByDate/',
   GET_OPU_SHEETS_BY_DATE: '/scan/getOpuSheetsByDate/',
+  GET_HYSTERO_LAP_BY_DATE: '/scan/getHysteroLapByDate/',
   GET_SCAN_REPORTS: '/scan/getScanReports',
   GET_SCAN_RRESULT: '/scan/getSavedScanResult',
   GET_SCAN_TEMPLATE: '/scan/getScanTemplate',

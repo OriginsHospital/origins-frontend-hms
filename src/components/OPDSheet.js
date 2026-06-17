@@ -14,7 +14,7 @@ import {
   Button,
   IconButton,
 } from '@mui/material'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useDispatch, useSelector } from 'react-redux'
 import dynamic from 'next/dynamic'
 import dayjs from 'dayjs'
@@ -32,11 +32,16 @@ const JoditEditor = dynamic(() => import('jodit-react'), {
 // API function to get OPD sheet template
 
 function OPDSheet({ patientInfo, vitalInfo }) {
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
+  const queryClient = useQueryClient()
   const [template, setTemplate] = useState('')
   const dispatch = useDispatch()
   // Fetch OPD sheet template using React Query
-  const { data: opdTemplate, isLoading, error } = useQuery({
+  const {
+    data: opdTemplate,
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ['opdSheet', patientInfo?.id],
     queryFn: () => getOpdSheetTemplate(user.accessToken, patientInfo?.id),
     enabled: !!patientInfo?.id && !!user.accessToken,
@@ -47,7 +52,7 @@ function OPDSheet({ patientInfo, vitalInfo }) {
       setTemplate(opdTemplate.data.template)
     }
   }, [opdTemplate])
-  const handleTemplateChange = value => {
+  const handleTemplateChange = (value) => {
     setTemplate(value)
   }
   const handleUpdate = useMutation({
@@ -57,11 +62,17 @@ function OPDSheet({ patientInfo, vitalInfo }) {
         patientInfo?.id,
         template,
       )
-      console.log(res)
       if (res.status === 200) {
         toast.success('OPD sheet updated successfully', toastconfig)
       }
       return res
+    },
+    onSuccess: (res) => {
+      if (res?.status === 200 && patientInfo?.id) {
+        queryClient.invalidateQueries({
+          queryKey: ['opdSheetSummary', patientInfo.id],
+        })
+      }
     },
   })
   if (isLoading) {

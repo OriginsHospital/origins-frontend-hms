@@ -2507,6 +2507,25 @@ export const getOpuSheetsByDate = async (token, date, branchId) => {
   )
   return response.json()
 }
+
+export const getHysteroLapByDate = async (token, date, branchId) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const branchParam =
+    branchId === null || branchId === undefined ? '' : branchId
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_HYSTERO_LAP_BY_DATE}${date}?branchId=${branchParam}`,
+    {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
 export const getScanReports = async (token, fromDate, toDate, branchId) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)

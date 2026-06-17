@@ -265,6 +265,32 @@ function Prescription({
       selectedPatient?.visitId ??
       selectedPatient?.visit_id,
   )
+  const treatmentStatusQueryKey = useMemo(
+    () => [
+      'treatmentStatus',
+      patientInfo?.activeVisitId,
+      patientInfo?.treatmentDetails?.treatmentTypeId,
+    ],
+    [
+      patientInfo?.activeVisitId,
+      patientInfo?.treatmentDetails?.treatmentTypeId,
+    ],
+  )
+
+  const refetchTreatmentStatus = async (visitId, treatmentType) => {
+    queryClient.invalidateQueries({
+      queryKey: ['treatmentStatus'],
+      exact: false,
+    })
+
+    if (!visitId || treatmentType == null) return null
+
+    await queryClient.refetchQueries({
+      queryKey: ['treatmentStatus', visitId, treatmentType],
+    })
+
+    return queryClient.getQueryData(['treatmentStatus', visitId, treatmentType])
+  }
   const visitTypeText = [
     selectedPatient?.visitType,
     selectedPatient?.appointmentType,
@@ -402,11 +428,7 @@ function Prescription({
 
   const { data: treatmentStatus, isLoading: isTreatmentStatusLoading } =
     useQuery({
-      queryKey: [
-        'treatmentStatus',
-        patientInfo?.activeVisitId,
-        patientInfo?.treatmentDetails?.treatmentTypeId,
-      ],
+      queryKey: treatmentStatusQueryKey,
       queryFn: async () => {
         const responsejson = await getTreatmentStatus(
           user.accessToken,
@@ -1115,16 +1137,34 @@ function Prescription({
         hysteroscopyTime,
         treatmentType: patientInfo?.treatmentDetails?.treatmentTypeId,
       })
-      if (res.status == 200) {
-        toast.success('Hystero/Lap started successfully')
-        queryClient.invalidateQueries('treatmentStatus')
-        let defaultTreatmentTemplate = res.data
-        if (defaultTreatmentTemplate) {
-          setHysteroscopyTemplate(defaultTreatmentTemplate)
-        }
-      } else {
-        toast.error(res.message)
+      if (res.status !== 200) {
+        throw new Error(res.message || 'Failed to start Hystero/Lap')
       }
+      return res
+    },
+    onSuccess: async (res) => {
+      const visitId = patientInfo?.activeVisitId
+      const treatmentType = patientInfo?.treatmentDetails?.treatmentTypeId
+      const defaultTreatmentTemplate = res.data
+
+      if (defaultTreatmentTemplate) {
+        setHysteroscopyTemplate(defaultTreatmentTemplate)
+      }
+
+      queryClient.setQueryData(treatmentStatusQueryKey, (current) => ({
+        ...(current || {}),
+        START_HYSTEROSCOPY: 1,
+      }))
+
+      await refetchTreatmentStatus(visitId, treatmentType)
+      queryClient.invalidateQueries({
+        queryKey: ['hysteroscopySheet', resolvedHysteroscopyVisitId],
+      })
+
+      toast.success('Hystero/Lap started successfully', toastconfig)
+    },
+    onError: (error) => {
+      toast.error(error?.message || 'Failed to start Hystero/Lap', toastconfig)
     },
   })
   const updateTreatmentFETSheetMutation = useMutation({
@@ -1217,6 +1257,25 @@ function Prescription({
       setSelectedHysteroLapType(hysteroscopyReport.formType)
     }
   }, [hysteroscopyReport?.formType])
+
+  const isHysteroLapStarted = useMemo(() => {
+    if (treatmentStatus?.START_HYSTEROSCOPY === 1) return true
+    if (hysteroscopyReport?.id || hysteroscopyReport?.formType) return true
+    if (hysteroscopySheet) return true
+    return false
+  }, [
+    treatmentStatus?.START_HYSTEROSCOPY,
+    hysteroscopyReport?.id,
+    hysteroscopyReport?.formType,
+    hysteroscopySheet,
+  ])
+
+  useEffect(() => {
+    setHysteroscopyTemplate(null)
+    setHysteroscopyReportId(null)
+    setSelectedHysteroLapType(null)
+    setHysteroscopyTime(null)
+  }, [resolvedHysteroscopyVisitId, resolvedHysteroscopyPatientId])
 
   // Mutations for structured hysteroscopy report
   const createHysteroscopyReportMutation = useMutation({
@@ -2170,11 +2229,11 @@ function Prescription({
                 onClick={() => {
                   if (hysteroscopyReport?.formType) {
                     setSelectedHysteroLapType(hysteroscopyReport.formType)
-                  } else if (treatmentStatus?.START_HYSTEROSCOPY != 1) {
+                  } else if (!isHysteroLapStarted) {
                     setSelectedHysteroLapType(null)
                   }
                   if (
-                    treatmentStatus?.START_HYSTEROSCOPY == 1 ||
+                    isHysteroLapStarted ||
                     confirm('Are you sure you want to start Hystero/Lap?')
                   ) {
                     dispatch(
@@ -2184,13 +2243,9 @@ function Prescription({
                 }}
                 disabled={treatmentStatus?.END_HYSTEROSCOPY == 1}
               >
-                {treatmentStatus?.START_HYSTEROSCOPY == 1
-                  ? // ? treatmentStatus?.END_HYSTEROSCOPY == 0
-                    'Update'
-                  : // : 'View Hysteroscopy'
-                    'Start'}
+                {isHysteroLapStarted ? 'Update' : 'Start'}
               </Button>
-              {treatmentStatus?.START_HYSTEROSCOPY == 1 &&
+              {isHysteroLapStarted &&
                 treatmentStatus?.END_HYSTEROSCOPY >= 0 && (
                   <Button
                     variant="outlined"
@@ -2597,7 +2652,7 @@ function Prescription({
       </Modal>
       <Modal
         uniqueKey={'HYSTEROSCOPY' + patientInfo?.activeVisitId}
-        maxWidth={hysteroscopyTemplate ? 'lg' : 'sm'}
+        maxWidth={isHysteroLapStarted || hysteroscopyTemplate ? 'lg' : 'sm'}
         closeOnOutsideClick={true}
       >
         <div className="flex justify-between">
@@ -2611,7 +2666,7 @@ function Prescription({
           </IconButton>
         </div>
         <div className="">
-          {hysteroscopyTemplate ? (
+          {isHysteroLapStarted || hysteroscopyTemplate ? (
             <HysteroLapOperationNotesForm
               formType={
                 selectedHysteroLapType || hysteroscopyReport?.formType || ''
