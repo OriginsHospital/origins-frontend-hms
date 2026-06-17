@@ -5523,6 +5523,23 @@ export const deleteReceipt = async (token, payload) => {
   return response.json()
 }
 
+export const deleteExpense = async (token, payload) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.DELETE_EXPENSE}`,
+    {
+      method: 'DELETE',
+      headers: myHeaders,
+      body: JSON.stringify(payload),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
 export const getAvailableGrnInfoByItemId = async (
   token,
   itemId,

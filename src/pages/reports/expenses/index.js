@@ -13,6 +13,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   addExpense,
+  deleteExpense,
   deleteReceipt,
   editExpense,
   getExpenses,
@@ -44,12 +45,48 @@ import Link from 'next/link'
 import { Autocomplete } from '@mui/material'
 import { FaFileCircleExclamation } from 'react-icons/fa6'
 import { getBranchName } from '@/utils/branchMapping'
+import { hasExpenseDeleteAccess } from '@/utils/expenseDeleteAccess'
 import BranchDataTest from '@/components/BranchDataTest'
+
+const normalizeInvoiceReceipts = (invoiceReceipt) => {
+  if (!invoiceReceipt) return []
+
+  let receipts = invoiceReceipt
+  if (typeof receipts === 'string') {
+    try {
+      receipts = JSON.parse(receipts)
+    } catch {
+      return [{ receiptUrl: receipts }]
+    }
+  }
+
+  if (!Array.isArray(receipts)) return []
+
+  return receipts
+    .map((item) => {
+      if (!item) return null
+      if (typeof item === 'string') return { receiptUrl: item }
+      if (item.receiptUrl) return item
+      return null
+    })
+    .filter(Boolean)
+}
+
+const getReceiptUrl = (file) =>
+  typeof file === 'string' ? file : file?.receiptUrl
+
+const isPersistedReceipt = (file) =>
+  typeof file === 'string' ||
+  (file &&
+    typeof file === 'object' &&
+    file.receiptUrl &&
+    !(file instanceof File))
 
 const Expenses = () => {
   const user = useSelector((store) => store.user)
   const dropdowns = useSelector((store) => store.dropdowns)
   const { branches } = dropdowns
+  const canDeleteExpense = hasExpenseDeleteAccess(user)
 
   // Filter out specific branches from dropdown
   const filteredBranches = useMemo(() => {
@@ -166,8 +203,8 @@ const Expenses = () => {
       Object.keys(expenseData).forEach((key) => {
         if (expenseData[key]) {
           if (key === 'invoiceReceipt') {
-            expenseData[key].forEach((file, index) => {
-              if (typeof file === 'object') {
+            expenseData[key].forEach((file) => {
+              if (file instanceof File) {
                 formData.append(`invoiceReceipt`, file)
               }
             })
@@ -326,18 +363,32 @@ const Expenses = () => {
     {
       field: 'actions',
       headerName: 'Actions',
-      width: 120,
+      width: canDeleteExpense ? 180 : 120,
       flex: 1,
       renderCell: (params) => (
-        <Button
-          variant="outlined"
-          color="primary"
-          size="small"
-          startIcon={<EditNote />}
-          onClick={() => handleEdit(params.row)}
-        >
-          Edit
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="outlined"
+            color="primary"
+            size="small"
+            startIcon={<EditNote />}
+            onClick={() => handleEdit(params.row)}
+          >
+            Edit
+          </Button>
+          {canDeleteExpense && (
+            <Tooltip title="Delete expense">
+              <IconButton
+                color="error"
+                size="small"
+                aria-label="delete expense"
+                onClick={() => handleDeleteExpense(params.row)}
+              >
+                <Delete />
+              </IconButton>
+            </Tooltip>
+          )}
+        </div>
       ),
     },
   ]
@@ -363,11 +414,23 @@ const Expenses = () => {
       description,
       paymentDate,
       branchId: branch.id,
-      invoiceReceipt: invoiceReceipt || [], // Initialize with existing invoiceReceipt or empty array
+      invoiceReceipt: normalizeInvoiceReceipts(invoiceReceipt),
     }
     setExpenseForm(newObject)
     dispatch(openModal('Expense'))
     setModal('edit')
+  }
+
+  const handleDeleteExpense = (row) => {
+    if (
+      !window.confirm(
+        'Are you sure you want to delete this expense? This action cannot be undone.',
+      )
+    ) {
+      return
+    }
+
+    deleteExpenseMutation.mutate({ id: row.id })
   }
 
   const handleNewExpence = () => {
@@ -413,18 +476,44 @@ const Expenses = () => {
         toast.success('Receipt deleted successfully', toastconfig)
         setExpenseForm((prev) => ({
           ...prev,
-          invoiceReceipt: prev.invoiceReceipt.filter(
-            (file) => file !== data.receiptUrl,
-          ),
+          invoiceReceipt: prev.invoiceReceipt.filter((file) => {
+            if (data.receiptId && file?.id) {
+              return file.id !== data.receiptId
+            }
+            return getReceiptUrl(file) !== data.receiptUrl
+          }),
         }))
         queryClient.invalidateQueries({ queryKey: ['expenses'] })
-        // return res.json()
       } else {
-        throw new Error('Error deleting receipt')
+        throw new Error(res.message || 'Error deleting receipt')
       }
     },
     onError: (error) => {
       toast.error(error.message || 'Failed to delete receipt', toastconfig)
+    },
+  })
+
+  const deleteExpenseMutation = useMutation({
+    mutationKey: ['deleteExpense'],
+    mutationFn: async (data) => {
+      const res = await deleteExpense(user?.accessToken, data)
+
+      if (res.status === 200) {
+        toast.success('Expense deleted successfully', toastconfig)
+        queryClient.invalidateQueries({ queryKey: ['expenses'] })
+        return res.data
+      }
+
+      throw new Error(res.message || 'Error deleting expense')
+    },
+    onSuccess: (_, variables) => {
+      if (expenseForm?.id === variables.id) {
+        dispatch(closeModal('Expense'))
+        setExpenseForm(expenseModel)
+      }
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to delete expense', toastconfig)
     },
   })
 
@@ -656,10 +745,13 @@ const Expenses = () => {
                               variant="text"
                               className="truncate"
                               onClick={() => {
-                                window.open(file, '_blank')
+                                const receiptUrl = getReceiptUrl(file)
+                                if (receiptUrl) {
+                                  window.open(receiptUrl, '_blank')
+                                }
                               }}
                             >
-                              {typeof file === 'string'
+                              {isPersistedReceipt(file)
                                 ? `Receipt ${index + 1}`
                                 : file.name}
                             </Button>
@@ -669,7 +761,7 @@ const Expenses = () => {
                             aria-label="delete"
                             color="error"
                             onClick={() => {
-                              if (typeof file === 'string') {
+                              if (isPersistedReceipt(file)) {
                                 if (
                                   window.confirm(
                                     'Are you sure you want to delete this receipt?',
@@ -677,7 +769,8 @@ const Expenses = () => {
                                 ) {
                                   deleteReceiptMutation.mutate({
                                     expenseId: expenseForm.id,
-                                    receiptUrl: file,
+                                    receiptId: file?.id,
+                                    receiptUrl: getReceiptUrl(file),
                                   })
                                 }
                               } else {

@@ -464,6 +464,7 @@ export const API_ROUTES = {
   GET_ALL_ACTIVE_VISIT_APPOINTMENTS:
     '/appointments/getAllActiveVisitAppointments',
   DELETE_RECEIPT: '/expenses/deleteReceipt',
+  DELETE_EXPENSE: '/expenses/deleteExpense',
   GET_AVAILABLE_GRN_INFO_BY_ITEM_ID: '/pharmacy/showAvailableGrnInfoByItemId',
   GET_CONSULTANT_ROASTERS: '/consultantRoaster/getAllConsultantRoasters',
   ADD_CONSULTANT_ROASTER: '/consultantRoaster/createConsultantRoaster',
