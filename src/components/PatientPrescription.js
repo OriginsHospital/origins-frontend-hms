@@ -52,7 +52,10 @@ import {
   getCompanionMedicinesForTriggers,
   syncPrescriptionDaysForTriggerAndCompanions,
 } from '@/utils/pharmacyAutoCompanions'
-import { mergeLineBillValuesOnCopy } from '@/utils/mergeLineBillValuesOnCopy'
+import {
+  dedupeNonPharmacyLineBillValues,
+  mergeLineBillValuesOnCopy,
+} from '@/utils/mergeLineBillValuesOnCopy'
 
 const NAPO_SHOT_KIT_VALUE = 'NAPO_SHOT_KIT'
 
@@ -785,7 +788,10 @@ function PatientPrescription({
                 isLabTestBillType && isRestrictedPatientLabTest(item.name)
               return isPatientItem && !isRestrictedLabTest
             })
-          tempdefaultData[data.billType.id] = updatedArray
+          tempdefaultData[data.billType.id] = dedupeNonPharmacyLineBillValues(
+            billTypeId,
+            updatedArray,
+          )
         },
       )
       const notesText =

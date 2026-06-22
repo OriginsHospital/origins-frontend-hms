@@ -1,4 +1,27 @@
 /**
+ * Lab / scan / embryology rows should appear once per item id on load.
+ * Pharmacy may intentionally have multiple rows for the same medicine.
+ */
+export function dedupeNonPharmacyLineBillValues(billTypeId, values = []) {
+  if (billTypeId === 3 || !values.length) {
+    return values
+  }
+
+  const seen = new Map()
+  for (const item of values) {
+    const existing = seen.get(item.id)
+    if (!existing) {
+      seen.set(item.id, item)
+      continue
+    }
+    if (item.status === 'PAID' && existing.status !== 'PAID') {
+      seen.set(item.id, item)
+    }
+  }
+  return [...seen.values()]
+}
+
+/**
  * Merges copied prescription line bills into the current form state so items
  * already added on this appointment (especially unpaid pharmacy rows) are kept.
  */

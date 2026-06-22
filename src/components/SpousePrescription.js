@@ -36,7 +36,10 @@ import {
   getCompanionMedicinesForTriggers,
   syncPrescriptionDaysForTriggerAndCompanions,
 } from '@/utils/pharmacyAutoCompanions'
-import { mergeLineBillValuesOnCopy } from '@/utils/mergeLineBillValuesOnCopy'
+import {
+  dedupeNonPharmacyLineBillValues,
+  mergeLineBillValuesOnCopy,
+} from '@/utils/mergeLineBillValuesOnCopy'
 
 const JoditEditor = dynamic(() => import('jodit-react'), {
   ssr: false,
@@ -553,7 +556,10 @@ function SpousePrescription({
               }),
             )
             .filter((item) => item.isSpouse === 1)
-          tempdefaultData[data.billType.id] = updatedArray
+          tempdefaultData[data.billType.id] = dedupeNonPharmacyLineBillValues(
+            billTypeId,
+            updatedArray,
+          )
         },
       )
       const notesText =

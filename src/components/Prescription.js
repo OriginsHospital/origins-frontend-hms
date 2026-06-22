@@ -1006,37 +1006,32 @@ function Prescription({
       })
       if (res.status == 200) {
         toast.success('Consents reviewed successfully')
-        if (
-          patientInfo?.treatmentDetails?.treatmentTypeId != 6 &&
-          patientInfo?.treatmentDetails?.treatmentTypeId != 7
-        ) {
-          const defaultTreatmentTemplate = res.data
-          if (defaultTreatmentTemplate) {
-            setFolicularTemplate({
-              columns: defaultTreatmentTemplate?.date,
-              rows: defaultTreatmentTemplate?.follicularSheet,
-            })
-            setMedicationFormData({
-              // columns: defaultTreatmentTemplate?.date,
-              rows: defaultTreatmentTemplate?.medicationSheet,
-            })
-            setScanFormData({
-              // columns: defaultTreatmentTemplate?.date,
-              rows: defaultTreatmentTemplate?.scanSheet,
-            })
-            // console.log('under review consents calling handleUpdateTreatmentSheet')
-            // queryClient.invalidateQueries('treatmentStatus')
-            let temp = {
-              follicularSheet: folicularFormData,
-              columns: defaultTreatmentTemplate?.date,
-              rows: defaultTreatmentTemplate?.follicularSheet,
-              medicationRows: defaultTreatmentTemplate?.medicationSheet,
-              medicationSheet: [],
-              scanRows: defaultTreatmentTemplate?.scanSheet,
-              scanSheet: [],
-            }
-            handleUpdateTreatmentSheet(temp)
+        const defaultTreatmentTemplate = res.data
+        if (defaultTreatmentTemplate) {
+          setFolicularTemplate({
+            columns: defaultTreatmentTemplate?.date,
+            rows: defaultTreatmentTemplate?.follicularSheet,
+          })
+          setMedicationFormData({
+            // columns: defaultTreatmentTemplate?.date,
+            rows: defaultTreatmentTemplate?.medicationSheet,
+          })
+          setScanFormData({
+            // columns: defaultTreatmentTemplate?.date,
+            rows: defaultTreatmentTemplate?.scanSheet,
+          })
+          // console.log('under review consents calling handleUpdateTreatmentSheet')
+          // queryClient.invalidateQueries('treatmentStatus')
+          let temp = {
+            follicularSheet: folicularFormData,
+            columns: defaultTreatmentTemplate?.date,
+            rows: defaultTreatmentTemplate?.follicularSheet,
+            medicationRows: defaultTreatmentTemplate?.medicationSheet,
+            medicationSheet: [],
+            scanRows: defaultTreatmentTemplate?.scanSheet,
+            scanSheet: [],
           }
+          handleUpdateTreatmentSheet(temp)
         } else {
           dispatch(closeModal())
           queryClient.invalidateQueries('treatmentStatus')
@@ -2373,8 +2368,7 @@ function Prescription({
               reviewConsents={reviewConsentsICSI}
             />
           </>
-        ) : patientInfo?.treatmentDetails?.treatmentTypeId != 6 &&
-          patientInfo?.treatmentDetails?.treatmentTypeId != 7 ? (
+        ) : (
           <>
             <FolicularSheet
               folicularFormData={folicularFormData}
@@ -2402,10 +2396,6 @@ function Prescription({
               allBillTypeValues={allBillTypeValues}
               columns={follicularTemplate?.columns}
             />
-          </>
-        ) : (
-          <>
-            <span>No Folicular Sheet available for this treatment</span>
           </>
         )}
       </Modal>
