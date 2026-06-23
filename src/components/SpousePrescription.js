@@ -22,17 +22,20 @@ import dynamic from 'next/dynamic'
 import { Close } from '@mui/icons-material'
 import dayjs from 'dayjs'
 import {
+  applyPharmacyKitsToBillTypeValues,
+  ACTIVE_PHARMACY_KITS_QUERY_KEY,
+  ACTIVE_PHARMACY_KITS_QUERY_OPTIONS,
   buildPharmacySelectOption,
   enrichPharmacySelectValue,
   formatPharmacyOptionLabel,
-  getKitMedicineQuantity,
+  getSelectedPharmacyKits,
   parseKitMedicines,
   pharmacySelectStyles,
   PrescriptionPharmacyLowStockLegend,
+  preserveKitMedicineQuantity,
 } from '@/utils/prescriptionPharmacySelect'
 import {
   applyPharmacyCompanionMedicines,
-  findPharmacyItemForKitMedicine,
   getCompanionMedicinesForTriggers,
   syncPrescriptionDaysForTriggerAndCompanions,
 } from '@/utils/pharmacyAutoCompanions'
@@ -82,13 +85,14 @@ function SpousePrescription({
   }, [billTypes])
 
   const { data: activePharmacyKitsResponse } = useQuery({
-    queryKey: ['activePharmacyKits', 'spouse'],
+    queryKey: [...ACTIVE_PHARMACY_KITS_QUERY_KEY, 'spouse'],
     queryFn: () =>
       getPharmacyMasterData(
         user.accessToken,
         API_ROUTES.GET_ACTIVE_PHARMACY_KITS,
       ),
-    enabled: !!user?.accessToken && modal.key === 'addPrescription',
+    enabled: !!user?.accessToken && modal.key === 'addSpousePrescription',
+    ...ACTIVE_PHARMACY_KITS_QUERY_OPTIONS,
   })
 
   const medicineKits = useMemo(() => {
@@ -171,7 +175,7 @@ function SpousePrescription({
             // Filter out paid items and remove status field from each item
             const billTypeValues = SelectedTypeValuesArray.filter(
               (item) => item.status !== 'PAID',
-            ).map(({ status, ...item }) => ({
+            ).map(({ status, isKitMedicine, kitBaseQuantity, ...item }) => ({
               ...item,
               amount: Number(item.amount),
               ...(Number(data) === 3
@@ -214,103 +218,20 @@ function SpousePrescription({
     let billTypeValues = [...currentPaidItems] // Start with paid items
 
     if (name === 'Pharmacy') {
-      // Helper function to process a medicine kit
-      const processKit = (kit) => {
-        const BillTypeValuesArray = allBillTypeValues[name] || []
-        const existingAllItems = copyOfDefaultLineBillValues[billTypeId] || []
-
-        kit.medicines.forEach((kitMedicine) => {
-          const kitQuantity = getKitMedicineQuantity(kitMedicine)
-          // Find the medicine in the available pharmacy items (by name match)
-          const medicineInPharmacy = findPharmacyItemForKitMedicine(
-            BillTypeValuesArray,
-            kitMedicine.name,
-          )
-
-          if (medicineInPharmacy) {
-            // Check if medicine already exists in the prescription (both paid and unpaid)
-            const existingMedicineIndex = existingAllItems.findIndex(
-              (item) => item.id === medicineInPharmacy.id,
-            )
-
-            if (existingMedicineIndex >= 0) {
-              const existingMedicine = existingAllItems[existingMedicineIndex]
-
-              // Only update if it's not paid (can't modify paid items)
-              if (existingMedicine.status !== 'PAID') {
-                const existingBillTypeValuesIndex = billTypeValues.findIndex(
-                  (item) => item.id === medicineInPharmacy.id,
-                )
-
-                if (existingBillTypeValuesIndex >= 0) {
-                  // Update quantity by adding the kit quantity
-                  billTypeValues[
-                    existingBillTypeValuesIndex
-                  ].prescribedQuantity =
-                    (billTypeValues[existingBillTypeValuesIndex]
-                      .prescribedQuantity || 0) + kitQuantity
-                } else {
-                  // Medicine exists but not in current billTypeValues
-                  const infoObject = defaultLineBillValues['3']?.find(
-                    (values) => values.id === medicineInPharmacy.id,
-                  )
-
-                  billTypeValues.push({
-                    id: medicineInPharmacy.id,
-                    name: medicineInPharmacy.name,
-                    amount: parseInt(medicineInPharmacy.amount, 10),
-                    prescribedQuantity:
-                      (existingMedicine.prescribedQuantity || 0) + kitQuantity,
-                    prescriptionDetails:
-                      infoObject?.prescriptionDetails ??
-                      existingMedicine.prescriptionDetails ??
-                      '',
-                    prescriptionDays:
-                      infoObject?.prescriptionDays ??
-                      existingMedicine.prescriptionDays ??
-                      1,
-                    status: 'UNPAID',
-                  })
-                }
-              }
-            } else {
-              // Add new medicine with predefined quantity
-              const infoObject = defaultLineBillValues['3']?.find(
-                (values) => values.id === medicineInPharmacy.id,
-              )
-
-              billTypeValues.push({
-                id: medicineInPharmacy.id,
-                name: medicineInPharmacy.name,
-                amount: parseInt(medicineInPharmacy.amount, 10),
-                prescribedQuantity: kitQuantity,
-                prescriptionDetails: infoObject?.prescriptionDetails ?? '',
-                prescriptionDays: infoObject?.prescriptionDays ?? 1,
-                status: 'UNPAID',
-              })
-            }
-          }
-        })
-      }
-
-      // Detect which kits were selected (only NAPO_SHOT_KIT is in this screen)
-      const selectedKits = []
-      selectedOptions?.forEach((option) => {
-        medicineKits.forEach((kit) => {
-          const kitSelected =
-            option.value === kit.kitValue ||
-            option.label?.toUpperCase() === kit.kitName.toUpperCase()
-          if (kitSelected) {
-            selectedKits.push(kit)
-          }
-        })
-      })
-
-      // Process all selected kits
-      selectedKits.forEach((kit) => processKit(kit))
+      const selectedKits = getSelectedPharmacyKits(
+        selectedOptions,
+        medicineKits,
+      )
 
       if (selectedKits.length > 0) {
-        // Remove all kit trigger options from selected options
+        billTypeValues = applyPharmacyKitsToBillTypeValues({
+          kits: selectedKits,
+          billTypeValues,
+          pharmacyItems: allBillTypeValues[name] || [],
+          defaultLineBillValues: copyOfDefaultLineBillValues,
+          billTypeId,
+        })
+
         const kitValues = medicineKits.map((k) => k.kitValue)
         const kitNames = medicineKits.map((k) => k.kitName.toUpperCase())
         const filteredOptions = selectedOptions.filter(
@@ -319,7 +240,6 @@ function SpousePrescription({
             !kitNames.includes(option.label?.toUpperCase()),
         )
 
-        // Continue with remaining selected items (non-kit items)
         filteredOptions?.forEach((element) => {
           if (!currentPaidItems.some((paid) => paid.id === element.value)) {
             const BillTypeValuesArray = allBillTypeValues[name] || []
@@ -495,6 +415,18 @@ function SpousePrescription({
         triggerRowIndex: prescriptionRowIndex,
         days,
         getMultipleForQuatityCalculation,
+      }).map((row, index) => {
+        if (index === prescriptionRowIndex && row?.isKitMedicine) {
+          return preserveKitMedicineQuantity(row, {
+            prescriptionDays:
+              days === ''
+                ? ''
+                : Number.isFinite(Number(days)) && Number(days) > 0
+                  ? Number(days)
+                  : row.prescriptionDays,
+          })
+        }
+        return row
       })
     setDefaultLineBillValues(copyOfDefaultLineBillValues)
   }
@@ -506,16 +438,25 @@ function SpousePrescription({
     let tempLineBillValues = copyOfDefaultLineBillValues?.[
       billTypeIdPrescription
     ]?.map((lineBillValues, index) => {
-      if (index === prescriptionRowIndex) {
-        const currentDays = Number(lineBillValues.prescriptionDays)
-        const hasValidDays = Number.isFinite(currentDays) && currentDays > 0
-        const multiple = getMultipleForQuatityCalculation(medIntake) || 1
-        lineBillValues.prescriptionDetails = medIntake
-        lineBillValues.prescribedQuantity = hasValidDays
-          ? currentDays * multiple
-          : ''
+      if (index !== prescriptionRowIndex) {
+        return lineBillValues
       }
-      return lineBillValues
+
+      if (lineBillValues.isKitMedicine) {
+        return preserveKitMedicineQuantity(lineBillValues, {
+          prescriptionDetails: medIntake,
+        })
+      }
+
+      const currentDays = Number(lineBillValues.prescriptionDays)
+      const hasValidDays = Number.isFinite(currentDays) && currentDays > 0
+      const multiple = getMultipleForQuatityCalculation(medIntake) || 1
+
+      return {
+        ...lineBillValues,
+        prescriptionDetails: medIntake,
+        prescribedQuantity: hasValidDays ? currentDays * multiple : '',
+      }
     })
     if (copyOfDefaultLineBillValues[billTypeIdPrescription]?.length != 0) {
       copyOfDefaultLineBillValues[billTypeIdPrescription] = tempLineBillValues

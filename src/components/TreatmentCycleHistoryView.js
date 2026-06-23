@@ -1,48 +1,69 @@
-import React, { useRef } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useSelector } from 'react-redux'
-import dynamic from 'next/dynamic'
-import { CircularProgress } from '@mui/material'
+import { CircularProgress, Chip } from '@mui/material'
+import dayjs from 'dayjs'
 import {
   getTreatmentSheetByTreatmentCycleId,
   getDischargeSummaryTemplate,
+  getPickupSheetTemplate,
+  getEmbryologyReportsByTreatmentCycleId,
 } from '@/constants/apis'
 import { isIuiTreatment } from '@/utils/treatmentTypeUtils'
 
-const JoditEditor = dynamic(() => import('jodit-react'), {
-  ssr: false,
-})
+function HtmlPreview({ html, title, minHeight = 420 }) {
+  const iframeRef = useRef(null)
 
-// Read-only rendering of the Jodit rich text content so the doctor can review
-// the cycle conclusion without the toolbar clutter.
-function ReadOnlyRichText({ contents }) {
-  const editor = useRef(null)
+  useEffect(() => {
+    const doc = iframeRef.current?.contentDocument
+    if (!doc) return
+    doc.open()
+    doc.write(
+      html ||
+        '<html><body style="font-family:Arial,sans-serif;padding:16px;color:#666;">No data available</body></html>',
+    )
+    doc.close()
+  }, [html])
+
   return (
-    <JoditEditor
-      ref={editor}
-      value={contents || ''}
-      tabIndex={1}
-      config={{
-        readonly: true,
-        toolbar: false,
-        showCharsCounter: false,
-        showWordsCounter: false,
-        showXPathInStatusbar: false,
-        statusbar: false,
-      }}
+    <iframe
+      ref={iframeRef}
+      title={title}
+      className="w-full border rounded bg-white"
+      style={{ minHeight }}
     />
   )
 }
 
-// Read-only visualization of the follicular scan, modelled after FolicularSheet
-// but rendering plain text cells so the doctor can quickly review prior cycles.
+function SectionCard({ title, children, action }) {
+  return (
+    <div className="border rounded-lg p-3">
+      <div className="flex justify-between items-center mb-2 gap-2">
+        <span className="text-sm font-semibold text-secondary">{title}</span>
+        {action}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function LoadingBlock({ label }) {
+  return (
+    <div className="flex items-center gap-2 p-2">
+      <CircularProgress size={16} />
+      <span className="text-xs opacity-60">{label}</span>
+    </div>
+  )
+}
+
+// Read-only visualization of the follicular scan
 function FollicularReadOnlyTable({ template, formData }) {
   const columns = Array.isArray(template?.columns) ? template.columns : []
   const rows = Array.isArray(template?.rows) ? template.rows : []
 
   if (columns.length === 0 || rows.length === 0) {
     return (
-      <span className="opacity-50">
+      <span className="opacity-50 text-xs">
         No follicular sheet data captured for this cycle
       </span>
     )
@@ -147,12 +168,9 @@ function FollicularReadOnlyTable({ template, formData }) {
   )
 }
 
-// Read-only viewer for a previous treatment cycle - shows the follicular sheet
-// and the cycle results (discharge summary) so the consulting doctor can review
-// historical cycles directly from the appointments timeline.
 function TreatmentCycleHistoryView({ treatmentCycleId, treatmentType }) {
   const user = useSelector((store) => store.user)
-  const showDischargeSummary = !isIuiTreatment({ treatmentType })
+  const showIcsiSections = !isIuiTreatment({ treatmentType })
 
   const {
     data: treatmentSheet,
@@ -179,12 +197,47 @@ function TreatmentCycleHistoryView({ treatmentCycleId, treatmentType }) {
   })
 
   const {
+    data: pickupSheet,
+    isLoading: isPickupSheetLoading,
+    isError: isPickupSheetError,
+  } = useQuery({
+    queryKey: ['historyPickupSheet', treatmentCycleId],
+    enabled: !!treatmentCycleId && showIcsiSections,
+    queryFn: async () => {
+      const responsejson = await getPickupSheetTemplate(
+        user.accessToken,
+        treatmentCycleId,
+      )
+      return responsejson?.data?.template || ''
+    },
+  })
+
+  const {
+    data: embryologyReports,
+    isLoading: isEmbryologyLoading,
+    isError: isEmbryologyError,
+  } = useQuery({
+    queryKey: ['historyEmbryologyReports', treatmentCycleId],
+    enabled: !!treatmentCycleId && showIcsiSections,
+    queryFn: async () => {
+      const responsejson = await getEmbryologyReportsByTreatmentCycleId(
+        user.accessToken,
+        treatmentCycleId,
+      )
+      if (responsejson?.status === 200) {
+        return responsejson.data || []
+      }
+      return []
+    },
+  })
+
+  const {
     data: dischargeSummary,
     isLoading: isDischargeSummaryLoading,
     isError: isDischargeSummaryError,
   } = useQuery({
     queryKey: ['historyDischargeSummary', treatmentCycleId],
-    enabled: !!treatmentCycleId && showDischargeSummary,
+    enabled: !!treatmentCycleId && showIcsiSections,
     queryFn: async () => {
       const responsejson = await getDischargeSummaryTemplate(
         user.accessToken,
@@ -203,19 +256,9 @@ function TreatmentCycleHistoryView({ treatmentCycleId, treatmentType }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="border rounded-lg p-3">
-        <div className="flex justify-between items-center mb-2">
-          <span className="text-sm font-semibold text-secondary">
-            Follicular Sheet
-          </span>
-        </div>
+      <SectionCard title="Follicular Sheet">
         {isTreatmentSheetLoading ? (
-          <div className="flex items-center gap-2 p-2">
-            <CircularProgress size={16} />
-            <span className="text-xs opacity-60">
-              Loading follicular sheet...
-            </span>
-          </div>
+          <LoadingBlock label="Loading follicular sheet..." />
         ) : isTreatmentSheetError ? (
           <span className="opacity-50 text-xs">
             Unable to load follicular sheet
@@ -230,34 +273,114 @@ function TreatmentCycleHistoryView({ treatmentCycleId, treatmentType }) {
             formData={treatmentSheet?.follicularSheet}
           />
         )}
-      </div>
+      </SectionCard>
 
-      {showDischargeSummary && (
-        <div className="border rounded-lg p-3">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-sm font-semibold text-secondary">
-              Cycle Results
-            </span>
-          </div>
-          {isDischargeSummaryLoading ? (
-            <div className="flex items-center gap-2 p-2">
-              <CircularProgress size={16} />
-              <span className="text-xs opacity-60">
-                Loading cycle results...
+      {showIcsiSections && (
+        <>
+          <SectionCard title="OPU Sheet">
+            {isPickupSheetLoading ? (
+              <LoadingBlock label="Loading OPU sheet..." />
+            ) : isPickupSheetError ? (
+              <span className="opacity-50 text-xs">
+                Unable to load OPU sheet
               </span>
-            </div>
-          ) : isDischargeSummaryError ? (
-            <span className="opacity-50 text-xs">
-              Unable to load cycle results
-            </span>
-          ) : !dischargeSummary ? (
-            <span className="opacity-50 text-xs">
-              No cycle results recorded for this cycle
-            </span>
-          ) : (
-            <ReadOnlyRichText contents={dischargeSummary} />
-          )}
-        </div>
+            ) : (
+              <HtmlPreview
+                html={pickupSheet}
+                title="OPU Sheet"
+                minHeight={360}
+              />
+            )}
+          </SectionCard>
+
+          <SectionCard
+            title="Embryology Reports"
+            action={
+              embryologyReports?.length > 0 ? (
+                <Chip
+                  size="small"
+                  label={`${embryologyReports.length} report${
+                    embryologyReports.length === 1 ? '' : 's'
+                  }`}
+                  color="primary"
+                  variant="outlined"
+                />
+              ) : null
+            }
+          >
+            {isEmbryologyLoading ? (
+              <LoadingBlock label="Loading embryology reports..." />
+            ) : isEmbryologyError ? (
+              <span className="opacity-50 text-xs">
+                Unable to load embryology reports
+              </span>
+            ) : !embryologyReports?.length ? (
+              <span className="opacity-50 text-xs">
+                No embryology reports recorded for this treatment cycle
+              </span>
+            ) : (
+              <div className="flex flex-col gap-4">
+                {embryologyReports.map((report, index) => (
+                  <div
+                    key={`${report.appointmentId}-${report.embryologyName}-${report.categoryType}-${index}`}
+                    className="border rounded p-2"
+                  >
+                    <div className="flex flex-wrap gap-2 items-center mb-2 text-xs text-gray-600">
+                      <span className="font-semibold text-secondary capitalize">
+                        {report.embryologyName}
+                      </span>
+                      {report.categoryType && (
+                        <Chip
+                          size="small"
+                          label={report.categoryType}
+                          variant="outlined"
+                        />
+                      )}
+                      <span>
+                        {dayjs(report.appointmentDate).format('DD-MM-YYYY')}
+                      </span>
+                      {report.doctorName && (
+                        <span>Dr. {report.doctorName}</span>
+                      )}
+                    </div>
+                    <HtmlPreview
+                      html={report.template}
+                      title={report.embryologyName}
+                      minHeight={280}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </SectionCard>
+
+          <SectionCard title="Cycle Results (IVF-ICSI Discharge Summary)">
+            {isDischargeSummaryLoading ? (
+              <LoadingBlock label="Loading cycle results..." />
+            ) : isDischargeSummaryError ? (
+              <span className="opacity-50 text-xs">
+                Unable to load cycle results
+              </span>
+            ) : !dischargeSummary ? (
+              <span className="opacity-50 text-xs">
+                No cycle results recorded for this cycle
+              </span>
+            ) : (
+              <>
+                <p className="text-xs text-gray-500 mb-2">
+                  Patient, doctor, embryologist, and plan details are filled
+                  automatically. Use the Discharge Summary button above to enter
+                  oocyte, embryo transfer, cryopreservation, and sperm details.
+                </p>
+                <HtmlPreview
+                  html={dischargeSummary}
+                  title="Cycle Results"
+                  minHeight={520}
+                />
+              </>
+            )}
+          </SectionCard>
+        </>
       )}
     </div>
   )

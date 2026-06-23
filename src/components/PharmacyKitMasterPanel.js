@@ -23,7 +23,10 @@ import { API_ROUTES } from '@/constants/constants'
 import { closeModal, openModal } from '@/redux/modalSlice'
 import { toast } from 'react-toastify'
 import { toastconfig } from '@/utils/toastconfig'
-import { parseKitMedicines } from '@/utils/prescriptionPharmacySelect'
+import {
+  parseKitMedicines,
+  ACTIVE_PHARMACY_KITS_QUERY_KEY,
+} from '@/utils/prescriptionPharmacySelect'
 
 const EMPTY_MEDICINE = { name: '', quantity: 1 }
 
@@ -92,7 +95,9 @@ function PharmacyKitMasterPanel({ accessToken }) {
     onSuccess: (data) => {
       if (data?.status === 200) {
         queryClient.invalidateQueries({ queryKey: ['pharmacyKitMasterData'] })
-        queryClient.invalidateQueries({ queryKey: ['activePharmacyKits'] })
+        queryClient.invalidateQueries({
+          queryKey: ACTIVE_PHARMACY_KITS_QUERY_KEY,
+        })
         dispatch(closeModal())
         resetForm()
         toast.success(data?.message, toastconfig)
@@ -112,7 +117,9 @@ function PharmacyKitMasterPanel({ accessToken }) {
     onSuccess: (data) => {
       if (data?.status === 200) {
         queryClient.invalidateQueries({ queryKey: ['pharmacyKitMasterData'] })
-        queryClient.invalidateQueries({ queryKey: ['activePharmacyKits'] })
+        queryClient.invalidateQueries({
+          queryKey: ACTIVE_PHARMACY_KITS_QUERY_KEY,
+        })
         dispatch(closeModal())
         resetForm()
         toast.success(data?.message, toastconfig)

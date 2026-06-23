@@ -3902,6 +3902,25 @@ export const getPickupSheetTemplate = async (token, TreatmentCycleId) => {
   return response.json()
 }
 
+export const getEmbryologyReportsByTreatmentCycleId = async (
+  token,
+  treatmentCycleId,
+) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_EMBRYOLOGY_REPORTS_BY_TREATMENT_CYCLE}/${treatmentCycleId}`,
+    {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
 export const updatePickupSheetTemplate = async (
   token,
   treatmentCycleId,

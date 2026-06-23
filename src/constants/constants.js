@@ -268,6 +268,8 @@ export const API_ROUTES = {
   SAVE_DISCHARGE_SUMMARY: '/patients/saveDischargeSummarySheet',
   UPLOAD_DISCHARGE_SUMMARY_IMAGE: '/patients/uploadDischargeSummaryImage',
   GET_PICKUP_SHEET_TEMPLATE: '/patients/getPickUpSheetByTreatmentId',
+  GET_EMBRYOLOGY_REPORTS_BY_TREATMENT_CYCLE:
+    '/patients/getEmbryologyReportsByTreatmentCycleId',
   SAVE_PICKUP_SHEET: '/patients/savePickUpSheet',
   //coupons
   GET_COUPONS: '/coupon/getAllCoupons',

@@ -329,6 +329,19 @@ export function PatientDetails({
   )
 }
 
+const getOutcomeFromText = (text = '') => {
+  const value = String(text).toLowerCase()
+  if (value.includes('positive')) return 'Positive'
+  if (value.includes('negative')) return 'Negative'
+  return null
+}
+
+const getTreatmentCloseReason = (treatment) => {
+  const visitCloseReason = treatment?.visitClosedReason?.trim()
+  const treatmentEndReason = treatment?.closeCancelReason?.trim()
+  return visitCloseReason || treatmentEndReason || null
+}
+
 function ConsultationsAndTreatments({
   consultations,
   treatments,
@@ -336,6 +349,7 @@ function ConsultationsAndTreatments({
   patientInfo,
   checklistData,
   isChecklistDataLoading,
+  onActiveTreatmentCycleChange,
 }) {
   const user = useSelector((store) => store.user)
   const { billTypes } = useSelector((store) => store.dropdowns)
@@ -427,11 +441,17 @@ function ConsultationsAndTreatments({
         type: type,
         id: id,
       })
+      if (type === 'Treatment') {
+        onActiveTreatmentCycleChange?.(id)
+      }
     } else {
       setClickedConsultationOrTreatment({
         type: '',
         id: '',
       })
+      if (type === 'Treatment') {
+        onActiveTreatmentCycleChange?.(null)
+      }
     }
   }
 
@@ -793,53 +813,76 @@ function ConsultationsAndTreatments({
         <AccordionDetails>
           {treatments?.length > 0 ? (
             <div className="flex flex-col">
-              {treatments.map((eachTreatment, i) => (
-                <Accordion
-                  key={'treatmentCycle' + eachTreatment.treatmentCycleId}
-                  expanded={
-                    clickedConsultationOrTreatment.type == 'Treatment' &&
-                    eachTreatment.treatmentCycleId ==
-                      clickedConsultationOrTreatment.id
-                  }
-                  onChange={(e, isExpanded) => {
-                    onAccordionClick(
-                      'Treatment',
-                      eachTreatment.treatmentCycleId,
-                      isExpanded,
-                    )
-                  }}
-                >
-                  <AccordionSummary expandIcon={<ExpandMore />}>
-                    <div className="flex gap-5">
-                      <span>
-                        {dayjs(eachTreatment.treatmentDate).format(
-                          'DD-MM-YYYY',
-                        )}
-                      </span>
-                      <span>{eachTreatment.treatmentType}</span>
-                    </div>
-                  </AccordionSummary>
-                  <AccordionDetails>
-                    {clickedConsultationOrTreatment.type == 'Treatment' &&
+              {treatments.map((eachTreatment, i) => {
+                const closeReason = getTreatmentCloseReason(eachTreatment)
+                const outcome =
+                  getOutcomeFromText(eachTreatment.visitClosedReason) ||
+                  getOutcomeFromText(eachTreatment.closeCancelReason)
+                return (
+                  <Accordion
+                    key={'treatmentCycle' + eachTreatment.treatmentCycleId}
+                    expanded={
+                      clickedConsultationOrTreatment.type == 'Treatment' &&
                       eachTreatment.treatmentCycleId ==
-                        clickedConsultationOrTreatment.id && (
-                        <div className="flex flex-col gap-3">
-                          {renderRespectiveAppointments(
-                            clickedConsultationOrTreatment.type,
-                            'Treatment',
-                            clickedConsultationOrTreatment.id,
-                            eachTreatment.treatmentCycleId,
+                        clickedConsultationOrTreatment.id
+                    }
+                    onChange={(e, isExpanded) => {
+                      onAccordionClick(
+                        'Treatment',
+                        eachTreatment.treatmentCycleId,
+                        isExpanded,
+                      )
+                    }}
+                  >
+                    <AccordionSummary expandIcon={<ExpandMore />}>
+                      <div className="flex flex-wrap gap-3 items-center w-full pr-2">
+                        <span>
+                          {dayjs(eachTreatment.treatmentDate).format(
+                            'DD-MM-YYYY',
                           )}
-                          <Divider className="my-2" />
-                          <TreatmentCycleHistoryView
-                            treatmentCycleId={eachTreatment.treatmentCycleId}
-                            treatmentType={eachTreatment.treatmentType}
+                        </span>
+                        <span className="font-medium">
+                          {eachTreatment.treatmentType}
+                        </span>
+                        {closeReason && (
+                          <span
+                            className="text-xs text-gray-600 max-w-xs truncate"
+                            title={closeReason}
+                          >
+                            Close: {closeReason}
+                          </span>
+                        )}
+                        {outcome && (
+                          <Chip
+                            label={outcome}
+                            size="small"
+                            color={outcome === 'Positive' ? 'success' : 'error'}
                           />
-                        </div>
-                      )}
-                  </AccordionDetails>
-                </Accordion>
-              ))}
+                        )}
+                      </div>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      {clickedConsultationOrTreatment.type == 'Treatment' &&
+                        eachTreatment.treatmentCycleId ==
+                          clickedConsultationOrTreatment.id && (
+                          <div className="flex flex-col gap-3">
+                            {renderRespectiveAppointments(
+                              clickedConsultationOrTreatment.type,
+                              'Treatment',
+                              clickedConsultationOrTreatment.id,
+                              eachTreatment.treatmentCycleId,
+                            )}
+                            <Divider className="my-2" />
+                            <TreatmentCycleHistoryView
+                              treatmentCycleId={eachTreatment.treatmentCycleId}
+                              treatmentType={eachTreatment.treatmentType}
+                            />
+                          </div>
+                        )}
+                    </AccordionDetails>
+                  </Accordion>
+                )
+              })}
             </div>
           ) : (
             <div className="h-full">
@@ -973,6 +1016,8 @@ export default function Appointments() {
   const user = useSelector((store) => store.user)
   const queryClient = useQueryClient()
   const [date, setDate] = useState(dayjs())
+  const [activeHistoryTreatmentCycleId, setActiveHistoryTreatmentCycleId] =
+    useState(null)
   const [selectedPatient, setSelectedPatient] = useState({
     patientId: '',
     branchId: '',
@@ -991,6 +1036,10 @@ export default function Appointments() {
   useEffect(() => {
     selectedPatientRef.current = selectedPatient
   }, [selectedPatient])
+
+  useEffect(() => {
+    setActiveHistoryTreatmentCycleId(null)
+  }, [selectedPatient?.patientId, selectedPatient?.appointmentId])
 
   const resolveSelectedAppointment = (appointments, query = {}) => {
     if (!appointments?.length) return null
@@ -1119,6 +1168,9 @@ export default function Appointments() {
     patientDetails?.treatments,
     selectedPatient?.treatmentCycleId,
   ])
+
+  const sheetTreatmentCycleId =
+    activeHistoryTreatmentCycleId || selectedPatient?.treatmentCycleId
 
   const [searchTab, setSearchTab] = useState('date') // 'date' or 'patient'
   const [selectedSearchPatient, setSelectedSearchPatient] = useState(null)
@@ -1944,7 +1996,7 @@ export default function Appointments() {
                     closeOnOutsideClick={true}
                   >
                     <DischargeSummarSheet
-                      TreatmentCycleId={selectedPatient?.treatmentCycleId}
+                      TreatmentCycleId={sheetTreatmentCycleId}
                     />
                   </Modal>
                 )}
@@ -1953,9 +2005,7 @@ export default function Appointments() {
                   maxWidth="xl"
                   closeOnOutsideClick={true}
                 >
-                  <PickupSheet
-                    TreatmentCycleId={selectedPatient?.treatmentCycleId}
-                  />
+                  <PickupSheet TreatmentCycleId={sheetTreatmentCycleId} />
                 </Modal>
                 <Modal
                   uniqueKey="EmbryologyHistory"
@@ -2003,6 +2053,7 @@ export default function Appointments() {
               patientInfo={patientDetails?.patientInfo}
               checklistData={checklistData}
               isChecklistDataLoading={isChecklistDataLoading}
+              onActiveTreatmentCycleChange={setActiveHistoryTreatmentCycleId}
             />
           </>
         ) : (

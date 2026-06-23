@@ -1,4 +1,5 @@
 import React from 'react'
+import { findPharmacyItemForKitMedicine } from '@/utils/pharmacyAutoCompanions'
 
 export function parseKitMedicines(medicines) {
   if (!medicines) {
@@ -26,6 +27,125 @@ export function parseKitMedicines(medicines) {
 export function getKitMedicineQuantity(kitMedicine) {
   const qty = Number(kitMedicine?.quantity ?? kitMedicine?.qty)
   return Number.isFinite(qty) && qty >= 1 ? Math.floor(qty) : 1
+}
+
+export const ACTIVE_PHARMACY_KITS_QUERY_KEY = ['activePharmacyKits']
+
+export const ACTIVE_PHARMACY_KITS_QUERY_OPTIONS = {
+  staleTime: 0,
+  refetchOnMount: 'always',
+}
+
+export function getSelectedPharmacyKits(
+  selectedOptions = [],
+  medicineKits = [],
+) {
+  const selectedKits = []
+
+  medicineKits.forEach((kit) => {
+    const isSelected = selectedOptions?.some(
+      (option) =>
+        option.value === kit.kitValue ||
+        option.label?.toUpperCase() === kit.kitName.toUpperCase(),
+    )
+
+    if (isSelected) {
+      selectedKits.push(kit)
+    }
+  })
+
+  return selectedKits
+}
+
+/**
+ * Applies kit master quantities to prescription rows.
+ * Quantities are set from master data (not added) so admin edits reflect immediately.
+ */
+export function applyPharmacyKitsToBillTypeValues({
+  kits = [],
+  billTypeValues = [],
+  pharmacyItems = [],
+  defaultLineBillValues = {},
+  billTypeId = '3',
+}) {
+  const kitQuantityByMedicineId = new Map()
+  const kitMedicineMeta = new Map()
+
+  kits.forEach((kit) => {
+    parseKitMedicines(kit.medicines).forEach((kitMedicine) => {
+      const kitQuantity = getKitMedicineQuantity(kitMedicine)
+      const medicineInPharmacy = findPharmacyItemForKitMedicine(
+        pharmacyItems,
+        kitMedicine.name,
+      )
+
+      if (!medicineInPharmacy) {
+        return
+      }
+
+      const medicineId = medicineInPharmacy.id
+      kitQuantityByMedicineId.set(
+        medicineId,
+        (kitQuantityByMedicineId.get(medicineId) || 0) + kitQuantity,
+      )
+      kitMedicineMeta.set(medicineId, {
+        id: medicineInPharmacy.id,
+        name: medicineInPharmacy.name,
+        amount: parseInt(medicineInPharmacy.amount, 10),
+      })
+    })
+  })
+
+  const updatedBillTypeValues = [...billTypeValues]
+  const unpaidPharmacyRows =
+    defaultLineBillValues?.[billTypeId]?.filter(
+      (row) => row.status !== 'PAID',
+    ) ?? []
+
+  kitQuantityByMedicineId.forEach((quantity, medicineId) => {
+    const meta = kitMedicineMeta.get(medicineId)
+    const existingIndex = updatedBillTypeValues.findIndex(
+      (item) => item.id === medicineId && item.status !== 'PAID',
+    )
+    const infoObject = unpaidPharmacyRows.find((row) => row.id === medicineId)
+    const kitRowFields = {
+      prescribedQuantity: quantity,
+      isKitMedicine: true,
+      kitBaseQuantity: quantity,
+      prescriptionDetails: infoObject?.prescriptionDetails ?? '',
+      prescriptionDays: infoObject?.prescriptionDays ?? 1,
+      status: 'UNPAID',
+    }
+
+    if (existingIndex >= 0) {
+      updatedBillTypeValues[existingIndex] = {
+        ...updatedBillTypeValues[existingIndex],
+        ...kitRowFields,
+      }
+      return
+    }
+
+    updatedBillTypeValues.push({
+      ...meta,
+      ...kitRowFields,
+    })
+  })
+
+  return updatedBillTypeValues
+}
+
+export function preserveKitMedicineQuantity(row, updates = {}) {
+  if (!row?.isKitMedicine) {
+    return { ...row, ...updates }
+  }
+
+  const baseQuantity = row.kitBaseQuantity ?? row.prescribedQuantity
+
+  return {
+    ...row,
+    ...updates,
+    prescribedQuantity: baseQuantity,
+  }
 }
 
 export const PHARMACY_LOW_STOCK_THRESHOLD = 5

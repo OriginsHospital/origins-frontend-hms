@@ -235,6 +235,22 @@ function resolveCompanionQuantity(companionDef, days, intakeMultiple) {
   return numericDays * perDayQty * multiple
 }
 
+function isKitSourcedPrescriptionRow(row) {
+  return Boolean(row?.isKitMedicine)
+}
+
+function preserveKitRowQuantity(row, updates = {}) {
+  if (!isKitSourcedPrescriptionRow(row)) {
+    return { ...row, ...updates }
+  }
+
+  return {
+    ...row,
+    ...updates,
+    prescribedQuantity: row.kitBaseQuantity ?? row.prescribedQuantity,
+  }
+}
+
 /**
  * When days change on an injection trigger, mirror days (and quantity) on its auto-added companions.
  */
@@ -255,6 +271,24 @@ export function syncPrescriptionDaysForTriggerAndCompanions({
       if (index !== triggerRowIndex) {
         return lineBillValues
       }
+
+      if (isKitSourcedPrescriptionRow(lineBillValues)) {
+        if (days === '') {
+          return preserveKitRowQuantity(lineBillValues, {
+            prescriptionDays: '',
+          })
+        }
+
+        const numericDays = Number(days)
+        if (Number.isFinite(numericDays) && numericDays > 0) {
+          return preserveKitRowQuantity(lineBillValues, {
+            prescriptionDays: numericDays,
+          })
+        }
+
+        return lineBillValues
+      }
+
       const multiple =
         getMultipleForQuatityCalculation(lineBillValues.prescriptionDetails) ||
         1
@@ -278,6 +312,10 @@ export function syncPrescriptionDaysForTriggerAndCompanions({
   }
 
   return prescriptionRows.map((lineBillValues, index) => {
+    if (isKitSourcedPrescriptionRow(lineBillValues)) {
+      return lineBillValues
+    }
+
     const isTriggerRow = index === triggerRowIndex
     const isLinkedCompanion =
       !isTriggerRow &&
@@ -375,21 +413,27 @@ export function applyPharmacyCompanionMedicines({
       companion.name,
     )
 
-    if (existingSelectionIndex >= 0 && triggerDaysForCompanion != null) {
-      const existingRow = billTypeValues[existingSelectionIndex]
-      billTypeValues[existingSelectionIndex] = {
-        ...existingRow,
-        prescriptionDays: triggerDaysForCompanion,
-        prescribedQuantity: resolveCompanionQuantity(
-          companion,
-          triggerDaysForCompanion,
-          1,
-        ),
-      }
-      return
-    }
-
     if (existingSelectionIndex >= 0) {
+      const existingRow = billTypeValues[existingSelectionIndex]
+
+      // Kit master quantities take priority over auto-companion defaults.
+      if (isKitSourcedPrescriptionRow(existingRow)) {
+        return
+      }
+
+      if (triggerDaysForCompanion != null) {
+        billTypeValues[existingSelectionIndex] = {
+          ...existingRow,
+          prescriptionDays: triggerDaysForCompanion,
+          prescribedQuantity: resolveCompanionQuantity(
+            companion,
+            triggerDaysForCompanion,
+            1,
+          ),
+        }
+        return
+      }
+
       return
     }
 

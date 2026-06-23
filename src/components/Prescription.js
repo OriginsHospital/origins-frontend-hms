@@ -767,14 +767,24 @@ function Prescription({
       patientInfo?.activeVisitId,
     ],
     queryFn: async () => {
-      const responsejson = await getTreatmentFETSheetByTreatmentCycleId(
-        user.accessToken,
-        treatmentCycleId,
-      )
+      const [responsejson, prescriptionResponse] = await Promise.all([
+        getTreatmentFETSheetByTreatmentCycleId(
+          user.accessToken,
+          treatmentCycleId,
+        ),
+        getPrescriptionDetailsByTreatmentCycleId(
+          user.accessToken,
+          treatmentCycleId,
+        ),
+      ])
+      const prescribedMedications =
+        prescriptionResponse?.status === 200
+          ? prescriptionResponse?.data || []
+          : []
+
       if (responsejson.status == 200) {
         if (responsejson?.data?.template) {
           const res = JSON.parse(responsejson?.data?.template)
-          console.log(res)
           // Fallback guards for malformed templates
           const hasValidColumns =
             Array.isArray(res?.columns) && res?.columns.length > 0
@@ -789,8 +799,12 @@ function Prescription({
             : [dayjs().format('DD/MM')]
           const medicationRows = hasValidMedRows ? res?.medicationRows : []
           const scanRows = hasValidScanRows ? res?.scanRows : []
-          const fetMedicationFormData = buildMedicationFormData(
+          const mergedMedicationRows = mergePrescribedMedicationRows(
             medicationRows,
+            prescribedMedications,
+          )
+          const fetMedicationFormData = buildMedicationFormData(
+            mergedMedicationRows,
             res?.medicationSheet,
           )
 
@@ -806,10 +820,14 @@ function Prescription({
         } else {
           // No template returned from API. If FET is started, create a safe default
           if (treatmentStatus?.FET_START == 1) {
-            setFETFormData({ rows: [] })
+            const mergedMedicationRows = mergePrescribedMedicationRows(
+              [],
+              prescribedMedications,
+            )
+            setFETFormData({ rows: mergedMedicationRows })
             setFETTemplate({
               columns: [dayjs().format('DD/MM')],
-              rows: [],
+              rows: mergedMedicationRows,
             })
             setScanFetFormData({ rows: [] })
           } else {
@@ -1340,20 +1358,25 @@ function Prescription({
         const defaultTreatmentTemplate = res.data
         toast.success('Consents reviewed successfully')
         if (defaultTreatmentTemplate) {
-          setFETFormData({
-            rows: defaultTreatmentTemplate?.medicationSheet,
-          })
+          const medicationRows = defaultTreatmentTemplate?.medicationSheet || []
+          const mergedMedicationRows = mergePrescribedMedicationRows(
+            medicationRows,
+            medicationOptionsFollicular,
+          )
+          const fetMedicationFormData =
+            buildMedicationFormData(mergedMedicationRows)
+          setFETFormData(fetMedicationFormData)
           setFETTemplate({
             columns: defaultTreatmentTemplate?.date,
-            rows: defaultTreatmentTemplate?.medicationSheet,
+            rows: fetMedicationFormData.rows,
           })
           setScanFetFormData({
             rows: defaultTreatmentTemplate?.scanSheet,
           })
           let temp = {
             columns: defaultTreatmentTemplate?.date,
-            medicationRows: defaultTreatmentTemplate?.medicationSheet,
-            medicationSheet: [],
+            medicationRows: fetMedicationFormData.rows,
+            medicationSheet: fetMedicationFormData,
             scanRows: defaultTreatmentTemplate?.scanSheet,
             scanSheet: [],
           }
