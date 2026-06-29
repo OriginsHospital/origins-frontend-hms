@@ -27,6 +27,7 @@ import {
   hasRevenueNewRowActionsAccess,
 } from '@/utils/revenueAccess'
 import { formatRupeeRounded, roundCurrency } from '@/utils/currencyFormat'
+import { getRevenueBranchDisplayCode } from '@/utils/branchMapping'
 
 const getReportBranchId = (item) => {
   if (!item) return null
@@ -53,6 +54,8 @@ const normalizeBranchValue = (value) => {
 
 const getRowBranchCandidates = (item) => {
   if (!item) return []
+  const branchString =
+    typeof item.branch === 'string' ? item.branch.trim() : null
   return [
     item.billingBranchId,
     item.billedAtBranchId,
@@ -72,8 +75,11 @@ const getRowBranchCandidates = (item) => {
     item.visitBranchName,
     item.branchDetails?.id,
     item.branchDetails?.name,
+    item.branchDetails?.branchCode,
     item.branch?.id,
     item.branch?.name,
+    item.branch?.branchCode,
+    branchString,
     item.branchId,
     item.branchName,
     item.branchCode,
@@ -84,13 +90,34 @@ const getRowBranchCandidates = (item) => {
 
 const getSelectedBranchCandidates = (selectedBranch) => {
   if (!selectedBranch) return []
-  return [selectedBranch.id, selectedBranch.name, selectedBranch.code]
+  return [
+    selectedBranch.id,
+    selectedBranch.name,
+    selectedBranch.branchCode,
+    selectedBranch.code,
+  ]
     .map(normalizeBranchValue)
     .filter(Boolean)
 }
 
-const rowBelongsToSelectedBranch = (item, selectedBranch) => {
+const rowBelongsToSelectedBranch = (
+  item,
+  selectedBranch,
+  dropdownBranches = [],
+  branchCatalog = [],
+) => {
   if (!item || !selectedBranch) return false
+
+  const branchCode = normalizeBranchValue(
+    selectedBranch.branchCode || selectedBranch.name,
+  )
+  if (branchCode) {
+    const displayCode = normalizeBranchValue(
+      getRevenueBranchDisplayCode(item, branchCatalog, dropdownBranches),
+    )
+    if (displayCode && displayCode === branchCode) return true
+  }
+
   const rowCandidates = getRowBranchCandidates(item)
   const branchCandidates = getSelectedBranchCandidates(selectedBranch)
   if (rowCandidates.length === 0 || branchCandidates.length === 0) return false
@@ -107,14 +134,55 @@ const rowBelongsToSelectedBranch = (item, selectedBranch) => {
   return rowCandidates.some((rowValue) => branchCandidates.includes(rowValue))
 }
 
-const ROH_BRANCH_ID = 'ROH'
+const rowHasBranchCode = (
+  item,
+  branchCode,
+  dropdownBranches = [],
+  branchCatalog = [],
+) => {
+  if (!item || !branchCode) return false
+  const normalizedCode = normalizeBranchValue(branchCode)
+  const displayCode = normalizeBranchValue(
+    getRevenueBranchDisplayCode(item, branchCatalog, dropdownBranches),
+  )
+  if (displayCode && displayCode === normalizedCode) return true
 
-const getHnkBranch = (branches = []) =>
+  return getRowBranchCandidates(item).includes(normalizedCode)
+}
+
+const ROH_BRANCH_ID = 'ROH'
+const REVENUE_EXTRA_BRANCH_CODES = ['VKB']
+const REVENUE_EXCLUDED_BRANCH_NAMES = new Set(['OBH', '02', 'kmm03', 'HYD-KKT'])
+
+const getBranchByCode = (branches = [], code) =>
   branches.find(
     (branch) =>
-      normalizeBranchValue(branch.name) === 'HNK' ||
-      normalizeBranchValue(branch.code) === 'HNK',
+      normalizeBranchValue(branch.branchCode) === normalizeBranchValue(code) ||
+      normalizeBranchValue(branch.name) === normalizeBranchValue(code) ||
+      normalizeBranchValue(branch.code) === normalizeBranchValue(code),
   )
+
+const getHnkBranch = (branches = []) => getBranchByCode(branches, 'HNK')
+
+const getRevenueReportBranches = (
+  dropdownBranches = [],
+  branchCatalog = [],
+) => {
+  const branches = (dropdownBranches || []).filter(
+    (branch) => !REVENUE_EXCLUDED_BRANCH_NAMES.has(branch.name),
+  )
+  const existingIds = new Set(branches.map((branch) => String(branch.id)))
+
+  for (const code of REVENUE_EXTRA_BRANCH_CODES) {
+    const extra = getBranchByCode(branchCatalog, code)
+    if (extra && !existingIds.has(String(extra.id))) {
+      branches.push(extra)
+      existingIds.add(String(extra.id))
+    }
+  }
+
+  return branches
+}
 
 const dedupeRevenueRows = (rows = []) => {
   const seen = new Set()
@@ -227,6 +295,7 @@ function SalesNew() {
       appliedBranchId,
       appliedPaymentMode,
       dropdowns?.branches?.length, // Include branches length to refetch when branches change
+      branchCatalog?.length,
     ],
     queryFn: async () => {
       try {
@@ -250,13 +319,10 @@ function SalesNew() {
           throw new Error('No branches available')
         }
 
-        // Filter out excluded branches (OBH, 02, kmm03, HYD-KKT)
-        const filteredBranches = dropdowns.branches.filter(
-          (branch) =>
-            branch.name !== 'OBH' &&
-            branch.name !== '02' &&
-            branch.name !== 'kmm03' &&
-            branch.name !== 'HYD-KKT',
+        // Filter out excluded branches and ensure VKB is included
+        const filteredBranches = getRevenueReportBranches(
+          dropdowns.branches,
+          branchCatalog,
         )
 
         const branchNames = filteredBranches.map((b) => b.name).join(', ')
@@ -386,27 +452,39 @@ function SalesNew() {
       }
 
       // Apply branch filter based on selection
-      // ALL: show all branches (HNK + HYD + KMM + SPL)
+      // ALL: show all branches (HNK + HYD + KMM + SPL + VKB)
       // ROH: All minus HNK
       // Other: show only the selected branch
       if (branchId === ROH_BRANCH_ID) {
-        const hnkBranch = getHnkBranch(dropdowns?.branches)
         const beforeSalesCount = filteredSalesData.length
         const beforeReturnsCount = filteredReturnData.length
 
         filteredSalesData = filteredSalesData.filter((item) => {
           if (!item) return false
-          return !rowBelongsToSelectedBranch(item, hnkBranch)
+          return !rowHasBranchCode(
+            item,
+            'HNK',
+            dropdowns?.branches,
+            branchCatalog,
+          )
         })
 
         filteredReturnData = filteredReturnData.filter((item) => {
           if (!item) return false
-          return !rowBelongsToSelectedBranch(item, hnkBranch)
+          return !rowHasBranchCode(
+            item,
+            'HNK',
+            dropdowns?.branches,
+            branchCatalog,
+          )
         })
 
         console.log('Branch filter results (ROH = All - HNK):', {
           branchId,
-          hnkBranchName: hnkBranch?.name,
+          hnkBranchName: getHnkBranch([
+            ...dropdowns?.branches,
+            ...branchCatalog,
+          ])?.branchCode,
           beforeSalesCount,
           afterSalesCount: filteredSalesData.length,
           beforeReturnsCount,
@@ -414,7 +492,11 @@ function SalesNew() {
         })
       } else if (branchId && branchId !== 'ALL') {
         console.log('Applying branch filter for specific branch:', branchId)
-        const selectedBranch = dropdowns?.branches?.find(
+        const reportBranches = getRevenueReportBranches(
+          dropdowns?.branches,
+          branchCatalog,
+        )
+        const selectedBranch = reportBranches.find(
           (item) => String(item.id) === String(branchId),
         )
 
@@ -423,12 +505,22 @@ function SalesNew() {
 
         filteredSalesData = filteredSalesData.filter((item) => {
           if (!item) return false
-          return rowBelongsToSelectedBranch(item, selectedBranch)
+          return rowBelongsToSelectedBranch(
+            item,
+            selectedBranch,
+            dropdowns?.branches,
+            branchCatalog,
+          )
         })
 
         filteredReturnData = filteredReturnData.filter((item) => {
           if (!item) return false
-          return rowBelongsToSelectedBranch(item, selectedBranch)
+          return rowBelongsToSelectedBranch(
+            item,
+            selectedBranch,
+            dropdowns?.branches,
+            branchCatalog,
+          )
         })
 
         console.log('Branch filter results:', {
@@ -565,7 +657,14 @@ function SalesNew() {
     } catch (error) {
       console.error('Error processing sales dashboard data:', error)
     }
-  }, [salesDashboardData, paymentMode, service, branchId, dropdowns?.branches])
+  }, [
+    salesDashboardData,
+    paymentMode,
+    service,
+    branchId,
+    dropdowns?.branches,
+    branchCatalog,
+  ])
 
   const handleApplyFilters = () => {
     setAppliedFromDate(fromDate)
@@ -578,8 +677,9 @@ function SalesNew() {
     const defaultTo = new Date()
     const defaultFrom = defaultTo // From Date = To Date on reset
     // Set default branch to HNK
-    const hnkBranch = dropdowns?.branches?.find(
-      (branch) => branch.name === 'HNK' || branch.name === 'hnk',
+    const hnkBranch = getBranchByCode(
+      [...(dropdowns?.branches || []), ...branchCatalog],
+      'HNK',
     )
     const defaultBranch = hnkBranch?.id || dropdowns?.branches?.[0]?.id || ''
     setFromDate(defaultFrom)
@@ -733,19 +833,14 @@ function SalesNew() {
             >
               <MenuItem value="ALL">ALL</MenuItem>
               <MenuItem value={ROH_BRANCH_ID}>ROH</MenuItem>
-              {dropdowns?.branches
-                ?.filter(
-                  (branch) =>
-                    branch.name !== 'OBH' &&
-                    branch.name !== '02' &&
-                    branch.name !== 'kmm03' &&
-                    branch.name !== 'HYD-KKT',
-                )
-                ?.map((branch, idx) => (
-                  <MenuItem key={branch.id} value={branch.id}>
-                    {branch.branchCode || branch.name}
-                  </MenuItem>
-                ))}
+              {getRevenueReportBranches(
+                dropdowns?.branches,
+                branchCatalog,
+              )?.map((branch) => (
+                <MenuItem key={branch.id} value={branch.id}>
+                  {branch.branchCode || branch.name}
+                </MenuItem>
+              ))}
             </Select>
           </FormControl>
         </Grid>

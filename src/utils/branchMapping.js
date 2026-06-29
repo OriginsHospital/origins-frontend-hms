@@ -36,7 +36,10 @@ export const getRevenueBranchDisplayCode = (
     )
 
     const code = String(
-      catalogMatch?.branchCode || dropdownMatch?.name || '',
+      catalogMatch?.branchCode ||
+        dropdownMatch?.branchCode ||
+        dropdownMatch?.name ||
+        '',
     ).trim()
     if (code) return code
   }
@@ -48,7 +51,24 @@ export const getRevenueBranchDisplayCode = (
         ? String(row.branch.branchCode).trim()
         : ''
 
-  if (apiBranch) return apiBranch
+  if (apiBranch) {
+    const catalogByName = branchCatalog.find(
+      (b) =>
+        String(b.name).trim().toLowerCase() === apiBranch.toLowerCase() ||
+        String(b.branchCode).trim().toUpperCase() === apiBranch.toUpperCase(),
+    )
+    const dropdownByName = dropdownBranches.find(
+      (b) =>
+        String(b.name).trim().toLowerCase() === apiBranch.toLowerCase() ||
+        String(b.branchCode).trim().toUpperCase() === apiBranch.toUpperCase(),
+    )
+    return (
+      catalogByName?.branchCode ||
+      dropdownByName?.branchCode ||
+      dropdownByName?.name ||
+      apiBranch
+    )
+  }
   if (row.branchName) return String(row.branchName).trim()
   return '—'
 }
