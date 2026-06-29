@@ -772,6 +772,16 @@ const PurchaseDetails = ({
   const dispatch = useDispatch()
   const queryClient = useQueryClient()
   const user = useSelector((store) => store.user)
+  const userBranches = user?.branchDetails || []
+  const [refundBranchId, setRefundBranchId] = useState(
+    () => userBranches[0]?.id || '',
+  )
+  useEffect(() => {
+    if (!refundBranchId && userBranches.length > 0) {
+      setRefundBranchId(userBranches[0]?.id || '')
+    }
+  }, [refundBranchId, userBranches])
+
   const returnedByRefId = React.useMemo(() => {
     const map = {}
     const logs = Array.isArray(returnHistory) ? returnHistory : []
@@ -1014,6 +1024,11 @@ const PurchaseDetails = ({
       )
     } else if (!atleastOneObjFound) {
       toast.error('Please add at least one return quantity', toastconfig)
+    } else if (!refundBranchId) {
+      toast.error(
+        'Please select the branch where refund is processed',
+        toastconfig,
+      )
     } else {
       let totAmount = 0
       Object.values(returnDetailsByRefId).forEach((row) => {
@@ -1029,6 +1044,7 @@ const PurchaseDetails = ({
         patientId: headerDetails?.patientId,
         totalAmount: Math.round(totAmount * 100) / 100,
         type: resolvedType,
+        refundBranchId: Number(refundBranchId),
         returnDetails: Object.values(returnDetailsByRefId).map((row) => ({
           ...row,
           // Always send the user-entered quantity; backend can derive GRN split.
@@ -1125,7 +1141,22 @@ const PurchaseDetails = ({
           </Alert>
         )}
 
-        <div className="mb-4">
+        <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <FormControl fullWidth size="small">
+            <InputLabel>Refund Branch (stock update)</InputLabel>
+            <Select
+              value={refundBranchId}
+              label="Refund Branch (stock update)"
+              onChange={(e) => setRefundBranchId(e.target.value)}
+              disabled={isPending || userBranches.length <= 1}
+            >
+              {userBranches.map((branch) => (
+                <MenuItem key={branch.id} value={branch.id}>
+                  {branch.name || branch.branchCode || `Branch ${branch.id}`}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           <FormControl fullWidth size="small">
             <InputLabel>Refund Method</InputLabel>
             <Select
@@ -1142,6 +1173,26 @@ const PurchaseDetails = ({
             </Select>
           </FormControl>
         </div>
+
+        {refundBranchId && userBranches.length > 0 && (
+          <Alert severity="info" className="mb-4">
+            <Typography variant="body2">
+              Returned medicines will be added to stock at{' '}
+              <strong>
+                {userBranches.find(
+                  (branch) => String(branch.id) === String(refundBranchId),
+                )?.name ||
+                  userBranches.find(
+                    (branch) => String(branch.id) === String(refundBranchId),
+                  )?.branchCode ||
+                  'selected branch'}
+              </strong>
+              . If the purchase was made at a different branch, a duplicate GRN
+              will be created there with a branch suffix (e.g. &quot;-
+              HYD&quot;).
+            </Typography>
+          </Alert>
+        )}
 
         <div>
           <TableContainer component={Paper}>

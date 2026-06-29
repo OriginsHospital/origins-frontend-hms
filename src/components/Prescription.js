@@ -63,10 +63,7 @@ import HysteroscopySheet from './HysteroscopySheet'
 import ERASheet from './ERASheet'
 import HysteroscopySheetNew from './HysteroscopySheetNew'
 import HysteroLapOperationNotesForm from './HysteroLapOperationNotesForm'
-import {
-  buildMedicationFormData,
-  mergePrescribedMedicationRows,
-} from '@/utils/medicationSheetUtils'
+import { buildMedicationFormData } from '@/utils/medicationSheetUtils'
 
 const HYSTERO_LAP_TYPE_OPTIONS = [
   { value: 'Hysteroscopy', label: 'Hysteroscopy' },
@@ -767,20 +764,10 @@ function Prescription({
       patientInfo?.activeVisitId,
     ],
     queryFn: async () => {
-      const [responsejson, prescriptionResponse] = await Promise.all([
-        getTreatmentFETSheetByTreatmentCycleId(
-          user.accessToken,
-          treatmentCycleId,
-        ),
-        getPrescriptionDetailsByTreatmentCycleId(
-          user.accessToken,
-          treatmentCycleId,
-        ),
-      ])
-      const prescribedMedications =
-        prescriptionResponse?.status === 200
-          ? prescriptionResponse?.data || []
-          : []
+      const responsejson = await getTreatmentFETSheetByTreatmentCycleId(
+        user.accessToken,
+        treatmentCycleId,
+      )
 
       if (responsejson.status == 200) {
         if (responsejson?.data?.template) {
@@ -799,12 +786,8 @@ function Prescription({
             : [dayjs().format('DD/MM')]
           const medicationRows = hasValidMedRows ? res?.medicationRows : []
           const scanRows = hasValidScanRows ? res?.scanRows : []
-          const mergedMedicationRows = mergePrescribedMedicationRows(
-            medicationRows,
-            prescribedMedications,
-          )
           const fetMedicationFormData = buildMedicationFormData(
-            mergedMedicationRows,
+            medicationRows,
             res?.medicationSheet,
           )
 
@@ -820,14 +803,10 @@ function Prescription({
         } else {
           // No template returned from API. If FET is started, create a safe default
           if (treatmentStatus?.FET_START == 1) {
-            const mergedMedicationRows = mergePrescribedMedicationRows(
-              [],
-              prescribedMedications,
-            )
-            setFETFormData({ rows: mergedMedicationRows })
+            setFETFormData({ rows: [] })
             setFETTemplate({
               columns: [dayjs().format('DD/MM')],
-              rows: mergedMedicationRows,
+              rows: [],
             })
             setScanFetFormData({ rows: [] })
           } else {
@@ -843,61 +822,6 @@ function Prescription({
     },
     enabled: !!treatmentCycleId && treatmentStatus?.FET_START == 1,
   })
-
-  useEffect(() => {
-    if (
-      treatmentStatus?.FET_START != 1 ||
-      !medicationOptionsFollicular?.length
-    ) {
-      return
-    }
-
-    setFETFormData((prevData) => {
-      const mergedRows = mergePrescribedMedicationRows(
-        prevData?.rows,
-        medicationOptionsFollicular,
-      )
-      if (
-        mergedRows.length === prevData?.rows?.length &&
-        mergedRows.every(
-          (row, index) =>
-            row?.value === prevData?.rows?.[index]?.value &&
-            row?.label === prevData?.rows?.[index]?.label,
-        )
-      ) {
-        return prevData
-      }
-
-      return {
-        ...(prevData || {}),
-        rows: mergedRows,
-      }
-    })
-
-    setFETTemplate((prevTemplate) => {
-      if (!prevTemplate?.columns) return prevTemplate
-
-      const mergedRows = mergePrescribedMedicationRows(
-        prevTemplate?.rows,
-        medicationOptionsFollicular,
-      )
-      if (
-        mergedRows.length === prevTemplate?.rows?.length &&
-        mergedRows.every(
-          (row, index) =>
-            row?.value === prevTemplate?.rows?.[index]?.value &&
-            row?.label === prevTemplate?.rows?.[index]?.label,
-        )
-      ) {
-        return prevTemplate
-      }
-
-      return {
-        ...prevTemplate,
-        rows: mergedRows,
-      }
-    })
-  }, [medicationOptionsFollicular, treatmentStatus?.FET_START])
 
   const { data: treatmentERASheet } = useQuery({
     queryKey: [
@@ -1358,24 +1282,18 @@ function Prescription({
         const defaultTreatmentTemplate = res.data
         toast.success('Consents reviewed successfully')
         if (defaultTreatmentTemplate) {
-          const medicationRows = defaultTreatmentTemplate?.medicationSheet || []
-          const mergedMedicationRows = mergePrescribedMedicationRows(
-            medicationRows,
-            medicationOptionsFollicular,
-          )
-          const fetMedicationFormData =
-            buildMedicationFormData(mergedMedicationRows)
+          const fetMedicationFormData = buildMedicationFormData([])
           setFETFormData(fetMedicationFormData)
           setFETTemplate({
             columns: defaultTreatmentTemplate?.date,
-            rows: fetMedicationFormData.rows,
+            rows: [],
           })
           setScanFetFormData({
             rows: defaultTreatmentTemplate?.scanSheet,
           })
           let temp = {
             columns: defaultTreatmentTemplate?.date,
-            medicationRows: fetMedicationFormData.rows,
+            medicationRows: [],
             medicationSheet: fetMedicationFormData,
             scanRows: defaultTreatmentTemplate?.scanSheet,
             scanSheet: [],
