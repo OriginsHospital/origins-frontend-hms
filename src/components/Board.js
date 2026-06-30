@@ -112,6 +112,11 @@ import { ACCESS_TYPES } from '@/constants/constants'
 import { PrintPreview } from './PrintPreview'
 import { TbInvoice } from 'react-icons/tb'
 import { CalendarIcon, DatePicker } from '@mui/x-date-pickers'
+import {
+  getAppointmentCompositeId,
+  getAppointmentModalKey,
+  getLineBillsQueryKey,
+} from '@/utils/appointmentKeys'
 
 import dynamic from 'next/dynamic'
 import { ArrowBack } from '@mui/icons-material'
@@ -377,7 +382,7 @@ const Column = ({
 
   const handleDragStart = (e, patientDetails) => {
     // console.log(patientDetails)
-    e.dataTransfer.setData('cardId', patientDetails.appointmentId)
+    e.dataTransfer.setData('cardId', getAppointmentCompositeId(patientDetails))
   }
 
   const handleDragEnd = (e) => {
@@ -393,7 +398,9 @@ const Column = ({
     if (before !== cardId) {
       let copy = [...cards]
       // console.log(copy)
-      let cardToTransfer = copy.find((c) => c.appointmentId == cardId)
+      let cardToTransfer = copy.find(
+        (c) => getAppointmentCompositeId(c) === cardId,
+      )
       // console.log(cardToTransfer)
       if (!cardToTransfer) return
 
@@ -453,7 +460,7 @@ const Column = ({
         isPackageExists: cardToTransfer.isPackageExists,
       }
       updateStage.mutate(payload)
-      copy = copy.filter((c) => c.appointmentId != cardId)
+      copy = copy.filter((c) => getAppointmentCompositeId(c) !== cardId)
 
       // const moveToBack = before == -1
       // console.log(moveToBack, copy, cardId, stage)
@@ -604,7 +611,7 @@ const Column = ({
         {filteredCards?.map((c) => {
           return (
             <Card
-              key={c.appointmentId}
+              key={getAppointmentCompositeId(c)}
               patientDetails={c}
               handleDragStart={handleDragStart}
               stage={stage}
@@ -672,9 +679,16 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
       null,
     [billingMilestones],
   )
+  const appointmentCompositeId = getAppointmentCompositeId(patientDetails)
+  const billingModalKey = appointmentCompositeId
+  const vitalsModalKey = `${appointmentCompositeId}vitals`
+  const printPreviewModalKey = `print-preview${appointmentCompositeId}`
+  const consultationFeeModalKey = `consultationFee${appointmentCompositeId}`
+  const noShowModalKey = `noShow${appointmentCompositeId}`
+  const editAppointmentModalKey = `editAppointment${appointmentCompositeId}`
+  const milestoneBillingModalKey = `milestoneBilling${appointmentCompositeId}`
   const [selectedBillingProductType, setSelectedBillingProductType] =
     useState('')
-  const milestoneBillingModalKey = `milestoneBilling${patientDetails?.appointmentId}`
   const [previewContent, setPreviewContent] = useState(null)
   const [anchorEl, setAnchorEl] = useState(null)
   const open = Boolean(anchorEl)
@@ -683,7 +697,7 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
   }
 
   const handleEditAppointments = (event) => {
-    dispatch(openModal('editAppointment' + patientDetails?.appointmentId))
+    dispatch(openModal(editAppointmentModalKey))
   }
 
   const handleClose = () => {
@@ -701,11 +715,11 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
       routeStage === stage
     ) {
       // Auto-open modal if URL matches this card's data
-      dispatch(openModal(patientDetails?.appointmentId))
+      dispatch(openModal(billingModalKey))
 
       // Fetch any necessary data
       queryClient.prefetchQuery({
-        queryKey: ['getLineBills', patientDetails?.appointmentId],
+        queryKey: getLineBillsQueryKey(patientDetails),
         queryFn: async () => {
           const responsejson = await getLineBillsAndNotesForAppointment(
             user.accessToken,
@@ -722,15 +736,15 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
         },
       })
     }
-  }, [router.query, patientDetails, stage])
+  }, [router.query, patientDetails, stage, billingModalKey])
 
   // Query for line bills and notes
   const {
     data: lineBillsAndNotesData,
     isLoading: islineBillsAndNotesDataLoading,
   } = useQuery({
-    queryKey: ['getLineBills', patientDetails?.appointmentId],
-    enabled: modalState?.key == patientDetails?.appointmentId,
+    queryKey: getLineBillsQueryKey(patientDetails),
+    enabled: modalState?.key === billingModalKey,
     queryFn: async () => {
       const responsejson = await getLineBillsAndNotesForAppointment(
         user.accessToken,
@@ -748,8 +762,7 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
   })
 
   const handlePatientModal = () => {
-    // First dispatch the openModal action
-    dispatch(openModal(patientDetails?.appointmentId))
+    dispatch(openModal(billingModalKey))
 
     // Then update URL with patient details
     router.push(
@@ -791,7 +804,7 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
       try {
         if (res.status == 200) {
           setPreviewContent(res.data)
-          dispatch(openModal('print-preview' + patientDetails?.appointmentId))
+          dispatch(openModal(printPreviewModalKey))
         } else {
           toast.error('Error generating invoice', toastconfig)
         }
@@ -884,7 +897,7 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
     },
   })
   const handleOpenVitalsModal = () => {
-    dispatch(openModal(patientDetails?.appointmentId + 'vitals'))
+    dispatch(openModal(vitalsModalKey))
   }
   const handleOpenMilestoneBilling = (productType = '') => {
     setSelectedBillingProductType(productType)
@@ -923,7 +936,14 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
 
       if (res.status === 200) {
         setPreviewContent(res.data)
-        dispatch(openModal('print-preview' + bill.appointmentId))
+        dispatch(
+          openModal(
+            `print-preview${getAppointmentCompositeId({
+              type: bill.type,
+              appointmentId: bill.appointmentId,
+            })}`,
+          ),
+        )
       } else {
         toast.error('Failed to generate invoice', toastconfig)
       }
@@ -950,9 +970,9 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
 
   return (
     <>
-      <DropIndicator beforeId={patientDetails?.appointmentId} stage={stage} />
+      <DropIndicator beforeId={appointmentCompositeId} stage={stage} />
       <motion.div
-        layoutId={patientDetails?.appointmentId}
+        layoutId={appointmentCompositeId}
         draggable="true"
         onDragStart={(e) => handleDragStart(e, patientDetails)}
         className={`cursor-grab rounded-lg bg-white p-2 shadow-md hover:shadow-lg transition-all duration-200 relative ${
@@ -991,7 +1011,7 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
                 size="small"
                 className="bg-secondary/10 hover:bg-secondary/20"
                 onClick={handleStatusClick}
-                aria-describedby={`status-popper-${patientDetails?.appointmentId}`}
+                aria-describedby={`status-popper-${appointmentCompositeId}`}
               >
                 <InfoOutlined className="text-secondary w-4 h-4" />
               </IconButton>
@@ -1001,7 +1021,7 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
 
         {/* Status Popper */}
         <Popper
-          id={`status-popper-${patientDetails?.appointmentId}`}
+          id={`status-popper-${appointmentCompositeId}`}
           open={open}
           anchorEl={anchorEl}
           placement="top-start"
@@ -1174,7 +1194,7 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
                 size="small"
                 className="bg-secondary/10 hover:bg-secondary/20"
                 onClick={handleEditAppointments}
-                aria-describedby={`status-popper-${patientDetails?.appointmentId}`}
+                aria-describedby={`status-popper-${appointmentCompositeId}`}
               >
                 <Edit className="text-secondary w-4 h-4" color="primary" />
               </IconButton>
@@ -1186,7 +1206,7 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
                 size="small"
                 className="bg-secondary/10 hover:bg-secondary/20"
                 onClick={handleStatusClick}
-                aria-describedby={`status-popper-${patientDetails?.appointmentId}`}
+                aria-describedby={`status-popper-${appointmentCompositeId}`}
               >
                 <InfoOutlined className="text-secondary w-4 h-4" />
               </IconButton>
@@ -1362,11 +1382,7 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
                       className="flex-1 capitalize"
                       startIcon={<PaymentsOutlined />}
                       onClick={() =>
-                        dispatch(
-                          openModal(
-                            'consultationFee' + patientDetails?.appointmentId,
-                          ),
-                        )
+                        dispatch(openModal(consultationFeeModalKey))
                       }
                     >
                       Pay
@@ -1397,11 +1413,7 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
 
                 {patientDetails?.noShow === 0 && (
                   <PermissionedNoShowButton
-                    onClick={() =>
-                      dispatch(
-                        openModal('noShow' + patientDetails?.appointmentId),
-                      )
-                    }
+                    onClick={() => dispatch(openModal(noShowModalKey))}
                   />
                 )}
               </div>
@@ -1433,11 +1445,7 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
                 </Tooltip>
                 {patientDetails?.noShow === 0 && (
                   <PermissionedNoShowButton
-                    onClick={() =>
-                      dispatch(
-                        openModal('noShow' + patientDetails?.appointmentId),
-                      )
-                    }
+                    onClick={() => dispatch(openModal(noShowModalKey))}
                   />
                 )}
                 {(user.roleDetails?.id === 1 || user.roleDetails?.id === 7) && (
@@ -1471,8 +1479,8 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
       {/* {modalState?.key === patientDetails?.appointmentId && ( */}
       <Modal
         maxWidth={'md'}
-        key="patientdetail"
-        uniqueKey={patientDetails?.appointmentId}
+        key={`patientdetail-${appointmentCompositeId}`}
+        uniqueKey={billingModalKey}
         // closeOnOutsideClick={true}
         onClose={handleModalClose}
       >
@@ -1493,23 +1501,21 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
 
       <PrintPreview
         htmlContent={previewContent}
-        onClose={() =>
-          dispatch(closeModal('print-preview' + patientDetails?.appointmentId))
-        }
-        uniqueKey={patientDetails?.appointmentId}
+        onClose={() => dispatch(closeModal(printPreviewModalKey))}
+        uniqueKey={appointmentCompositeId}
       />
 
       <Modal
         maxWidth={'sm'}
-        key="consultationFee"
-        uniqueKey={'consultationFee' + patientDetails?.appointmentId}
+        key={`consultationFee-${appointmentCompositeId}`}
+        uniqueKey={consultationFeeModalKey}
         closeOnOutsideClick={true}
       >
         <ConsultationFee patientDetails={patientDetails} />
       </Modal>
       <Modal
         maxWidth={'md'}
-        key="milestoneBilling"
+        key={`milestoneBilling-${appointmentCompositeId}`}
         uniqueKey={milestoneBillingModalKey}
         closeOnOutsideClick={true}
       >
@@ -1522,8 +1528,8 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
       </Modal>
       <Modal
         maxWidth={'sm'}
-        key="noShow"
-        uniqueKey={'noShow' + patientDetails?.appointmentId}
+        key={`noShow-${appointmentCompositeId}`}
+        uniqueKey={noShowModalKey}
         closeOnOutsideClick={true}
       >
         <NoShow patientDetails={patientDetails} />
@@ -1532,8 +1538,8 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
       {!isReceptionistUser && (
         <Modal
           maxWidth={'sm'}
-          key="editAppointment"
-          uniqueKey={'editAppointment' + patientDetails?.appointmentId}
+          key={`editAppointment-${appointmentCompositeId}`}
+          uniqueKey={editAppointmentModalKey}
           closeOnOutsideClick={true}
         >
           <EditAppointment patientDetails={patientDetails} />
@@ -1633,7 +1639,9 @@ const ConsultationFee = ({ patientDetails }) => {
             console.log(p)
             if (order_details && order_details.transactionId) {
               dispatch(
-                closeModal('consultationFee' + patientDetails?.appointmentId),
+                closeModal(
+                  getAppointmentModalKey(patientDetails, 'consultationFee'),
+                ),
               )
               toast.success('Payment successful thorugh online', toastconfig)
               // setPayClicked(null)
@@ -1662,7 +1670,9 @@ const ConsultationFee = ({ patientDetails }) => {
           toast.success('Payment successful thorugh cash', toastconfig)
           queryClient.invalidateQueries('allAppointments')
           dispatch(
-            closeModal('consultationFee' + patientDetails?.appointmentId),
+            closeModal(
+              getAppointmentModalKey(patientDetails, 'consultationFee'),
+            ),
           )
         }
       }
@@ -1674,7 +1684,9 @@ const ConsultationFee = ({ patientDetails }) => {
           toast.success('Payment successful thorugh UPI', toastconfig)
           queryClient.invalidateQueries('allAppointments')
           dispatch(
-            closeModal('consultationFee' + patientDetails?.appointmentId),
+            closeModal(
+              getAppointmentModalKey(patientDetails, 'consultationFee'),
+            ),
           )
         }
       }
@@ -1734,7 +1746,9 @@ const ConsultationFee = ({ patientDetails }) => {
       if (order.status == 200) {
         toast.success('Split payment saved successfully', toastconfig)
         queryClient.invalidateQueries('allAppointments')
-        dispatch(closeModal('consultationFee' + patientDetails?.appointmentId))
+        dispatch(
+          closeModal(getAppointmentModalKey(patientDetails, 'consultationFee')),
+        )
       }
     } catch (error) {
       console.log('Error while saving split payment:', error)
@@ -2514,7 +2528,7 @@ const NoShow = ({ patientDetails }) => {
     } else {
       toast.error('Something went wrong', toastconfig)
     }
-    dispatch(closeModal('noShow' + patientDetails?.appointmentId))
+    dispatch(closeModal(getAppointmentModalKey(patientDetails, 'noShow')))
   }
 
   return (
@@ -2609,7 +2623,7 @@ export function PatientFullDetail({
 
         if (data.status == 200) {
           queryClient.invalidateQueries({
-            queryKey: ['getLineBills', patientDetails?.appointmentId],
+            queryKey: getLineBillsQueryKey(patientDetails),
           })
         }
       } catch (error) {
@@ -2677,7 +2691,7 @@ export function PatientFullDetail({
 
       if (data.status == 200) {
         queryClient.invalidateQueries({
-          queryKey: ['getLineBills', patientDetails?.appointmentId],
+          queryKey: getLineBillsQueryKey(patientDetails),
         })
         toast.success('Split payment saved successfully', toastconfig)
       }
@@ -2745,7 +2759,7 @@ export function PatientFullDetail({
             // dispatch(closeModal())
             // setPayClicked(null)
             queryClient.invalidateQueries({
-              queryKey: ['getLineBills', patientDetails?.appointmentId],
+              queryKey: getLineBillsQueryKey(patientDetails),
             })
           }
         },
@@ -2781,7 +2795,14 @@ export function PatientFullDetail({
 
       if (res.status === 200) {
         setPreviewContent(res.data)
-        dispatch(openModal('print-preview' + bill.appointmentId))
+        dispatch(
+          openModal(
+            `print-preview${getAppointmentCompositeId({
+              type: bill.type,
+              appointmentId: bill.appointmentId,
+            })}`,
+          ),
+        )
       } else {
         toast.error('Failed to generate invoice', toastconfig)
       }
@@ -3187,7 +3208,9 @@ const BillTypePanel = React.memo(
         return response.data
       },
       onSuccess: () => {
-        queryClient.invalidateQueries(['getLineBills', bill.appointmentId])
+        queryClient.invalidateQueries({
+          queryKey: getLineBillsQueryKey(bill),
+        })
         toast.success('Successfully updated opt-out status', toastconfig)
       },
       onError: (error) => {

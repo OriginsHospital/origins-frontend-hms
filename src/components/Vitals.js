@@ -4,6 +4,7 @@ import { Button, InputAdornment, TextField, Typography } from '@mui/material'
 import { CheckCircleSharp, PendingActions } from '@mui/icons-material'
 import Modal from './Modal'
 import { closeModal, openModal } from '@/redux/modalSlice'
+import { getAppointmentCompositeId } from '@/utils/appointmentKeys'
 
 function Vitals({
   patientDetails,
@@ -13,10 +14,10 @@ function Vitals({
   editVitalsMutation,
 }) {
   const dispatch = useDispatch()
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const [isEditing, setIsEditing] = useState(false)
 
-  const handleSubmit = e => {
+  const handleSubmit = (e) => {
     e.preventDefault()
     if (vitalsData?.id) {
       editVitalsMutation.mutate({ ...vitalsData, initials: user?.userName })
@@ -35,8 +36,8 @@ function Vitals({
     }
   }
 
-  const handleVitalsChange = e => {
-    setVitalsData(prev => ({ ...prev, [e.target.name]: e.target.value }))
+  const handleVitalsChange = (e) => {
+    setVitalsData((prev) => ({ ...prev, [e.target.name]: e.target.value }))
     setIsEditing(true)
   }
   useEffect(() => {
@@ -47,7 +48,7 @@ function Vitals({
   const calculateBMI = () => {
     const bmi =
       vitalsData?.weight / ((vitalsData?.height * vitalsData?.height) / 10000)
-    setVitalsData(prev => ({ ...prev, bmi: bmi.toFixed(2) }))
+    setVitalsData((prev) => ({ ...prev, bmi: bmi.toFixed(2) }))
   }
 
   useEffect(() => {
@@ -60,13 +61,13 @@ function Vitals({
     const bmi =
       vitalsData?.spouseWeight /
       ((vitalsData?.spouseHeight * vitalsData?.spouseHeight) / 10000)
-    setVitalsData(prev => ({ ...prev, spouseBmi: bmi.toFixed(2) }))
+    setVitalsData((prev) => ({ ...prev, spouseBmi: bmi.toFixed(2) }))
   }
 
   return (
     <Modal
       maxWidth={'sm'}
-      uniqueKey={patientDetails?.appointmentId + 'vitals'}
+      uniqueKey={`${getAppointmentCompositeId(patientDetails)}vitals`}
       // onOutsideClick={() => {
       //     dispatch(closeModal(patientDetails?.appointmentId + 'vitals'))
       //     setIsEditing(false)
