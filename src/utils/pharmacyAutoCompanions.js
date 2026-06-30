@@ -60,6 +60,10 @@ export const PHARMACY_AUTO_COMPANION_RULES = [
     companions: [{ name: 'NIPRO SYRINGE 2.5ML', quantity: 1 }],
   },
   {
+    trigger: 'ENDOKINE 300 MCG INJ',
+    companions: [{ name: 'NIPRO SYRINGE 2.5ML', quantity: 1 }],
+  },
+  {
     trigger: 'Strone 100 mg inj',
     companions: [{ name: 'NIPRO SYRINGE 2.5ML', quantity: 1 }],
   },
