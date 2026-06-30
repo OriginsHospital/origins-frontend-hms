@@ -56,34 +56,39 @@ function OutPatient() {
   )
   const OT_DEFAULTS_BY_USER_EMAIL = {
     'jhansi@gmail.com': {
-      surgeon: ['DR. K. JHANSI RANI', 'DR.Jhansi Rani'],
-      anesthetist: ['DR.Athyun', 'DR. Athyun'],
-      embryologist: ['Ravi Teja', 'Nithya Srinivasan'],
-      otStaff: ['Ashwini'],
+      surgeon: [
+        'DR. K. JHANSI RANI',
+        'DR.Jhansi Rani',
+        'Dr. Jhansi',
+        'Dr. K. Jhansi Rani',
+      ],
+      anesthetist: ['DR.Athyun', 'DR. Athyun', 'Dr. Athyun'],
+      embryologist: ['Nithya Srinivasan', 'DR.Nithya', 'DR. Nithya'],
+      otStaff: ['Ramakrishna', 'Rama Krishna'],
     },
     'domalateja@gmail.com': {
-      surgeon: ['DR.Teja D', 'DR. Teja D', 'DR.Teja', 'DR. Teja'],
-      anesthetist: ['DR.Karthik', 'DR. Karthik'],
-      embryologist: ['Nithya Srinivasan', 'DR.Nithya', 'DR. Nithya'],
-      otStaff: ['Ramakrishna'],
+      surgeon: ['DR.Teja D', 'DR. Teja D', 'DR.Teja', 'DR. Teja', 'Dr. Teja D'],
+      anesthetist: ['DR.Karthik', 'DR. Karthik', 'Dr. Karthik'],
+      embryologist: ['Sridhar'],
+      otStaff: ['Shyam'],
     },
     'sambiswetha@gmail.com': {
-      surgeon: ['DR.Swetha', 'DR. Swetha'],
-      anesthetist: ['DR.Karthik', 'DR. Karthik'],
-      embryologist: ['Nithya Srinivasan', 'DR.Nithya', 'DR. Nithya'],
-      otStaff: ['Ramakrishna'],
-    },
-    'divyanagabushnam37@gmail.com': {
-      surgeon: ['DR.Divya', 'DR. Divya'],
-      anesthetist: [],
-      embryologist: ['Nagaraju'],
+      surgeon: ['DR.Swetha', 'DR. Swetha', 'Dr. Swetha', 'Dr. S. Swetha'],
+      anesthetist: ['DR.Vijay', 'DR. Vijay', 'Dr. Vijay'],
+      embryologist: ['Ravi Teja'],
       otStaff: [],
     },
     'navyakonjeti2811@gmail.com': {
-      surgeon: ['DR.Navya', 'DR. Navya'],
+      surgeon: [
+        'DR.Navya K',
+        'DR. Navya K',
+        'DR.Navya',
+        'DR. Navya',
+        'Dr. Navya K',
+      ],
       anesthetist: [],
-      embryologist: ['Sridhar'],
-      otStaff: ['Shyam'],
+      embryologist: [],
+      otStaff: [],
     },
   }
   const createEmptyFormData = () => ({

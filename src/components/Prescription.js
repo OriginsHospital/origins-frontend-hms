@@ -71,6 +71,31 @@ const HYSTERO_LAP_TYPE_OPTIONS = [
   { value: 'Hysterolap', label: 'Hysterolap' },
 ]
 
+const DEFAULT_FOLLICULAR_ROWS = [
+  { value: '<=10' },
+  { value: '10.5' },
+  { value: '11' },
+  { value: '11.5' },
+  { value: '12' },
+  { value: '12.5' },
+  { value: '13' },
+  { value: '13.5' },
+  { value: '14' },
+  { value: '14.5' },
+  { value: '15' },
+  { value: '15.5' },
+  { value: '16' },
+  { value: '16.5' },
+  { value: '17' },
+  { value: '17.5' },
+  { value: '18' },
+  { value: '18.5' },
+  { value: '19' },
+  { value: '19.5' },
+  { value: '>=20' },
+  { value: 'ET' },
+]
+
 function Prescription({
   appointmentId,
   type,
@@ -247,6 +272,7 @@ function Prescription({
   const [fetTemplate, setFETTemplate] = useState(null)
   const [eraFormData, setERAFormData] = useState({})
   const [eraTemplate, setERATemplate] = useState({})
+  const [eraFolicularFormData, setEraFolicularFormData] = useState({})
   const [triggerTime, setTriggerTime] = useState(null)
   const [hysteroscopyTime, setHysteroscopyTime] = useState(null)
   const [eraStartTime, setEraStartTime] = useState(null)
@@ -843,6 +869,10 @@ function Prescription({
       if (responsejson.status == 200) {
         if (responsejson?.data?.template) {
           const res = JSON.parse(responsejson?.data?.template)
+          const columns =
+            Array.isArray(res?.columns) && res.columns.length > 0
+              ? res.columns
+              : [dayjs().format('DD/MM')]
           // Use timeout to ensure state updates after modal reopens
           setTimeout(() => {
             setERAFormData({
@@ -850,9 +880,13 @@ function Prescription({
               ...res?.medicationSheet,
             })
             setERATemplate({
-              columns: res?.columns,
+              columns,
               rows: res?.medicationRows,
+              follicularRows: res?.rows?.length
+                ? res.rows
+                : DEFAULT_FOLLICULAR_ROWS,
             })
+            setEraFolicularFormData(res?.follicularSheet || {})
             setScanEraFormData({
               rows: res?.scanRows,
               ...res?.scanSheet,
@@ -861,6 +895,7 @@ function Prescription({
         } else {
           setERAFormData({})
           setERATemplate({})
+          setEraFolicularFormData({})
         }
       } else {
         throw new Error('Error occurred while fetching treatment sheet')
@@ -1325,6 +1360,10 @@ function Prescription({
 
           // Create treatment sheet template
           const temp = {
+            columns: initialTemplate.date || [dayjs().format('DD/MM')],
+            rows: initialTemplate.follicularSheet || DEFAULT_FOLLICULAR_ROWS,
+            follicularSheet: {},
+            medicationRows: [],
             medicationSheet: [],
             scanRows: initialTemplate?.scanSheet || [],
             scanSheet: [],
@@ -1344,9 +1383,12 @@ function Prescription({
             rows: initialTemplate.medicationSheet || [],
           })
           setERATemplate({
-            columns: initialTemplate.date || [dayjs().format('YYYY-MM-DD')],
+            columns: initialTemplate.date || [dayjs().format('DD/MM')],
             rows: initialTemplate.medicationSheet || [],
+            follicularRows:
+              initialTemplate.follicularSheet || DEFAULT_FOLLICULAR_ROWS,
           })
+          setEraFolicularFormData({})
           setScanEraFormData({
             rows: initialTemplate.scanSheet || [],
           })
@@ -1835,10 +1877,12 @@ function Prescription({
         id: treatmentCycleId,
         template: JSON.stringify({
           columns: eraTemplate?.columns,
+          rows: eraTemplate?.follicularRows || DEFAULT_FOLLICULAR_ROWS,
+          follicularSheet: eraFolicularFormData,
           medicationRows: eraFormData?.rows,
           medicationSheet: eraFormData,
           scanSheet: scanEraFormData,
-          scanSheetRows: scanEraFormData?.rows,
+          scanRows: scanEraFormData?.rows,
         }),
       })
     }
@@ -2561,16 +2605,41 @@ function Prescription({
           </>
         ) : (
           <>
+            <FolicularSheet
+              folicularFormData={eraFolicularFormData}
+              setFolicularFormData={setEraFolicularFormData}
+              handleUpdateTreatmentSheet={handleUpdateTreatmentERASheet}
+              follicularTemplate={{
+                columns:
+                  eraTemplate?.columns?.length > 0
+                    ? eraTemplate.columns
+                    : [dayjs().format('DD/MM')],
+                rows: eraTemplate?.follicularRows || DEFAULT_FOLLICULAR_ROWS,
+              }}
+              setFolicularTemplate={(updater) => {
+                setERATemplate((prev) => {
+                  const follicularPrev = {
+                    columns: prev?.columns || [],
+                    rows: prev?.follicularRows || DEFAULT_FOLLICULAR_ROWS,
+                  }
+                  const next =
+                    typeof updater === 'function'
+                      ? updater(follicularPrev)
+                      : updater
+                  return {
+                    ...prev,
+                    columns: next.columns,
+                    follicularRows: next.rows,
+                  }
+                })
+              }}
+              canUpdate={treatmentStatus?.END_ERA == 0}
+            />
             <ERASheet
               eraFormData={eraFormData}
               setERAFormData={setERAFormData}
               eraTemplate={eraTemplate}
-              handleUpdateTreatmentERASheet={handleUpdateTreatmentERASheet}
-              patientInfo={patientInfo}
-              setERATemplate={setERATemplate}
-              canUpdate={treatmentStatus?.END_ERA == 0}
               medicationOptions={medicationOptionsFollicular}
-              allBillTypeValues={allBillTypeValues}
             />
             <ScanSheet
               scanFormData={scanEraFormData}

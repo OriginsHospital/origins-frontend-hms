@@ -390,6 +390,15 @@ const tabs = {
         type: 'number',
         width: 200,
       },
+      {
+        headerName: 'Is Active',
+        field: 'isActive',
+        type: 'boolean',
+        width: 120,
+        renderCell: ({ row }) => {
+          return <>{row.isActive == 1 ? 'Yes' : 'No'}</>
+        },
+      },
     ],
     createUrl: API_ROUTES.CREATE_PERSON,
     createFields: [
@@ -411,6 +420,13 @@ const tabs = {
         name: 'phoneNumber',
         type: 'number',
         required: true,
+      },
+      {
+        label: 'Is Active',
+        name: 'isActive',
+        type: 'trueOrFalse',
+        required: true,
+        id: 'isActive',
       },
     ],
     editUrl: API_ROUTES.EDIT_PERSON,

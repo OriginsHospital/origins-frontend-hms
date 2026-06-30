@@ -38,17 +38,27 @@ const FollicularScanForm = ({
 
   // Add new function to handle adding column
   const handleAddColumn = useCallback(() => {
-    if (!follicularTemplate?.columns) return
+    setFolicularTemplate((prev) => {
+      const columns = Array.isArray(prev?.columns) ? prev.columns : []
+      if (columns.length === 0) {
+        return {
+          ...prev,
+          columns: [dayjs().format('DD/MM')],
+        }
+      }
 
-    const lastDate =
-      follicularTemplate.columns[follicularTemplate.columns.length - 1]
-    const nextDate = dayjs(lastDate, 'DD/MM').add(1, 'day').format('DD/MM')
+      const lastDate = columns[columns.length - 1]
+      const parsed = dayjs(lastDate, 'DD/MM')
+      const nextDate = (parsed.isValid() ? parsed : dayjs())
+        .add(1, 'day')
+        .format('DD/MM')
 
-    setFolicularTemplate((prev) => ({
-      ...prev,
-      columns: [...prev.columns, nextDate],
-    }))
-  }, [follicularTemplate, setFolicularTemplate])
+      return {
+        ...prev,
+        columns: [...columns, nextDate],
+      }
+    })
+  }, [setFolicularTemplate])
 
   const [noteModal, setNoteModal] = useState({
     open: false,
