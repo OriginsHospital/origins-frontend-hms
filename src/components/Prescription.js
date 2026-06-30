@@ -975,11 +975,12 @@ function Prescription({
 
   const [reviewAppointmentForm, setReviewAppointmentForm] = useState(null)
   const reviewConsentsICSI = useMutation({
-    mutationFn: async (visitId) => {
+    mutationFn: async ({ visitId, treatmentStartDate }) => {
       const res = await reviewIcsiConsents(user.accessToken, visitId, {
         visitId,
         stage: 'START_ICSI',
         treatmentType: patientInfo?.treatmentDetails?.treatmentTypeId,
+        treatmentStartDate,
       })
       if (res.status == 200) {
         toast.success('Consents reviewed successfully')
@@ -1020,7 +1021,7 @@ function Prescription({
   })
 
   const startIUIMutation = useMutation({
-    mutationFn: async (visitId) => {
+    mutationFn: async ({ visitId }) => {
       const res = await updateTreatmentStatus(user.accessToken, {
         visitId,
         stage: 'START_IUI',
@@ -1307,11 +1308,12 @@ function Prescription({
     }
   }
   const reviewConsentsFET = useMutation({
-    mutationFn: async (visitId) => {
+    mutationFn: async ({ visitId, treatmentStartDate }) => {
       const res = await reviewFETConsents(user.accessToken, visitId, {
         visitId,
         stage: 'START_FET',
         treatmentType: patientInfo?.treatmentDetails?.treatmentTypeId,
+        treatmentStartDate,
       })
       if (res.status == 200) {
         const defaultTreatmentTemplate = res.data
@@ -2331,10 +2333,8 @@ function Prescription({
 
       <Modal
         uniqueKey={`ICSI` + patientInfo?.activeVisitId}
-        // closeOnOutsideClick={true}
-        maxWidth="xl"
+        maxWidth={treatmentStatus?.START_ICSI == 0 ? 'sm' : 'xl'}
         closeOnOutsideClick={true}
-        // onOutsideClick={() => dispatch(closeModal('ICSI'))}
       >
         <div className="flex justify-between">
           <Typography variant="h6" className="text-gray-800 mb-2">

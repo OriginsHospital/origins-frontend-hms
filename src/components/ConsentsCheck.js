@@ -6,7 +6,9 @@ import {
 } from '@/constants/apis'
 import { OpenInNew } from '@mui/icons-material'
 import { Button, Checkbox } from '@mui/material'
+import { DatePicker } from '@mui/x-date-pickers'
 import { useQuery } from '@tanstack/react-query'
+import dayjs from 'dayjs'
 import Link from 'next/link'
 import React, { useEffect, useState } from 'react'
 import { useSelector } from 'react-redux'
@@ -14,8 +16,12 @@ import { toast } from 'react-toastify'
 
 function ConsentsCheck({ consentType, patientInfo, reviewConsents }) {
   const userDetails = useSelector((state) => state.user)
-  // const [signedConsents, setSignedConsents] = useState([])
   const [checkedConsents, setCheckedConsents] = useState({})
+  const showTreatmentStartDate = consentType === 'ICSI' || consentType === 'FET'
+  const [treatmentStartDate, setTreatmentStartDate] = useState(
+    dayjs().format('YYYY-MM-DD'),
+  )
+
   const { data: consentsData } = useQuery({
     queryKey: ['consents', consentType],
     queryFn: () => {
@@ -69,28 +75,56 @@ function ConsentsCheck({ consentType, patientInfo, reviewConsents }) {
   const { isConsentOptional } = require('../constants/optionalConsents')
 
   const areAllConsentsChecked = () => {
-    // If this is an optional consent type and no consents are uploaded, return true
     if (isConsentOptional(consentType) && consentsData?.data?.length === 0) {
       return true
     }
-    // Otherwise check if all uploaded consents are checked
     return Object.values(checkedConsents).every((value) => value === true)
   }
 
   const handleReviewConsents = () => {
-    console.log(
-      'treatment type',
-      patientInfo?.treatmentDetails?.treatmentTypeId,
-    )
+    if (!treatmentStartDate && showTreatmentStartDate) {
+      toast.error('Please select a treatment start date')
+      return
+    }
+
     if (confirm('Are you sure you want to review consents?')) {
-      reviewConsents.mutate(patientInfo?.activeVisitId)
+      reviewConsents.mutate({
+        visitId: patientInfo?.activeVisitId,
+        treatmentStartDate: showTreatmentStartDate
+          ? treatmentStartDate
+          : undefined,
+      })
     } else if (!isConsentOptional(consentType)) {
       toast.error('Please review all consents')
     }
   }
 
+  const canStartTreatment =
+    areAllConsentsChecked() && (!showTreatmentStartDate || !!treatmentStartDate)
+
   return (
     <div className="flex flex-col gap-3 w-fit">
+      {showTreatmentStartDate && (
+        <div className="flex flex-col gap-2">
+          <span className="text-lg font-semibold">Treatment Start Date</span>
+          <DatePicker
+            label="Select start date"
+            format="DD/MM/YYYY"
+            className="bg-white rounded-lg"
+            value={dayjs(treatmentStartDate)}
+            maxDate={dayjs()}
+            onChange={(newValue) => {
+              if (newValue) {
+                setTreatmentStartDate(dayjs(newValue).format('YYYY-MM-DD'))
+              }
+            }}
+          />
+          <span className="text-sm text-gray-500">
+            Defaults to today. You can select a previous date if treatment
+            started earlier.
+          </span>
+        </div>
+      )}
       <span className="text-lg font-semibold">
         Review Consent Forms {isConsentOptional(consentType) && '(Optional)'}
       </span>
@@ -121,11 +155,7 @@ function ConsentsCheck({ consentType, patientInfo, reviewConsents }) {
               target="_blank"
               className="capitalize text-secondary "
             >
-              <Button
-                variant="text"
-                endIcon={<OpenInNew size={16} />}
-                // className="capitalize"
-              >
+              <Button variant="text" endIcon={<OpenInNew size={16} />}>
                 <span className="text-[16px] capitalize">
                   {convertToNormalCase(
                     consent?.key
@@ -138,14 +168,18 @@ function ConsentsCheck({ consentType, patientInfo, reviewConsents }) {
             </Link>
           </div>
         ))}
-      {consentsData?.data?.length > 0 && (
+      {(consentsData?.data?.length > 0 ||
+        (isConsentOptional(consentType) &&
+          consentsData?.data?.length === 0)) && (
         <Button
           variant="contained"
           className="capitalize text-white"
           onClick={handleReviewConsents}
-          disabled={!areAllConsentsChecked()}
+          disabled={!canStartTreatment || reviewConsents.isPending}
         >
-          Review Consents
+          {consentType === 'ICSI' || consentType === 'FET'
+            ? `Start ${consentType}`
+            : 'Review Consents'}
         </Button>
       )}
     </div>
