@@ -43,12 +43,12 @@ const JoditEditor = dynamic(() => import('jodit-react'), {
 const ViewReportModal = ({ testData, reportData }) => {
   const dispatch = useDispatch()
   const editor = useRef(null)
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const [content, setContent] = useState(reportData?.labTestResult || '')
   const queryClient = useQueryClient()
 
   const { mutate: saveMutation } = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const response = await saveLabTestResult(user.accessToken, payload)
       if (response.status === 200) {
         toast.success('Report saved successfully', toastconfig)
@@ -68,7 +68,7 @@ const ViewReportModal = ({ testData, reportData }) => {
         throw new Error(response.message || 'Failed to save report')
       }
     },
-    onError: error => {
+    onError: (error) => {
       toast.error(error.message || 'Failed to save report', toastconfig)
     },
   })
@@ -111,7 +111,7 @@ const ViewReportModal = ({ testData, reportData }) => {
         <JoditEditor
           ref={editor}
           value={content}
-          onChange={newContent => setContent(newContent)}
+          onChange={(newContent) => setContent(newContent)}
         />
       </div>
 
@@ -137,7 +137,7 @@ const ViewReportModal = ({ testData, reportData }) => {
 }
 
 function LabsList() {
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const branches = user?.branchDetails
   const [branchId, setBranchId] = useState(branches[0]?.id || null)
   const [fromDate, setFromDate] = useState(dayjs(new Date()).subtract(7, 'day'))
@@ -184,7 +184,7 @@ function LabsList() {
   }
 
   const { mutate: downloadLabReportMutation } = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const response = await downloadLabReport(
         user.accessToken,
         payload.appointmentId,
@@ -207,7 +207,7 @@ function LabsList() {
     },
   })
 
-  const handleDownloadClick = row => {
+  const handleDownloadClick = (row) => {
     downloadLabReportMutation(row)
   }
 
@@ -216,15 +216,15 @@ function LabsList() {
       field: 'appointmentDate',
       headerName: 'Appointment',
       width: 130,
-      renderCell: params => (
+      renderCell: (params) => (
         <span>{dayjs(params.row.appointmentDate).format('DD-MM-YYYY')}</span>
       ),
     },
     {
-      field: 'patientInfo',
+      field: 'patientName',
       headerName: 'Patient',
       width: 200,
-      renderCell: params => (
+      renderCell: (params) => (
         <div className="flex items-center gap-2">
           <Avatar
             src={params.row.patientPhoto}
@@ -239,7 +239,7 @@ function LabsList() {
       field: 'type',
       headerName: 'Type',
       width: 130,
-      renderCell: params => (
+      renderCell: (params) => (
         <span className="capitalize">
           {params.row.type === 'TREATMENT' ? 'Treatment' : 'Consultation'}
         </span>
@@ -249,7 +249,7 @@ function LabsList() {
       field: 'isSpouse',
       headerName: 'Is Spouse',
       width: 100,
-      renderCell: params => (
+      renderCell: (params) => (
         <span>{params.row.isSpouse === 1 ? 'Yes' : 'No'}</span>
       ),
     },
@@ -257,7 +257,7 @@ function LabsList() {
       field: 'labTestName',
       headerName: 'Test Name',
       width: 200,
-      renderCell: params => (
+      renderCell: (params) => (
         <span className="capitalize">{params.row.labTestName || 'N/A'}</span>
       ),
     },
@@ -265,7 +265,7 @@ function LabsList() {
       field: 'actions',
       headerName: 'Actions',
       width: 150,
-      renderCell: params => (
+      renderCell: (params) => (
         <Button
           variant="contained"
           size="small"
@@ -275,15 +275,15 @@ function LabsList() {
             params.row.status === 'RED'
               ? 'error'
               : params.row.status === 'ORANGE'
-              ? 'warning'
-              : 'success'
+                ? 'warning'
+                : 'success'
           }
         >
           {params.row.status === 'RED'
             ? 'Collect'
             : params.row.status === 'ORANGE'
-            ? 'Update Result'
-            : 'View Report'}
+              ? 'Update Result'
+              : 'View Report'}
         </Button>
       ),
     },
@@ -291,7 +291,7 @@ function LabsList() {
       field: 'download',
       headerName: 'Download',
       width: 80,
-      renderCell: params => (
+      renderCell: (params) => (
         <Button
           variant="contained"
           size="small"
@@ -342,7 +342,7 @@ function LabsList() {
 
   const { mutate: collectMutation } = useMutation({
     mutationKey: ['collectMutation'],
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       console.log('payload', payload)
       const response = await saveLabTestResult(user.accessToken, payload)
       if (response.status === 200) {
@@ -352,7 +352,7 @@ function LabsList() {
         throw new Error(response.message || 'Failed to collect sample')
       }
     },
-    onError: error => {
+    onError: (error) => {
       toast.error(error.message || 'Failed to collect sample', toastconfig)
     },
   })
@@ -386,10 +386,10 @@ function LabsList() {
           <Autocomplete
             className="w-48"
             options={branches || []}
-            getOptionLabel={option => option?.branchCode || option?.name}
-            value={branches?.find(branch => branch.id === branchId) || null}
+            getOptionLabel={(option) => option?.branchCode || option?.name}
+            value={branches?.find((branch) => branch.id === branchId) || null}
             onChange={(_, value) => setBranchId(value?.id || null)}
-            renderInput={params => <TextField {...params} label="Branch" />}
+            renderInput={(params) => <TextField {...params} label="Branch" />}
             clearIcon={null}
           />
         </div>
@@ -423,8 +423,8 @@ function LabsList() {
         <DataGrid
           rows={apiData || []}
           columns={columns}
-          getRowId={row =>
-            `${row.appointmentId}-${row.labTestId}-${row.isSpouse}`
+          getRowId={(row) =>
+            `${row.type}-${row.appointmentId}-${row.labTestId}-${row.isSpouse}`
           }
           loading={isLoading}
           disableRowSelectionOnClick

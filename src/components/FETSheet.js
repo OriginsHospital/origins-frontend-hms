@@ -39,7 +39,7 @@ const FETSheet = ({
     (day, medication, value) => {
       console.log(day, medication, value, fetFormData)
       // Validate input if needed
-      setFETFormData(prevData => ({
+      setFETFormData((prevData) => ({
         ...prevData,
         [`${day}-${medication}`]: value,
       }))
@@ -55,11 +55,9 @@ const FETSheet = ({
     if (!fetTemplate?.columns) return
 
     const lastDate = fetTemplate.columns[fetTemplate.columns.length - 1]
-    const nextDate = dayjs(lastDate, 'DD/MM')
-      .add(1, 'day')
-      .format('DD/MM')
+    const nextDate = dayjs(lastDate, 'DD/MM').add(1, 'day').format('DD/MM')
 
-    setFETTemplate(prev => ({
+    setFETTemplate((prev) => ({
       ...prev,
       columns: [...prev.columns, nextDate],
     }))
@@ -161,6 +159,7 @@ const FETSheet = ({
         // allBillTypeValues={allBillTypeValues}
         columns={fetTemplate?.columns}
         medicationOptions={medicationOptions}
+        autofillOnly
       />
       {/* <ScanSheet
         scanFormData={fetFormData}

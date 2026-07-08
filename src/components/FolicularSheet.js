@@ -1,6 +1,10 @@
 import { closeModal } from '@/redux/modalSlice'
 import { Button } from '@mui/material'
-import { DatePicker } from '@mui/x-date-pickers'
+import {
+  DatePicker,
+  DateTimePicker,
+  renderTimeViewClock,
+} from '@mui/x-date-pickers'
 import dayjs from 'dayjs'
 import React, { useCallback, useEffect, useState } from 'react'
 import { useDispatch } from 'react-redux'
@@ -18,6 +22,11 @@ const FollicularScanForm = ({
   handleUpdateTreatmentSheet,
   setFolicularTemplate,
   canUpdate,
+  showEraStartTime = false,
+  eraStartTime = null,
+  onEraStartTimeChange,
+  onUpdateEraStartTime,
+  isUpdatingEraStartTime = false,
 }) => {
   const dispatch = useDispatch()
   const handleInputChange = useCallback(
@@ -87,6 +96,41 @@ const FollicularScanForm = ({
 
   return (
     <div className="w-full">
+      {showEraStartTime && (
+        <div className="flex flex-wrap items-end gap-3 p-3 border-b">
+          <DateTimePicker
+            label="ERA Start Time"
+            className="bg-white rounded-lg"
+            format="DD/MM/YY hh:mm A"
+            value={eraStartTime ? dayjs(eraStartTime) : null}
+            onChange={(newValue) => {
+              if (newValue && onEraStartTimeChange) {
+                onEraStartTimeChange(newValue)
+              }
+            }}
+            disabled={!canUpdate}
+            viewRenderers={{
+              hours: renderTimeViewClock,
+              minutes: renderTimeViewClock,
+            }}
+          />
+          {canUpdate && (
+            <Button
+              variant="contained"
+              className="bg-secondary text-white capitalize"
+              onClick={onUpdateEraStartTime}
+              disabled={!eraStartTime || isUpdatingEraStartTime}
+            >
+              {isUpdatingEraStartTime ? 'Saving...' : 'Set ERA Start Time'}
+            </Button>
+          )}
+          {!eraStartTime && canUpdate && (
+            <p className="text-sm text-gray-500">
+              ERA start date and time can be set here after starting treatment.
+            </p>
+          )}
+        </div>
+      )}
       <div className="flex justify-end p-3">
         {canUpdate && (
           <div className="flex gap-2">

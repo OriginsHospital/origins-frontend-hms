@@ -3,7 +3,6 @@ import Select from 'react-select'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useDispatch, useSelector } from 'react-redux'
 import { toast } from 'react-toastify'
-import StartERAConfirmation from './StartERAConfirmation'
 import { toastconfig } from '@/utils/toastconfig'
 import TextField from '@mui/material/TextField'
 import {
@@ -63,7 +62,10 @@ import HysteroscopySheet from './HysteroscopySheet'
 import ERASheet from './ERASheet'
 import HysteroscopySheetNew from './HysteroscopySheetNew'
 import HysteroLapOperationNotesForm from './HysteroLapOperationNotesForm'
-import { buildMedicationFormData } from '@/utils/medicationSheetUtils'
+import {
+  buildMedicationFormData,
+  getAutofilledMedicationRows,
+} from '@/utils/medicationSheetUtils'
 
 const HYSTERO_LAP_TYPE_OPTIONS = [
   { value: 'Hysteroscopy', label: 'Hysteroscopy' },
@@ -473,6 +475,15 @@ function Prescription({
       refetchOnWindowFocus: false,
       refetchOnMount: true,
     })
+
+  useEffect(() => {
+    if (treatmentStatus?.eraStartDate) {
+      setEraStartTime(
+        dayjs(treatmentStatus.eraStartDate).format('YYYY-MM-DDTHH:mm:00[Z]'),
+      )
+    }
+  }, [treatmentStatus?.eraStartDate])
+
   // const [folicularSheet, setFolicularSheet] = useState('')
   // const { data: defaultTreatmentTemplate } = useQuery({
   //   queryKey: ['defaultTemplate', treatmentStartDate],
@@ -812,10 +823,19 @@ function Prescription({
             : [dayjs().format('DD/MM')]
           const medicationRows = hasValidMedRows ? res?.medicationRows : []
           const scanRows = hasValidScanRows ? res?.scanRows : []
-          const fetMedicationFormData = buildMedicationFormData(
-            medicationRows,
-            res?.medicationSheet,
+          const candidateRows =
+            Array.isArray(res?.medicationSheet?.rows) &&
+            res.medicationSheet.rows.length > 0
+              ? res.medicationSheet.rows
+              : medicationRows
+          const autofilledRows = getAutofilledMedicationRows(
+            { ...res?.medicationSheet, rows: candidateRows },
+            columns,
           )
+          const fetMedicationFormData = {
+            ...buildMedicationFormData(autofilledRows, res?.medicationSheet),
+            rows: autofilledRows,
+          }
 
           setFETFormData(fetMedicationFormData)
           setFETTemplate({
@@ -1348,7 +1368,6 @@ function Prescription({
         const res = await reviewEraConsents(user.accessToken, visitId, {
           visitId,
           stage: 'ERA_START',
-          eraStartTime,
           treatmentType: patientInfo?.treatmentDetails?.treatmentTypeId,
         })
 
@@ -1417,6 +1436,34 @@ function Prescription({
         toast.error(error.message || 'Failed to start ERA treatment')
         throw error
       }
+    },
+  })
+  const updateEraStartTimeMutation = useMutation({
+    mutationFn: async (startTime) => {
+      const res = await updateTreatmentStatus(user.accessToken, {
+        visitId: patientInfo?.activeVisitId,
+        stage: 'UPDATE_ERA_START_TIME',
+        eraStartTime: startTime,
+        treatmentType: patientInfo?.treatmentDetails?.treatmentTypeId,
+      })
+      if (res.status !== 200) {
+        throw new Error(res.message || 'Failed to update ERA start time')
+      }
+      return res.data
+    },
+    onSuccess: (data) => {
+      if (data?.date) {
+        setERATemplate((prev) => ({
+          ...prev,
+          columns: data.date,
+        }))
+      }
+      queryClient.invalidateQueries(treatmentStatusQueryKey)
+      queryClient.invalidateQueries('treatmentERASheet')
+      toast.success('ERA start time updated successfully')
+    },
+    onError: (error) => {
+      toast.error(error.message || 'Failed to update ERA start time')
     },
   })
   function EndTreatmentModal({ type, visitId, onClose }) {
@@ -2164,15 +2211,28 @@ function Prescription({
               <Button
                 variant="contained"
                 className="text-white capitalize"
-                onClick={() =>
-                  dispatch(openModal('ERA' + patientInfo?.activeVisitId))
+                onClick={() => {
+                  if (treatmentStatus?.START_ERA == 0) {
+                    if (
+                      confirm('Are you sure you want to start ERA treatment?')
+                    ) {
+                      reviewConsentsERA.mutate(patientInfo?.activeVisitId)
+                    }
+                  } else {
+                    dispatch(openModal('ERA' + patientInfo?.activeVisitId))
+                  }
+                }}
+                disabled={
+                  treatmentStatus?.START_ERA == 0 && reviewConsentsERA.isLoading
                 }
               >
-                {treatmentStatus?.START_ERA == 1
-                  ? treatmentStatus?.END_ERA == 0
-                    ? 'Update'
-                    : 'View'
-                  : 'Start'}
+                {treatmentStatus?.START_ERA == 0 && reviewConsentsERA.isLoading
+                  ? 'Starting...'
+                  : treatmentStatus?.START_ERA == 1
+                    ? treatmentStatus?.END_ERA == 0
+                      ? 'Update'
+                      : 'View'
+                    : 'Start'}
               </Button>
               {treatmentStatus?.START_ERA == 1 &&
                 treatmentStatus?.END_ERA >= 0 && (
@@ -2560,7 +2620,7 @@ function Prescription({
       </Modal>
       <Modal
         uniqueKey={`ERA` + patientInfo?.activeVisitId}
-        maxWidth={treatmentStatus?.START_ERA == 0 ? 'sm' : 'xl'}
+        maxWidth="xl"
         closeOnOutsideClick={true}
       >
         <div className="flex justify-between">
@@ -2571,84 +2631,63 @@ function Prescription({
             <Close />
           </IconButton>
         </div>
-        {treatmentStatus?.START_ERA == 0 ? (
-          <>
-            <div className="text-center mb-6">
-              <DateTimePicker
-                label="ERA Start Time"
-                className="bg-white rounded-lg w-max-content mb-10"
-                name="eraStartTime"
-                onChange={(newValue) =>
-                  setEraStartTime(
-                    dayjs(newValue).format('YYYY-MM-DDTHH:mm:00[Z]'),
-                  )
+        <>
+          <FolicularSheet
+            folicularFormData={eraFolicularFormData}
+            setFolicularFormData={setEraFolicularFormData}
+            handleUpdateTreatmentSheet={handleUpdateTreatmentERASheet}
+            follicularTemplate={{
+              columns:
+                eraTemplate?.columns?.length > 0
+                  ? eraTemplate.columns
+                  : [dayjs().format('DD/MM')],
+              rows: eraTemplate?.follicularRows || DEFAULT_FOLLICULAR_ROWS,
+            }}
+            setFolicularTemplate={(updater) => {
+              setERATemplate((prev) => {
+                const follicularPrev = {
+                  columns: prev?.columns || [],
+                  rows: prev?.follicularRows || DEFAULT_FOLLICULAR_ROWS,
                 }
-                viewRenderers={{
-                  hours: renderTimeViewClock,
-                  minutes: renderTimeViewClock,
-                }}
-              />
-              <h5 className="text-md font-semibold text-gray-800 mb-4">
-                Please Provide ERA Start Time to proceed further
-              </h5>
-              <Button
-                variant="contained"
-                className="text-white capitalize mt-5"
-                disabled={!eraStartTime || reviewConsentsERA.isLoading}
-                onClick={() =>
-                  reviewConsentsERA.mutate(patientInfo?.activeVisitId)
+                const next =
+                  typeof updater === 'function'
+                    ? updater(follicularPrev)
+                    : updater
+                return {
+                  ...prev,
+                  columns: next.columns,
+                  follicularRows: next.rows,
                 }
-              >
-                {reviewConsentsERA.isLoading ? 'Starting ERA...' : 'Start ERA'}
-              </Button>
-            </div>
-          </>
-        ) : (
-          <>
-            <FolicularSheet
-              folicularFormData={eraFolicularFormData}
-              setFolicularFormData={setEraFolicularFormData}
-              handleUpdateTreatmentSheet={handleUpdateTreatmentERASheet}
-              follicularTemplate={{
-                columns:
-                  eraTemplate?.columns?.length > 0
-                    ? eraTemplate.columns
-                    : [dayjs().format('DD/MM')],
-                rows: eraTemplate?.follicularRows || DEFAULT_FOLLICULAR_ROWS,
-              }}
-              setFolicularTemplate={(updater) => {
-                setERATemplate((prev) => {
-                  const follicularPrev = {
-                    columns: prev?.columns || [],
-                    rows: prev?.follicularRows || DEFAULT_FOLLICULAR_ROWS,
-                  }
-                  const next =
-                    typeof updater === 'function'
-                      ? updater(follicularPrev)
-                      : updater
-                  return {
-                    ...prev,
-                    columns: next.columns,
-                    follicularRows: next.rows,
-                  }
-                })
-              }}
-              canUpdate={treatmentStatus?.END_ERA == 0}
-            />
-            <ERASheet
-              eraFormData={eraFormData}
-              setERAFormData={setERAFormData}
-              eraTemplate={eraTemplate}
-              medicationOptions={medicationOptionsFollicular}
-            />
-            <ScanSheet
-              scanFormData={scanEraFormData}
-              setScanFormData={setScanEraFormData}
-              allBillTypeValues={allBillTypeValues}
-              columns={eraTemplate?.columns}
-            />
-          </>
-        )}
+              })
+            }}
+            canUpdate={treatmentStatus?.END_ERA == 0}
+            showEraStartTime
+            eraStartTime={eraStartTime}
+            onEraStartTimeChange={(newValue) =>
+              setEraStartTime(dayjs(newValue).format('YYYY-MM-DDTHH:mm:00[Z]'))
+            }
+            onUpdateEraStartTime={() => {
+              if (!eraStartTime) {
+                toast.error('Please select ERA start date and time')
+                return
+              }
+              updateEraStartTimeMutation.mutate(eraStartTime)
+            }}
+            isUpdatingEraStartTime={updateEraStartTimeMutation.isLoading}
+          />
+          <ERASheet
+            eraFormData={eraFormData}
+            setERAFormData={setERAFormData}
+            eraTemplate={eraTemplate}
+            medicationOptions={medicationOptionsFollicular}
+          />
+          <ScanSheet
+            scanFormData={scanEraFormData}
+            setScanFormData={setScanEraFormData}
+            allBillTypeValues={allBillTypeValues}
+            columns={eraTemplate?.columns}
+          />
+        </>
       </Modal>
       <Modal
         uniqueKey={'HYSTEROSCOPY' + patientInfo?.activeVisitId}

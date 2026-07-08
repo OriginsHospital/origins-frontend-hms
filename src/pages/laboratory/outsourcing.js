@@ -302,100 +302,120 @@ const Outsourcing = () => {
     return text.charAt(0).toUpperCase() + text.slice(1)
   }
 
-  const columns = [
-    {
-      field: 'appointmentDate',
-      headerName: 'Appointment',
-      width: 130,
-      renderCell: (params) => (
-        <span>{dayjs(params.row.appointmentDate).format('DD-MM-YYYY')}</span>
-      ),
-    },
-    {
-      field: 'patientInfo',
-      headerName: 'Patient',
-      width: 200,
-      renderCell: (params) => (
-        <div className="flex items-center gap-2">
-          <Avatar
-            src={params.row.patientPhoto}
-            alt={params.row.patientName}
-            sx={{ width: 40, height: 40 }}
-          />
-          <span>{params.row.patientName}</span>
-        </div>
-      ),
-    },
-    {
-      field: 'branchCode',
-      headerName: 'Branch',
-      width: 100,
-      renderCell: (params) => (
-        <span>
-          {params.row.branchCode ||
-            branches?.find((b) => b.id === params.row.branchId)?.branchCode ||
-            branches?.find((b) => b.id === params.row.branchId)?.name ||
-            '-'}
-        </span>
-      ),
-    },
-    // { field: 'appointmentId', headerName: 'Appointment ID', width: 130 },
-    {
-      field: 'type',
-      headerName: 'Type',
-      width: 130,
-      renderCell: (params) => (
-        <span className="capitalize">
-          {params.row.type == 'TREATMENT' ? 'Treatment' : 'Consultation'}
-        </span>
-      ),
-    },
-    {
-      field: 'isSpouse',
-      headerName: 'Is Spouse',
-      width: 100,
-      renderCell: (params) => (
-        <span>{params.row.isSpouse == 1 ? 'Yes' : 'No'}</span>
-      ),
-    },
-    {
-      field: 'labTestName',
-      headerName: 'Test Name',
-      width: 200,
-      renderCell: (params) => (
-        <span className="capitalize">{params.row.labTestName || 'N/A'}</span>
-      ),
-    },
-    // { field: 'serviceGroup', headerName: 'Sample Group', width: 150 },
-    // { field: 'labTestType', headerName: 'Test Type', width: 130 },
+  const gridRows = useMemo(
+    () =>
+      (labTests || []).map((row, index) => ({
+        ...row,
+        id:
+          row.lineBillId != null
+            ? `${row.type}-${row.lineBillId}`
+            : `${row.type}-${row.appointmentId}-${row.labTestId}-${row.isSpouse}-${index}`,
+      })),
+    [labTests],
+  )
 
-    {
-      field: 'actions',
-      headerName: 'Actions',
-      width: 150,
-      renderCell: (params) => (
-        <Button
-          variant="contained"
-          size="small"
-          className="capitalize"
-          onClick={() => handleActionClick(params.row.status, params.row)}
-          color={
-            params.row.status === 'RED'
-              ? 'error'
+  const columns = useMemo(
+    () => [
+      {
+        field: 'appointmentDate',
+        headerName: 'Appointment',
+        width: 130,
+        renderCell: (params) => (
+          <span>{dayjs(params.row.appointmentDate).format('DD-MM-YYYY')}</span>
+        ),
+      },
+      {
+        field: 'patientName',
+        headerName: 'Patient',
+        width: 200,
+        valueGetter: (value, row) => row?.patientName ?? '',
+        renderCell: ({ id, value, row }) => (
+          <div className="flex items-center gap-2">
+            <Avatar
+              src={row?.patientPhoto || undefined}
+              alt={value || ''}
+              sx={{ width: 40, height: 40 }}
+            >
+              {(value || '?').charAt(0)}
+            </Avatar>
+            <span>{value}</span>
+          </div>
+        ),
+      },
+      {
+        field: 'branchCode',
+        headerName: 'Branch',
+        width: 100,
+        renderCell: (params) => (
+          <span>
+            {params.row.branchCode ||
+              branches?.find((b) => b.id === params.row.branchId)?.branchCode ||
+              branches?.find((b) => b.id === params.row.branchId)?.name ||
+              '-'}
+          </span>
+        ),
+      },
+      // { field: 'appointmentId', headerName: 'Appointment ID', width: 130 },
+      {
+        field: 'type',
+        headerName: 'Type',
+        width: 130,
+        renderCell: (params) => (
+          <span className="capitalize">
+            {params.row.type == 'TREATMENT' ? 'Treatment' : 'Consultation'}
+          </span>
+        ),
+      },
+      {
+        field: 'isSpouse',
+        headerName: 'Is Spouse',
+        width: 100,
+        renderCell: (params) => (
+          <span>{params.row.isSpouse == 1 ? 'Yes' : 'No'}</span>
+        ),
+      },
+      {
+        field: 'labTestName',
+        headerName: 'Test Name',
+        width: 200,
+        renderCell: (params) => (
+          <span className="capitalize">{params.row.labTestName || 'N/A'}</span>
+        ),
+      },
+      // { field: 'serviceGroup', headerName: 'Sample Group', width: 150 },
+      // { field: 'labTestType', headerName: 'Test Type', width: 130 },
+
+      {
+        field: 'actions',
+        headerName: 'Actions',
+        width: 150,
+        sortable: false,
+        filterable: false,
+        renderCell: (params) => (
+          <Button
+            variant="contained"
+            size="small"
+            className="capitalize"
+            onClick={() => handleActionClick(params.row.status, params.row)}
+            color={
+              params.row.status === 'RED'
+                ? 'error'
+                : params.row.status === 'ORANGE'
+                  ? 'warning'
+                  : 'success'
+            }
+          >
+            {params.row.status === 'RED'
+              ? 'Collect'
               : params.row.status === 'ORANGE'
-                ? 'warning'
-                : 'success'
-          }
-        >
-          {params.row.status === 'RED'
-            ? 'Collect'
-            : params.row.status === 'ORANGE'
-              ? 'Upload Report'
-              : 'View Report'}
-        </Button>
-      ),
-    },
-  ]
+                ? 'Upload Report'
+                : 'View Report'}
+          </Button>
+        ),
+      },
+    ],
+    [branches],
+  )
 
   return (
     <div className="p-4">
@@ -446,13 +466,18 @@ const Outsourcing = () => {
 
       <div style={{ height: '75vh', width: '100%' }}>
         <DataGrid
-          rows={labTests || []}
+          rows={gridRows}
           columns={columns}
-          getRowId={(row) =>
-            `${row.appointmentId}-${row.labTestId}-${row.isSpouse}`
-          }
+          getRowId={(row) => row.id}
           loading={isLoading}
-          disableSelectionOnClick
+          disableRowSelectionOnClick
+          disableVirtualization
+          pageSizeOptions={[25, 50, 100]}
+          initialState={{
+            pagination: {
+              paginationModel: { pageSize: 100, page: 0 },
+            },
+          }}
         />
       </div>
 

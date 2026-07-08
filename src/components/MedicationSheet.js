@@ -16,6 +16,7 @@ function MedicationSheet({
   allBillTypeValues,
   columns,
   medicationOptions,
+  autofillOnly = false,
 }) {
   // Add states for medication inputs
   const [medicationDays, setMedicationDays] = useState('')
@@ -365,13 +366,15 @@ function MedicationSheet({
           ))}
         </tbody>
       </table>
-      <Button
-        color="primary"
-        onClick={handleAddMedication}
-        sx={{ marginTop: 2 }}
-      >
-        Add Medication
-      </Button>
+      {!autofillOnly && (
+        <Button
+          color="primary"
+          onClick={handleAddMedication}
+          sx={{ marginTop: 2 }}
+        >
+          Add Medication
+        </Button>
+      )}
     </div>
   )
 }

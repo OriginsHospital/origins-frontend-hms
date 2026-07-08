@@ -14,6 +14,30 @@ export function buildMedicationFormData(medicationRows, medicationSheet) {
   }
 }
 
+export function getAutofilledMedicationRows(medicationSheet, columns = []) {
+  const sheet =
+    medicationSheet &&
+    typeof medicationSheet === 'object' &&
+    !Array.isArray(medicationSheet)
+      ? medicationSheet
+      : {}
+  const rows = Array.isArray(sheet.rows) ? sheet.rows : []
+
+  return rows.filter((row) => {
+    const medName = (row?.label || row?.value || '').trim()
+    if (!medName) return false
+
+    const dayColumns = Array.isArray(columns) ? columns : []
+    if (dayColumns.length > 0) {
+      return dayColumns.some((day) => sheet[`${day}-${medName}`])
+    }
+
+    return Object.keys(sheet).some(
+      (key) => key.endsWith(`-${medName}`) && sheet[key],
+    )
+  })
+}
+
 export function mergePrescribedMedicationRows(existingRows, prescribedOptions) {
   const safeRows = Array.isArray(existingRows) ? [...existingRows] : []
   const prescribed = Array.isArray(prescribedOptions) ? prescribedOptions : []
