@@ -49,7 +49,11 @@ import { openModal, closeModal } from '@/redux/modalSlice'
 import FolicularSheet from '@/components/FolicularSheet'
 import MedicationSheet from '@/components/MedicationSheet'
 import ScanSheet from '@/components/ScanSheet'
-import { DateTimePicker, renderTimeViewClock } from '@mui/x-date-pickers'
+import {
+  DatePicker,
+  DateTimePicker,
+  renderTimeViewClock,
+} from '@mui/x-date-pickers'
 import { FaPrescriptionBottleMedical } from 'react-icons/fa6'
 import ReviewCallForm from '@/components/ReviewCallForm'
 import ConsentsCheck from '@/components/ConsentsCheck'
@@ -267,7 +271,7 @@ function Prescription({
   const [medicationFormData, setMedicationFormData] = useState({})
   const [scanFormData, setScanFormData] = useState({})
   const migrationDoneRef = useRef(false) // Track if migration has been done for this template
-  const krishnaIuiColumnsFixedRef = useRef(false)
+  const patientSpecificColumnsFixedRef = useRef(false)
   const [scanFetFormData, setScanFetFormData] = useState({})
   const [scanEraFormData, setScanEraFormData] = useState({})
   const [fetFormData, setFETFormData] = useState({})
@@ -278,9 +282,22 @@ function Prescription({
   const [triggerTime, setTriggerTime] = useState(null)
   const [hysteroscopyTime, setHysteroscopyTime] = useState(null)
   const [eraStartTime, setEraStartTime] = useState(null)
+  const [oitiStartDate, setOitiStartDate] = useState(
+    dayjs().format('YYYY-MM-DD'),
+  )
+  const [eraTreatmentStartDate, setEraTreatmentStartDate] = useState(
+    dayjs().format('YYYY-MM-DD'),
+  )
   const [hysteroscopyTemplate, setHysteroscopyTemplate] = useState(null)
   const [hysteroscopyReportId, setHysteroscopyReportId] = useState(null)
   const [selectedHysteroLapType, setSelectedHysteroLapType] = useState(null)
+
+  useEffect(() => {
+    const today = dayjs().format('YYYY-MM-DD')
+    setOitiStartDate(today)
+    setEraTreatmentStartDate(today)
+    setHysteroscopyTime(null)
+  }, [patientInfo?.activeVisitId])
 
   const resolvedHysteroscopyPatientId = Number(
     patientInfo?.id ?? patientInfo?.patientId,
@@ -357,6 +374,30 @@ function Prescription({
     return candidateNames.includes('krishna kumar nandini')
   }, [patientInfo, selectedPatient])
 
+  const isKurapatiSravanthi = useMemo(() => {
+    const normalize = (value) =>
+      String(value || '')
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .trim()
+
+    const candidateNames = [
+      selectedPatient?.patientName,
+      selectedPatient?.name,
+      selectedPatient?.fullName,
+      patientInfo?.patientName,
+      patientInfo?.name,
+      patientInfo?.fullName,
+      [patientInfo?.firstName, patientInfo?.middleName, patientInfo?.lastName]
+        .filter(Boolean)
+        .join(' '),
+    ]
+      .filter(Boolean)
+      .map(normalize)
+
+    return candidateNames.includes('kurapati sravanthi')
+  }, [patientInfo, selectedPatient])
+
   const isAyeshaBegum = useMemo(() => {
     const normalize = (value) =>
       String(value || '')
@@ -382,15 +423,31 @@ function Prescription({
   }, [patientInfo, selectedPatient])
 
   const KRISHNA_IUI_DAY1 = '03/05'
+  const KURAPATI_ICSI_DAY1 = '12/07'
 
   const iuiColumns = useMemo(() => {
     const cols = follicularTemplate?.columns
     if (!isKrishnaKumarNandini || !Array.isArray(cols) || cols.length === 0)
       return null
 
-    const start = dayjs(KRISHNA_IUI_DAY1, 'DD/MM')
+    const start = dayjs(
+      `2000-${KRISHNA_IUI_DAY1.slice(3)}-${KRISHNA_IUI_DAY1.slice(0, 2)}`,
+    )
     return cols.map((_, index) => start.add(index, 'day').format('DD/MM'))
   }, [follicularTemplate?.columns, isKrishnaKumarNandini])
+
+  const icsiColumns = useMemo(() => {
+    const cols = follicularTemplate?.columns
+    if (!isKurapatiSravanthi || !Array.isArray(cols) || cols.length === 0)
+      return null
+
+    const start = dayjs(
+      `2000-${KURAPATI_ICSI_DAY1.slice(3)}-${KURAPATI_ICSI_DAY1.slice(0, 2)}`,
+    )
+    return cols.map((_, index) => start.add(index, 'day').format('DD/MM'))
+  }, [follicularTemplate?.columns, isKurapatiSravanthi])
+
+  const patientSpecificColumns = icsiColumns || iuiColumns
 
   const remapTreatmentSheetKeys = (data, oldCols, newCols) => {
     if (
@@ -420,36 +477,37 @@ function Prescription({
   }
 
   useEffect(() => {
-    krishnaIuiColumnsFixedRef.current = false
-  }, [treatmentCycleId, isKrishnaKumarNandini])
+    patientSpecificColumnsFixedRef.current = false
+  }, [treatmentCycleId, isKrishnaKumarNandini, isKurapatiSravanthi])
 
   useEffect(() => {
-    if (!isKrishnaKumarNandini || krishnaIuiColumnsFixedRef.current) return
+    if (!patientSpecificColumns || patientSpecificColumnsFixedRef.current)
+      return
 
     const oldCols = follicularTemplate?.columns
-    if (!Array.isArray(oldCols) || oldCols.length === 0 || !iuiColumns) return
+    if (!Array.isArray(oldCols) || oldCols.length === 0) return
 
-    if (oldCols.join('|') === iuiColumns.join('|')) {
-      krishnaIuiColumnsFixedRef.current = true
+    if (oldCols.join('|') === patientSpecificColumns.join('|')) {
+      patientSpecificColumnsFixedRef.current = true
       return
     }
 
-    krishnaIuiColumnsFixedRef.current = true
+    patientSpecificColumnsFixedRef.current = true
 
     setFolicularFormData((prev) =>
-      remapTreatmentSheetKeys(prev, oldCols, iuiColumns),
+      remapTreatmentSheetKeys(prev, oldCols, patientSpecificColumns),
     )
     setMedicationFormData((prev) =>
-      remapTreatmentSheetKeys(prev, oldCols, iuiColumns),
+      remapTreatmentSheetKeys(prev, oldCols, patientSpecificColumns),
     )
     setScanFormData((prev) =>
-      remapTreatmentSheetKeys(prev, oldCols, iuiColumns),
+      remapTreatmentSheetKeys(prev, oldCols, patientSpecificColumns),
     )
     setFolicularTemplate((prev) => ({
       ...(prev || {}),
-      columns: iuiColumns,
+      columns: patientSpecificColumns,
     }))
-  }, [isKrishnaKumarNandini, iuiColumns, follicularTemplate?.columns])
+  }, [patientSpecificColumns, follicularTemplate?.columns])
 
   const { data: treatmentStatus, isLoading: isTreatmentStatusLoading } =
     useQuery({
@@ -553,7 +611,7 @@ function Prescription({
         id: treatmentCycleId,
         template: JSON.stringify({
           follicularSheet: folicularFormData,
-          columns: iuiColumns || follicularTemplate?.columns,
+          columns: icsiColumns || iuiColumns || follicularTemplate?.columns,
           rows: follicularTemplate?.rows,
           medicationRows: medicationFormData?.rows,
           medicationSheet: medicationFormData,
@@ -1041,11 +1099,12 @@ function Prescription({
   })
 
   const startIUIMutation = useMutation({
-    mutationFn: async ({ visitId }) => {
+    mutationFn: async ({ visitId, treatmentStartDate }) => {
       const res = await updateTreatmentStatus(user.accessToken, {
         visitId,
         stage: 'START_IUI',
         treatmentType: patientInfo?.treatmentDetails?.treatmentTypeId,
+        treatmentStartDate,
       })
       if (res.status == 200) {
         toast.success('Consents reviewed successfully')
@@ -1082,11 +1141,12 @@ function Prescription({
     },
   })
   const startOITIMutation = useMutation({
-    mutationFn: async (visitId) => {
+    mutationFn: async ({ visitId, treatmentStartDate }) => {
       const res = await updateTreatmentStatus(user.accessToken, {
         visitId,
         stage: 'START_OITI',
         treatmentType: patientInfo?.treatmentDetails?.treatmentTypeId,
+        treatmentStartDate,
       })
       if (res.status == 200) {
         toast.success('Consents reviewed successfully')
@@ -1128,6 +1188,7 @@ function Prescription({
         visitId,
         stage: 'START_HYSTEROSCOPY',
         hysteroscopyTime,
+        treatmentStartDate: dayjs(hysteroscopyTime).format('YYYY-MM-DD'),
         treatmentType: patientInfo?.treatmentDetails?.treatmentTypeId,
       })
       if (res.status !== 200) {
@@ -1363,18 +1424,19 @@ function Prescription({
     },
   })
   const reviewConsentsERA = useMutation({
-    mutationFn: async (visitId) => {
+    mutationFn: async ({ visitId, treatmentStartDate }) => {
       try {
         const res = await reviewEraConsents(user.accessToken, visitId, {
           visitId,
           stage: 'ERA_START',
           treatmentType: patientInfo?.treatmentDetails?.treatmentTypeId,
+          treatmentStartDate,
         })
 
         if (res.status === 200) {
           // Initialize empty ERA form data
           const initialTemplate = res.data || {
-            date: [dayjs().format('YYYY-MM-DD')],
+            date: [treatmentStartDate],
             medicationSheet: [],
             scanSheet: [],
           }
@@ -2213,11 +2275,7 @@ function Prescription({
                 className="text-white capitalize"
                 onClick={() => {
                   if (treatmentStatus?.START_ERA == 0) {
-                    if (
-                      confirm('Are you sure you want to start ERA treatment?')
-                    ) {
-                      reviewConsentsERA.mutate(patientInfo?.activeVisitId)
-                    }
+                    dispatch(openModal('ERA' + patientInfo?.activeVisitId))
                   } else {
                     dispatch(openModal('ERA' + patientInfo?.activeVisitId))
                   }
@@ -2420,7 +2478,11 @@ function Prescription({
               setFolicularFormData={setFolicularFormData}
               treatmentStatus={treatmentStatus}
               handleUpdateTreatmentSheet={handleUpdateTreatmentSheet}
-              follicularTemplate={follicularTemplate}
+              follicularTemplate={
+                icsiColumns
+                  ? { ...(follicularTemplate || {}), columns: icsiColumns }
+                  : follicularTemplate
+              }
               setFolicularTemplate={setFolicularTemplate}
               canUpdate={treatmentStatus?.END_ICSI == 0}
             />
@@ -2430,7 +2492,7 @@ function Prescription({
               medicationFormData={medicationFormData}
               setMedicationFormData={setMedicationFormData}
               allBillTypeValues={allBillTypeValues}
-              columns={follicularTemplate?.columns}
+              columns={icsiColumns || follicularTemplate?.columns}
               medicationOptions={medicationOptionsFollicular}
             />
 
@@ -2439,7 +2501,7 @@ function Prescription({
               scanFormData={scanFormData}
               setScanFormData={setScanFormData}
               allBillTypeValues={allBillTypeValues}
-              columns={follicularTemplate?.columns}
+              columns={icsiColumns || follicularTemplate?.columns}
             />
           </>
         )}
@@ -2518,9 +2580,24 @@ function Prescription({
         </div>
         {treatmentStatus?.START_OITI == 0 ? (
           <>
-            {/* collect consents from patient */}
-            <div className="flex flex-col justify-center items-center gap-2">
-              <span>Are you sure you want to start OITI?</span>
+            <div className="flex flex-col justify-center items-center gap-3">
+              <DatePicker
+                label="Treatment Start Date"
+                format="DD/MM/YYYY"
+                className="bg-white rounded-lg"
+                value={dayjs(oitiStartDate)}
+                maxDate={dayjs()}
+                onChange={(newValue) =>
+                  setOitiStartDate(
+                    newValue && dayjs(newValue).isValid()
+                      ? dayjs(newValue).format('YYYY-MM-DD')
+                      : null,
+                  )
+                }
+              />
+              <span className="text-sm text-gray-500">
+                Select today or a previous date.
+              </span>
               <div className="flex justify-between gap-2">
                 <Button
                   variant="outlined"
@@ -2534,11 +2611,32 @@ function Prescription({
                 <Button
                   variant="contained"
                   className="text-white capitalize "
-                  onClick={() =>
-                    startOITIMutation.mutate(patientInfo?.activeVisitId)
+                  disabled={
+                    !oitiStartDate ||
+                    dayjs(oitiStartDate)
+                      .startOf('day')
+                      .isAfter(dayjs().startOf('day')) ||
+                    startOITIMutation.isPending
                   }
+                  onClick={() => {
+                    if (
+                      !dayjs(oitiStartDate).isValid() ||
+                      dayjs(oitiStartDate)
+                        .startOf('day')
+                        .isAfter(dayjs().startOf('day'))
+                    ) {
+                      toast.error(
+                        'Please select today or a previous treatment start date',
+                      )
+                      return
+                    }
+                    startOITIMutation.mutate({
+                      visitId: patientInfo?.activeVisitId,
+                      treatmentStartDate: oitiStartDate,
+                    })
+                  }}
                 >
-                  Yes
+                  {startOITIMutation.isPending ? 'Starting...' : 'Start OITI'}
                 </Button>
               </div>
             </div>
@@ -2620,7 +2718,7 @@ function Prescription({
       </Modal>
       <Modal
         uniqueKey={`ERA` + patientInfo?.activeVisitId}
-        maxWidth="xl"
+        maxWidth={treatmentStatus?.START_ERA == 0 ? 'xs' : 'xl'}
         closeOnOutsideClick={true}
       >
         <div className="flex justify-between">
@@ -2631,63 +2729,117 @@ function Prescription({
             <Close />
           </IconButton>
         </div>
-        <>
-          <FolicularSheet
-            folicularFormData={eraFolicularFormData}
-            setFolicularFormData={setEraFolicularFormData}
-            handleUpdateTreatmentSheet={handleUpdateTreatmentERASheet}
-            follicularTemplate={{
-              columns:
-                eraTemplate?.columns?.length > 0
-                  ? eraTemplate.columns
-                  : [dayjs().format('DD/MM')],
-              rows: eraTemplate?.follicularRows || DEFAULT_FOLLICULAR_ROWS,
-            }}
-            setFolicularTemplate={(updater) => {
-              setERATemplate((prev) => {
-                const follicularPrev = {
-                  columns: prev?.columns || [],
-                  rows: prev?.follicularRows || DEFAULT_FOLLICULAR_ROWS,
-                }
-                const next =
-                  typeof updater === 'function'
-                    ? updater(follicularPrev)
-                    : updater
-                return {
-                  ...prev,
-                  columns: next.columns,
-                  follicularRows: next.rows,
-                }
-              })
-            }}
-            canUpdate={treatmentStatus?.END_ERA == 0}
-            showEraStartTime
-            eraStartTime={eraStartTime}
-            onEraStartTimeChange={(newValue) =>
-              setEraStartTime(dayjs(newValue).format('YYYY-MM-DDTHH:mm:00[Z]'))
-            }
-            onUpdateEraStartTime={() => {
-              if (!eraStartTime) {
-                toast.error('Please select ERA start date and time')
-                return
+        {treatmentStatus?.START_ERA == 0 ? (
+          <div className="flex flex-col items-center gap-3 py-3">
+            <DatePicker
+              label="Treatment Start Date"
+              format="DD/MM/YYYY"
+              className="bg-white rounded-lg"
+              value={dayjs(eraTreatmentStartDate)}
+              maxDate={dayjs()}
+              onChange={(newValue) =>
+                setEraTreatmentStartDate(
+                  newValue && dayjs(newValue).isValid()
+                    ? dayjs(newValue).format('YYYY-MM-DD')
+                    : null,
+                )
               }
-              updateEraStartTimeMutation.mutate(eraStartTime)
-            }}
-            isUpdatingEraStartTime={updateEraStartTimeMutation.isLoading}
-          />
-          <ERASheet
-            eraFormData={eraFormData}
-            setERAFormData={setERAFormData}
-            eraTemplate={eraTemplate}
-            medicationOptions={medicationOptionsFollicular}
-          />
-          <ScanSheet
-            scanFormData={scanEraFormData}
-            setScanFormData={setScanEraFormData}
-            allBillTypeValues={allBillTypeValues}
-            columns={eraTemplate?.columns}
-          />
-        </>
+            />
+            <span className="text-sm text-gray-500">
+              Select today or a previous date.
+            </span>
+            <Button
+              variant="contained"
+              className="text-white capitalize"
+              disabled={
+                !eraTreatmentStartDate ||
+                dayjs(eraTreatmentStartDate)
+                  .startOf('day')
+                  .isAfter(dayjs().startOf('day')) ||
+                reviewConsentsERA.isPending
+              }
+              onClick={() => {
+                if (
+                  !dayjs(eraTreatmentStartDate).isValid() ||
+                  dayjs(eraTreatmentStartDate)
+                    .startOf('day')
+                    .isAfter(dayjs().startOf('day'))
+                ) {
+                  toast.error(
+                    'Please select today or a previous treatment start date',
+                  )
+                  return
+                }
+                reviewConsentsERA.mutate({
+                  visitId: patientInfo?.activeVisitId,
+                  treatmentStartDate: eraTreatmentStartDate,
+                })
+              }}
+            >
+              {reviewConsentsERA.isPending ? 'Starting...' : 'Start ERA'}
+            </Button>
+          </div>
+        ) : (
+          <>
+            <FolicularSheet
+              folicularFormData={eraFolicularFormData}
+              setFolicularFormData={setEraFolicularFormData}
+              handleUpdateTreatmentSheet={handleUpdateTreatmentERASheet}
+              follicularTemplate={{
+                columns:
+                  eraTemplate?.columns?.length > 0
+                    ? eraTemplate.columns
+                    : [dayjs().format('DD/MM')],
+                rows: eraTemplate?.follicularRows || DEFAULT_FOLLICULAR_ROWS,
+              }}
+              setFolicularTemplate={(updater) => {
+                setERATemplate((prev) => {
+                  const follicularPrev = {
+                    columns: prev?.columns || [],
+                    rows: prev?.follicularRows || DEFAULT_FOLLICULAR_ROWS,
+                  }
+                  const next =
+                    typeof updater === 'function'
+                      ? updater(follicularPrev)
+                      : updater
+                  return {
+                    ...prev,
+                    columns: next.columns,
+                    follicularRows: next.rows,
+                  }
+                })
+              }}
+              canUpdate={treatmentStatus?.END_ERA == 0}
+              showEraStartTime
+              eraStartTime={eraStartTime}
+              onEraStartTimeChange={(newValue) =>
+                setEraStartTime(
+                  dayjs(newValue).format('YYYY-MM-DDTHH:mm:00[Z]'),
+                )
+              }
+              onUpdateEraStartTime={() => {
+                if (!eraStartTime) {
+                  toast.error('Please select ERA start date and time')
+                  return
+                }
+                updateEraStartTimeMutation.mutate(eraStartTime)
+              }}
+              isUpdatingEraStartTime={updateEraStartTimeMutation.isLoading}
+            />
+            <ERASheet
+              eraFormData={eraFormData}
+              setERAFormData={setERAFormData}
+              eraTemplate={eraTemplate}
+              medicationOptions={medicationOptionsFollicular}
+            />
+            <ScanSheet
+              scanFormData={scanEraFormData}
+              setScanFormData={setScanEraFormData}
+              allBillTypeValues={allBillTypeValues}
+              columns={eraTemplate?.columns}
+            />
+          </>
+        )}
       </Modal>
       <Modal
         uniqueKey={'HYSTEROSCOPY' + patientInfo?.activeVisitId}
@@ -2892,11 +3044,14 @@ function Prescription({
                 label="Hystero/Lap Time"
                 className="bg-white rounded-lg w-max-content mb-10"
                 name="hysteroscopyTime"
-                onChange={(newValue) =>
+                maxDate={dayjs()}
+                onChange={(newValue) => {
                   setHysteroscopyTime(
-                    dayjs(newValue).format('YYYY-MM-DDTHH:mm:00[Z]'),
+                    newValue && dayjs(newValue).isValid()
+                      ? dayjs(newValue).toISOString()
+                      : null,
                   )
-                }
+                }}
                 viewRenderers={{
                   hours: renderTimeViewClock,
                   minutes: renderTimeViewClock,
@@ -2917,14 +3072,34 @@ function Prescription({
                 <Button
                   variant="contained"
                   className="text-white capitalize"
-                  disabled={!hysteroscopyTime}
-                  onClick={() =>
+                  disabled={
+                    !hysteroscopyTime ||
+                    !dayjs(hysteroscopyTime).isValid() ||
+                    dayjs(hysteroscopyTime)
+                      .startOf('day')
+                      .isAfter(dayjs().startOf('day')) ||
+                    startHysteroscopyMutation.isPending
+                  }
+                  onClick={() => {
+                    if (
+                      !dayjs(hysteroscopyTime).isValid() ||
+                      dayjs(hysteroscopyTime)
+                        .startOf('day')
+                        .isAfter(dayjs().startOf('day'))
+                    ) {
+                      toast.error(
+                        'Please select today or a previous treatment start date',
+                      )
+                      return
+                    }
                     startHysteroscopyMutation.mutate(
                       resolvedHysteroscopyVisitId,
                     )
-                  }
+                  }}
                 >
-                  Start {selectedHysteroLapType}
+                  {startHysteroscopyMutation.isPending
+                    ? 'Starting...'
+                    : `Start ${selectedHysteroLapType}`}
                 </Button>
               </div>
             </div>

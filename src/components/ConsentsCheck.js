@@ -17,7 +17,7 @@ import { toast } from 'react-toastify'
 function ConsentsCheck({ consentType, patientInfo, reviewConsents }) {
   const userDetails = useSelector((state) => state.user)
   const [checkedConsents, setCheckedConsents] = useState({})
-  const showTreatmentStartDate = consentType === 'ICSI' || consentType === 'FET'
+  const showTreatmentStartDate = ['ICSI', 'IUI', 'FET'].includes(consentType)
   const [treatmentStartDate, setTreatmentStartDate] = useState(
     dayjs().format('YYYY-MM-DD'),
   )
@@ -60,6 +60,10 @@ function ConsentsCheck({ consentType, patientInfo, reviewConsents }) {
     }
   }, [consentsData])
 
+  useEffect(() => {
+    setTreatmentStartDate(dayjs().format('YYYY-MM-DD'))
+  }, [patientInfo?.activeVisitId, consentType])
+
   const convertToNormalCase = (str) => {
     let words = str.split('_')
     let capitalizedWords = words.map(
@@ -82,9 +86,16 @@ function ConsentsCheck({ consentType, patientInfo, reviewConsents }) {
   }
 
   const handleReviewConsents = () => {
-    if (!treatmentStartDate && showTreatmentStartDate) {
-      toast.error('Please select a treatment start date')
-      return
+    if (showTreatmentStartDate) {
+      const selectedDate = dayjs(treatmentStartDate)
+      if (
+        !treatmentStartDate ||
+        !selectedDate.isValid() ||
+        selectedDate.startOf('day').isAfter(dayjs().startOf('day'))
+      ) {
+        toast.error('Please select today or a previous treatment start date')
+        return
+      }
     }
 
     if (confirm('Are you sure you want to review consents?')) {
@@ -177,9 +188,7 @@ function ConsentsCheck({ consentType, patientInfo, reviewConsents }) {
           onClick={handleReviewConsents}
           disabled={!canStartTreatment || reviewConsents.isPending}
         >
-          {consentType === 'ICSI' || consentType === 'FET'
-            ? `Start ${consentType}`
-            : 'Review Consents'}
+          {showTreatmentStartDate ? `Start ${consentType}` : 'Review Consents'}
         </Button>
       )}
     </div>
