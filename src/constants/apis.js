@@ -447,17 +447,78 @@ export const getNewPatientTracker = async (token, branch) => {
   return response.json()
 }
 
-export const getAllPatientTracker = async (token) => {
+export const getAllPatientTracker = async (token, params = {}) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
   myHeaders.append('Content-Type', 'application/json')
+
+  const query = new URLSearchParams()
+  if (params.fromDate) query.append('fromDate', params.fromDate)
+  if (params.toDate) query.append('toDate', params.toDate)
+  if (params.branchId) query.append('branchId', params.branchId)
+  if (params.patientId) query.append('patientId', params.patientId)
+  const qs = query.toString()
+
   const response = await fetch(
-    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_ALL_PATIENT_TRACKER}`,
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_ALL_PATIENT_TRACKER}${qs ? `?${qs}` : ''}`,
     {
       method: 'GET',
       headers: myHeaders,
       redirect: 'follow',
       credentials: 'include',
+    },
+  )
+
+  return response.json()
+}
+
+export const getPatientTrackerByPatientId = async (token, patientId) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_PATIENT_TRACKER_BY_PATIENT}/${encodeURIComponent(patientId)}`,
+    {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+
+  return response.json()
+}
+
+export const createPatientTrackerData = async (token, payload) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.CREATE_PATIENT_TRACKER}`,
+    {
+      method: 'POST',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+      body: JSON.stringify(payload),
+    },
+  )
+
+  return response.json()
+}
+
+export const editPatientTrackerData = async (token, payload) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.EDIT_PATIENT_TRACKER}`,
+    {
+      method: 'PUT',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+      body: JSON.stringify(payload),
     },
   )
 

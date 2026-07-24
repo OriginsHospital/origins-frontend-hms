@@ -66,10 +66,16 @@ import {
   getVisitsByPatientId,
   getPackageData,
   getAllPatients,
+  getAllPatientTracker,
+  getPatientTrackerByPatientId,
+  createPatientTrackerData,
+  editPatientTrackerData,
 } from '@/constants/apis'
 import SearchIcon from '@mui/icons-material/Search'
 import CircularProgress from '@mui/material/CircularProgress'
 import { debounce } from 'lodash'
+import SummaryAutomatedEntryDrawer from './SummaryAutomatedEntryDrawer'
+import AddIcon from '@mui/icons-material/Add'
 import {
   BarChart,
   Bar,
@@ -309,7 +315,14 @@ MemoizedSearchInput.displayName = 'MemoizedSearchInput'
 
 // Custom Patient Search with Dropdown - Uncontrolled to prevent focus loss
 const PatientSearchAutocomplete = React.memo(
-  ({ onSelectPatient, onSearch, isLoading, suggestions = [] }) => {
+  ({
+    onSelectPatient,
+    onSearch,
+    isLoading,
+    suggestions = [],
+    label = 'Search Patient',
+    placeholder = 'Enter name or mobile number',
+  }) => {
     const [showSuggestions, setShowSuggestions] = useState(false)
     const [highlightedIndex, setHighlightedIndex] = useState(-1)
     const inputRef = useRef(null)
@@ -411,8 +424,8 @@ const PatientSearchAutocomplete = React.memo(
         <TextField
           inputRef={inputRef}
           fullWidth
-          label="Search Patient"
-          placeholder="Enter name or mobile number"
+          label={label}
+          placeholder={placeholder}
           size="small"
           variant="outlined"
           defaultValue=""
@@ -753,6 +766,18 @@ function PatientTrackerReports() {
   const [automatedExportMenuAnchor, setAutomatedExportMenuAnchor] =
     useState(null)
 
+  // Tracker overlays + entry/edit drawer (Summary Automated)
+  const [trackerOverrides, setTrackerOverrides] = useState({}) // keyed by patientId
+  const [entryDrawerOpen, setEntryDrawerOpen] = useState(false)
+  const [entryDrawerMode, setEntryDrawerMode] = useState('create') // create | edit
+  const [entryPatientRow, setEntryPatientRow] = useState(null)
+  const [entryTrackerRecord, setEntryTrackerRecord] = useState(null)
+  const [entryDrawerLoading, setEntryDrawerLoading] = useState(false)
+  const [automatedPatientSuggestions, setAutomatedPatientSuggestions] =
+    useState([])
+  const [isLoadingAutomatedPatientSearch, setIsLoadingAutomatedPatientSearch] =
+    useState(false)
+
   // Patient History popup (Summary Automated - click on patient name)
   const [patientForHistory, setPatientForHistory] = useState(null)
   const modalState = useSelector((store) => store.modal)
@@ -771,6 +796,135 @@ function PatientTrackerReports() {
       dispatch(openModal(row.patientId + 'History'))
     },
     [dispatch],
+  )
+
+  const loadTrackerOverrides = useCallback(async () => {
+    if (!userDetails?.accessToken) return
+    try {
+      const response = await getAllPatientTracker(userDetails.accessToken)
+      if (response?.status === 200 && Array.isArray(response.data)) {
+        const map = {}
+        response.data.forEach((record) => {
+          if (!record?.patientId) return
+          // Keep latest per patient (API already ordered by date/updatedAt DESC)
+          if (!map[record.patientId]) {
+            map[record.patientId] = record
+          }
+        })
+        setTrackerOverrides(map)
+      }
+    } catch (err) {
+      console.error('Error loading patient tracker overlays', err)
+    }
+  }, [userDetails?.accessToken])
+
+  const openEntryDrawerForPatient = useCallback(
+    async (patientRow) => {
+      if (!patientRow?.patientId || patientRow.patientId === '-') {
+        toast.error('Invalid patient selected', { position: 'top-right' })
+        return
+      }
+      setEntryDrawerLoading(true)
+      setEntryPatientRow(patientRow)
+      try {
+        const cached = trackerOverrides[patientRow.patientId]
+        let record = cached || null
+        if (!record) {
+          const response = await getPatientTrackerByPatientId(
+            userDetails.accessToken,
+            patientRow.patientId,
+          )
+          if (response?.status === 200 && response.data) {
+            record = response.data
+          }
+        }
+        setEntryTrackerRecord(record)
+        setEntryDrawerMode(record?.id ? 'edit' : 'create')
+        setEntryDrawerOpen(true)
+      } catch (err) {
+        console.error(err)
+        toast.error('Unable to open tracker form', { position: 'top-right' })
+      } finally {
+        setEntryDrawerLoading(false)
+      }
+    },
+    [trackerOverrides, userDetails?.accessToken],
+  )
+
+  const handleEntryDrawerSaved = useCallback((savedRecord) => {
+    if (!savedRecord?.patientId) return
+    setTrackerOverrides((prev) => ({
+      ...prev,
+      [savedRecord.patientId]: savedRecord,
+    }))
+  }, [])
+
+  const debouncedAutomatedPatientSearch = useMemo(
+    () =>
+      debounce(async (searchText) => {
+        if (!searchText || searchText.trim().length < 2) {
+          setAutomatedPatientSuggestions([])
+          return
+        }
+        setIsLoadingAutomatedPatientSearch(true)
+        try {
+          const response = await getAllPatients(
+            userDetails.accessToken,
+            searchText.trim(),
+          )
+          if (response?.status === 200 && response.data) {
+            setAutomatedPatientSuggestions(response.data || [])
+          } else {
+            setAutomatedPatientSuggestions([])
+          }
+        } catch (err) {
+          console.error(err)
+          setAutomatedPatientSuggestions([])
+        } finally {
+          setIsLoadingAutomatedPatientSearch(false)
+        }
+      }, 300),
+    [userDetails.accessToken],
+  )
+
+  const handleAutomatedPatientSelect = useCallback(
+    async (patient) => {
+      if (!patient) return
+      const patientName =
+        `${patient.lastName || ''} ${patient.firstName || ''}`.trim() ||
+        patient.Name ||
+        patient.patientName ||
+        ''
+      const row = {
+        patientId: patient.patientId,
+        patientName,
+        mobileNumber: patient.mobileNo || patient.mobileNumber || '',
+        date: patient.registrationDate || patient.createdAt || dayjs(),
+        branch: patient.branch || patient.branchCode || '',
+        branchId: patient.branchId,
+        referralName: patient.referralName || '',
+        plan: patient.plan || '',
+        treatmentType: patient.treatmentType || '',
+        cycleStatus: '',
+        stageOfCycle: patient.stageOfCycle || '',
+        doctorsPackage: 0,
+        marketingPackage: 0,
+        registrationAmount: 0,
+        paidAmount: 0,
+        icsiD1: '-',
+        opu: '-',
+        fetD1: '-',
+        fet: '-',
+        uptResult: '-',
+        numberOfEmbryos: 0,
+        numberOfEmbryosUsed: 0,
+        numberOfEmbryosDiscarded: 0,
+      }
+      setAutomatedSummarySearch(patient.patientId || patientName)
+      setAutomatedPatientSuggestions([])
+      await openEntryDrawerForPatient(row)
+    },
+    [openEntryDrawerForPatient],
   )
 
   // Summary Graph data
@@ -1678,8 +1832,9 @@ function PatientTrackerReports() {
   useEffect(() => {
     return () => {
       debouncedGetPatientSuggestions.cancel()
+      debouncedAutomatedPatientSearch.cancel()
     }
-  }, [debouncedGetPatientSuggestions])
+  }, [debouncedGetPatientSuggestions, debouncedAutomatedPatientSearch])
 
   // Fetch all patients for Summary Automated tab
   useEffect(() => {
@@ -1687,6 +1842,8 @@ function PatientTrackerReports() {
       const summaryAutomatedTabIndex = hasDataSummaryAccess ? 2 : 0
       if (activeTab === summaryAutomatedTabIndex) {
         setIsLoadingAutomatedSummary(true)
+        // Load manual tracker overlays in parallel (edit/entry source of truth)
+        loadTrackerOverrides()
         try {
           const response = await getAllPatients(userDetails.accessToken, '')
           if (response.status === 200 && response.data) {
@@ -2038,7 +2195,12 @@ function PatientTrackerReports() {
       }
     }
     fetchAutomatedSummary()
-  }, [activeTab, userDetails.accessToken, hasDataSummaryAccess])
+  }, [
+    activeTab,
+    userDetails.accessToken,
+    hasDataSummaryAccess,
+    loadTrackerOverrides,
+  ])
 
   // Fetch all patients for Summary Graph tab
   useEffect(() => {
@@ -2065,7 +2227,7 @@ function PatientTrackerReports() {
   }, [activeTab, userDetails.accessToken, hasDataSummaryAccess])
 
   // Handle save
-  const handleSave = () => {
+  const handleSave = async () => {
     // Validate required fields
     if (
       !formData.patientId ||
@@ -2080,45 +2242,101 @@ function PatientTrackerReports() {
       return
     }
 
-    // TODO: Implement API call to save data
-    // Example API call structure:
-    // const response = await savePatientTrackerData(userDetails.accessToken, {
-    //   date: formData.date.format('YYYY-MM-DD'),
-    //   branchId: formData.branch,
-    //   patientId: formData.patientId,
-    //   patientName: formData.patientName,
-    //   mobileNumber: formData.mobileNumber,
-    //   referralSource: formData.referralSource,
-    //   referralName: formData.referralName,
-    //   treatmentType: formData.treatmentType,
-    //   cycleStatus: formData.cycleStatus,
-    //   stageOfCycle: formData.stageOfCycle,
-    //   packageName: formData.packageName,
-    //   packageAmount: formData.packageAmount,
-    //   registrationAmount: formData.registrationAmount,
-    //   paidAmount: formData.paidAmount,
-    //   numberOfEmbryos: formData.numberOfEmbryos,
-    //   numberOfEmbryosUsed: formData.numberOfEmbryosUsed,
-    //   lastRenewalDate: formData.lastRenewalDate?.format('YYYY-MM-DD'),
-    //   numberOfEmbryosDiscarded: formData.numberOfEmbryosDiscarded,
-    //   uptResult: formData.uptResult,
-    //   uptManualEntry: formData.uptManualEntry,
-    // })
-    // if (response.status === 200) {
-    //   toast.success('Patient tracker data saved successfully!')
-    //   queryClient.invalidateQueries(['patientTrackerSummary'])
-    //   // Optionally reset form after successful save
-    //   // setFormData({ ...initialFormData })
-    // }
+    const packageAmt = parseFloat(formData.packageAmount) || 0
+    const paidAmt = parseFloat(formData.paidAmount) || 0
+    const regAmt = parseFloat(formData.registrationAmount) || 0
+    const computedPending =
+      paidAmt === 0 ? packageAmt - regAmt : packageAmt - paidAmt
+    const embryos =
+      (parseFloat(formData.numberOfEmbryos) || 0) -
+      (parseFloat(formData.numberOfEmbryosUsed) || 0)
 
-    // For now, show success message
-    // The data entered will be reflected in the Summary tab automatically
-    toast.success(
-      'Patient tracker data saved successfully! The data will appear in the Summary tab.',
-      {
+    const payload = {
+      date: dayjs(formData.date).format('YYYY-MM-DD'),
+      branchId: Number(formData.branch),
+      patientId: formData.patientId,
+      patientName: formData.patientName,
+      mobileNumber: formData.mobileNumber || null,
+      referralSourceId: formData.referralSource
+        ? Number(formData.referralSource)
+        : null,
+      referralName: formData.referralName || null,
+      plan: formData.plan || null,
+      treatmentType: formData.treatmentType,
+      cycleStatus: formData.cycleStatus,
+      stageOfCycle: formData.stageOfCycle || null,
+      packageName: formData.packageName || null,
+      packageAmount: packageAmt,
+      registrationAmount: regAmt,
+      paidAmount: paidAmt,
+      pendingAmount: computedPending,
+      numberOfEmbryos: parseInt(formData.numberOfEmbryos, 10) || 0,
+      numberOfEmbryosUsed: parseInt(formData.numberOfEmbryosUsed, 10) || 0,
+      numberOfEmbryosDiscarded:
+        parseInt(formData.numberOfEmbryosDiscarded, 10) || 0,
+      lastRenewalDate: formData.lastRenewalDate
+        ? dayjs(formData.lastRenewalDate).format('YYYY-MM-DD')
+        : null,
+      embryosRemaining: embryos,
+      uptResult: formData.uptResult || null,
+      uptManualEntry: formData.uptManualEntry || null,
+    }
+
+    try {
+      dispatch(showLoader())
+      const existing = trackerOverrides[formData.patientId]
+      let response
+      if (existing?.id) {
+        response = await editPatientTrackerData(userDetails.accessToken, {
+          id: existing.id,
+          ...payload,
+        })
+      } else {
+        // Check API once more before create
+        const lookup = await getPatientTrackerByPatientId(
+          userDetails.accessToken,
+          formData.patientId,
+        )
+        if (lookup?.status === 200 && lookup.data?.id) {
+          response = await editPatientTrackerData(userDetails.accessToken, {
+            id: lookup.data.id,
+            ...payload,
+          })
+        } else {
+          response = await createPatientTrackerData(
+            userDetails.accessToken,
+            payload,
+          )
+        }
+      }
+
+      if (response?.status === 200) {
+        toast.success('Patient tracker data saved successfully!', {
+          position: 'top-right',
+        })
+        const saved = response.data || payload
+        if (saved.patientId) {
+          setTrackerOverrides((prev) => ({
+            ...prev,
+            [saved.patientId]: saved,
+          }))
+        }
+      } else {
+        toast.error(
+          response?.message || 'Failed to save patient tracker data',
+          {
+            position: 'top-right',
+          },
+        )
+      }
+    } catch (err) {
+      console.error(err)
+      toast.error('Failed to save patient tracker data', {
         position: 'top-right',
-      },
-    )
+      })
+    } finally {
+      dispatch(hideLoader())
+    }
   }
 
   // Create stable onChange handlers using useRef - initialized once, never change
@@ -2838,8 +3056,38 @@ function PatientTrackerReports() {
         headerAlign: 'center',
         align: 'center',
       },
+      {
+        field: 'actions',
+        headerName: 'Actions',
+        width: 140,
+        headerAlign: 'center',
+        align: 'center',
+        sortable: false,
+        filterable: false,
+        renderCell: (params) => {
+          const hasEntry = Boolean(
+            params.row?.hasTrackerEntry ||
+              trackerOverrides[params.row?.patientId],
+          )
+          return (
+            <Button
+              size="small"
+              variant={hasEntry ? 'outlined' : 'contained'}
+              color={hasEntry ? 'primary' : 'success'}
+              startIcon={hasEntry ? <EditIcon /> : <AddIcon />}
+              onClick={(e) => {
+                e.stopPropagation()
+                openEntryDrawerForPatient(params.row)
+              }}
+              sx={{ textTransform: 'none', minWidth: 110 }}
+            >
+              {hasEntry ? 'Edit' : 'Data Entry'}
+            </Button>
+          )
+        },
+      },
     ],
-    [handleOpenPatientHistory],
+    [handleOpenPatientHistory, openEntryDrawerForPatient, trackerOverrides],
   )
 
   // Branch options for Summary Automated tab
@@ -3352,7 +3600,7 @@ function PatientTrackerReports() {
       const cycleStatusValue =
         calculatedRegistrationAmount > 0 ? 'Registered' : 'Follow up'
 
-      return {
+      const baseRow = {
         id: patient.id || patient.patientId || `patient-${Math.random()}`,
         date: registrationDate,
         branch: branchName,
@@ -3561,7 +3809,43 @@ function PatientTrackerReports() {
           patient.numberOfEmbryosDiscarded ||
           patient.NumberOfEmbryosDiscarded ||
           0,
+        hasTrackerEntry: false,
       }
+
+      // Overlay manually entered tracker data (preferred for missing attributes)
+      const tracker = trackerOverrides[baseRow.patientId]
+      if (tracker) {
+        baseRow.hasTrackerEntry = true
+        baseRow.trackerRecordId = tracker.id
+        if (tracker.cycleStatus) baseRow.cycleStatus = tracker.cycleStatus
+        if (tracker.stageOfCycle) baseRow.stageOfCycle = tracker.stageOfCycle
+        if (tracker.plan) baseRow.plan = tracker.plan
+        if (tracker.treatmentType) baseRow.treatmentType = tracker.treatmentType
+        if (tracker.referralName) baseRow.referralName = tracker.referralName
+        if (tracker.icsiD1) baseRow.icsiD1 = tracker.icsiD1
+        if (tracker.opu) baseRow.opu = tracker.opu
+        if (tracker.fetD1) baseRow.fetD1 = tracker.fetD1
+        if (tracker.fet) baseRow.fet = tracker.fet
+        if (tracker.uptResult) baseRow.uptResult = tracker.uptResult
+        if (tracker.numberOfEmbryos != null)
+          baseRow.numberOfEmbryos = tracker.numberOfEmbryos
+        if (tracker.numberOfEmbryosUsed != null)
+          baseRow.numberOfEmbryosUsed = tracker.numberOfEmbryosUsed
+        if (tracker.embryosRemaining != null)
+          baseRow.embryosRemaining = tracker.embryosRemaining
+        if (tracker.lastRenewalDate)
+          baseRow.lastRenewalDate = tracker.lastRenewalDate
+        if (tracker.numberOfEmbryosDiscarded != null)
+          baseRow.numberOfEmbryosDiscarded = tracker.numberOfEmbryosDiscarded
+        if (tracker.registrationAmount != null)
+          baseRow.registrationAmount = Number(tracker.registrationAmount)
+        if (tracker.paidAmount != null)
+          baseRow.paidAmount = Number(tracker.paidAmount)
+        if (tracker.pendingAmount != null)
+          baseRow.pendingAmount = Number(tracker.pendingAmount)
+      }
+
+      return baseRow
     })
   }, [
     automatedSummaryData,
@@ -3573,14 +3857,17 @@ function PatientTrackerReports() {
     automatedSummaryTreatmentType,
     automatedSummarySearch,
     patientPackageData,
+    trackerOverrides,
   ])
 
   const automatedSummaryExportColumns = useMemo(
     () =>
-      automatedSummaryColumns.map(({ field, headerName }) => ({
-        field,
-        headerName,
-      })),
+      automatedSummaryColumns
+        .filter((col) => col.field !== 'actions')
+        .map(({ field, headerName }) => ({
+          field,
+          headerName,
+        })),
     [automatedSummaryColumns],
   )
 
@@ -4742,7 +5029,7 @@ function PatientTrackerReports() {
               </FormControl>
               <TextField
                 size="small"
-                placeholder="Search by ID, Name, Mobile..."
+                placeholder="Filter table by ID, Name, Mobile..."
                 value={automatedSummarySearch}
                 onChange={(e) => setAutomatedSummarySearch(e.target.value)}
                 InputProps={{
@@ -4767,6 +5054,18 @@ function PatientTrackerReports() {
                   },
                 }}
               />
+              <Box sx={{ width: 280, minWidth: 240 }}>
+                <PatientSearchAutocomplete
+                  label="Select patient for entry"
+                  placeholder="Search then open Edit / Data Entry"
+                  onSelectPatient={handleAutomatedPatientSelect}
+                  onSearch={debouncedAutomatedPatientSearch}
+                  isLoading={
+                    isLoadingAutomatedPatientSearch || entryDrawerLoading
+                  }
+                  suggestions={automatedPatientSuggestions}
+                />
+              </Box>
               <Tooltip title="Export">
                 <span>
                   <Button
@@ -4901,6 +5200,18 @@ function PatientTrackerReports() {
                 />
               )}
             </Box>
+
+            <SummaryAutomatedEntryDrawer
+              open={entryDrawerOpen}
+              onClose={() => setEntryDrawerOpen(false)}
+              mode={entryDrawerMode}
+              patientRow={entryPatientRow}
+              trackerRecord={entryTrackerRecord}
+              accessToken={userDetails.accessToken}
+              branchOptions={branchOptions}
+              referralSourceOptions={referralSourceOptions}
+              onSaved={handleEntryDrawerSaved}
+            />
           </CardContent>
         </TabPanel>
 
