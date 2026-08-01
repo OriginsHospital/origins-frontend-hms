@@ -63,15 +63,16 @@ import {
   getEmbryologyHistoryByPatientId,
   getSavedLabTestResult,
   getLineBillsAndNotesForAppointment,
-  getVisitsByPatientId,
   getPackageData,
   getAllPatients,
   getAllPatientTracker,
+  getPatientTrackerSummaryAutomated,
   getPatientTrackerByPatientId,
   createPatientTrackerData,
   editPatientTrackerData,
 } from '@/constants/apis'
 import SearchIcon from '@mui/icons-material/Search'
+import CloseIcon from '@mui/icons-material/Close'
 import CircularProgress from '@mui/material/CircularProgress'
 import { debounce } from 'lodash'
 import SummaryAutomatedEntryDrawer from './SummaryAutomatedEntryDrawer'
@@ -718,6 +719,20 @@ const MemoizedDatePicker = ({
 
 MemoizedDatePicker.displayName = 'MemoizedDatePicker'
 
+/** Stable module-level tab panel — never define inside the page (causes remount/focus loss). */
+function PatientTrackerTabPanel({ children, value, index }) {
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`patient-tracker-tabpanel-${index}`}
+      aria-labelledby={`patient-tracker-tab-${index}`}
+    >
+      {value === index ? <Box>{children}</Box> : null}
+    </div>
+  )
+}
+
 function PatientTrackerReports() {
   const userDetails = useSelector((store) => store.user)
   const dropdowns = useSelector((store) => store.dropdowns)
@@ -763,8 +778,10 @@ function PatientTrackerReports() {
   const [automatedSummaryTreatmentType, setAutomatedSummaryTreatmentType] =
     useState('')
   const [automatedSummarySearch, setAutomatedSummarySearch] = useState('')
+  const [tableSearchInput, setTableSearchInput] = useState('')
   const [automatedExportMenuAnchor, setAutomatedExportMenuAnchor] =
     useState(null)
+  const automatedExportButtonRef = useRef(null)
 
   // Tracker overlays + entry/edit drawer (Summary Automated)
   const [trackerOverrides, setTrackerOverrides] = useState({}) // keyed by patientId
@@ -777,6 +794,8 @@ function PatientTrackerReports() {
     useState([])
   const [isLoadingAutomatedPatientSearch, setIsLoadingAutomatedPatientSearch] =
     useState(false)
+  const [entryPatientOption, setEntryPatientOption] = useState(null)
+  const [entryPatientInput, setEntryPatientInput] = useState('')
 
   // Patient History popup (Summary Automated - click on patient name)
   const [patientForHistory, setPatientForHistory] = useState(null)
@@ -889,7 +908,10 @@ function PatientTrackerReports() {
 
   const handleAutomatedPatientSelect = useCallback(
     async (patient) => {
-      if (!patient) return
+      if (!patient) {
+        setEntryPatientOption(null)
+        return
+      }
       const patientName =
         `${patient.lastName || ''} ${patient.firstName || ''}`.trim() ||
         patient.Name ||
@@ -920,12 +942,25 @@ function PatientTrackerReports() {
         numberOfEmbryosUsed: 0,
         numberOfEmbryosDiscarded: 0,
       }
-      setAutomatedSummarySearch(patient.patientId || patientName)
+      setEntryPatientOption(patient)
       setAutomatedPatientSuggestions([])
       await openEntryDrawerForPatient(row)
     },
     [openEntryDrawerForPatient],
   )
+
+  const getAutomatedPatientOptionLabel = useCallback((patient) => {
+    if (!patient) return ''
+    if (typeof patient === 'string') return patient
+    const name =
+      `${patient.lastName || ''} ${patient.firstName || ''}`.trim() ||
+      patient.Name ||
+      patient.patientName ||
+      ''
+    const id = patient.patientId || ''
+    const mobile = patient.mobileNo || patient.mobileNumber || ''
+    return [id, name, mobile].filter(Boolean).join(' · ')
+  }, [])
 
   // Summary Graph data
   const [graphSummaryData, setGraphSummaryData] = useState([])
@@ -1836,370 +1871,112 @@ function PatientTrackerReports() {
     }
   }, [debouncedGetPatientSuggestions, debouncedAutomatedPatientSearch])
 
+  // Keep search input focus stable: local value updates instantly, filter debounces
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setAutomatedSummarySearch(tableSearchInput)
+    }, 250)
+    return () => clearTimeout(timer)
+  }, [tableSearchInput])
+
   // Fetch all patients for Summary Automated tab
   useEffect(() => {
-    const fetchAutomatedSummary = async () => {
-      const summaryAutomatedTabIndex = hasDataSummaryAccess ? 2 : 0
-      if (activeTab === summaryAutomatedTabIndex) {
-        setIsLoadingAutomatedSummary(true)
-        // Load manual tracker overlays in parallel (edit/entry source of truth)
-        loadTrackerOverrides()
-        try {
-          const response = await getAllPatients(userDetails.accessToken, '')
-          if (response.status === 200 && response.data) {
-            // Debug: Log first patient to check branch data structure
-            if (response.data && response.data.length > 0) {
-              console.log('Sample patient data for branch:', {
-                id: response.data[0].id,
-                patientId: response.data[0].patientId,
-                branchId: response.data[0].branchId,
-                branch: response.data[0].branch,
-                branchCode: response.data[0].branchCode,
-                branchName: response.data[0].branchName,
-                allKeys: Object.keys(response.data[0]),
-              })
+    const summaryAutomatedTabIndex = hasDataSummaryAccess ? 2 : 0
+    if (activeTab !== summaryAutomatedTabIndex) return
+    if (!userDetails?.accessToken) return
+    if (!automatedSummaryFromDate || !automatedSummaryToDate) return
+
+    const fromDate = dayjs(automatedSummaryFromDate).format('YYYY-MM-DD')
+    const toDate = dayjs(automatedSummaryToDate).format('YYYY-MM-DD')
+    if (!dayjs(fromDate).isValid() || !dayjs(toDate).isValid()) return
+
+    let cancelled = false
+    setIsLoadingAutomatedSummary(true)
+
+    // Overlays load in parallel; do not block the table on them
+    loadTrackerOverrides()
+    ;(async () => {
+      try {
+        const response = await getPatientTrackerSummaryAutomated(
+          userDetails.accessToken,
+          {
+            fromDate,
+            toDate,
+            branch:
+              automatedSummaryBranch && automatedSummaryBranch !== 'ALL'
+                ? automatedSummaryBranch
+                : undefined,
+          },
+        )
+
+        if (cancelled) return
+
+        if (response?.status === 200 && Array.isArray(response.data)) {
+          const sortedData = [...response.data].sort((a, b) => {
+            const dateA = dayjs(
+              a.registeredDate || a.createdAt || a.registrationDate,
+            )
+            const dateB = dayjs(
+              b.registeredDate || b.createdAt || b.registrationDate,
+            )
+            if (dateA.isBefore(dateB)) return -1
+            if (dateA.isAfter(dateB)) return 1
+            return 0
+          })
+
+          // Package fields already come from the summary API — map once for row helpers
+          const packageMap = {}
+          sortedData.forEach((patient) => {
+            if (!patient?.id) return
+            const packageData = {
+              doctorsPackage:
+                Number(
+                  patient.doctorsPackage ?? patient.doctorSuggestedPackage,
+                ) || 0,
+              marketingPackage: Number(patient.marketingPackage) || 0,
+              registrationAmount: Number(patient.registrationAmount) || 0,
+              paidAmount: Number(patient.paidAmount) || 0,
+              pendingAmount: Number(patient.pendingAmount) || 0,
             }
-            // Sort by creation date or patientId ascending
-            const sortedData = (response.data || []).sort((a, b) => {
-              const dateA = dayjs(
-                a.createdAt || a.CreatedAt || a.date || a.Date,
-              )
-              const dateB = dayjs(
-                b.createdAt || b.CreatedAt || b.date || b.Date,
-              )
-              return dateA.isBefore(dateB) ? -1 : dateA.isAfter(dateB) ? 1 : 0
-            })
-            setAutomatedSummaryData(sortedData)
-
-            // Fetch package data for each patient (via visits) - fetch in background
-            const allPackageDataMap = {} // Accumulate data across all batches
-
-            // Process all patients for package data (Summary Automated financial columns)
-            const patientsToProcess = sortedData
-
-            // Process in batches of 15 to avoid overwhelming the API
-            const batchSize = 15
-            for (let i = 0; i < patientsToProcess.length; i += batchSize) {
-              const batch = patientsToProcess.slice(i, i + batchSize)
-              const batchPackageDataMap = {} // Package data for this batch only
-
-              await Promise.all(
-                batch.map(async (patient) => {
-                  // Use patient.id (database ID) as primary key for consistency
-                  const patientId = patient.id
-                  const patientDisplayId =
-                    patient.patientId || patient.PatientId
-
-                  // Debug: Log patient ID structure (first patient only)
-                  if (!window._loggedPatientIdStructure && patientId) {
-                    window._loggedPatientIdStructure = true
-                    console.log('[Patient ID Structure]', {
-                      id: patientId,
-                      idType: typeof patientId,
-                      patientId: patientDisplayId,
-                      patientIdType: typeof patientDisplayId,
-                    })
-                  }
-
-                  if (
-                    !patientId ||
-                    patientId === 'null' ||
-                    patientId === null ||
-                    patientId === undefined
-                  ) {
-                    return
-                  }
-
-                  // First, try to use activeVisitId directly from patient data (most efficient)
-                  const activeVisitId =
-                    patient.activeVisitId ||
-                    patient.ActiveVisitId ||
-                    patient.activeVisit?.id
-
-                  let visitIdsToCheck = []
-
-                  if (
-                    activeVisitId &&
-                    activeVisitId !== 'null' &&
-                    activeVisitId !== null &&
-                    activeVisitId !== undefined
-                  ) {
-                    // Use active visit directly
-                    visitIdsToCheck = [activeVisitId]
-                  } else {
-                    // Fallback: fetch all visits and prioritize active ones
-                    try {
-                      const visitsResponse = await getVisitsByPatientId(
-                        userDetails.accessToken,
-                        patientId,
-                      )
-                      let visits = []
-                      if (visitsResponse && visitsResponse.status === 200) {
-                        if (Array.isArray(visitsResponse.data)) {
-                          visits = visitsResponse.data
-                        } else if (
-                          visitsResponse.data?.data &&
-                          Array.isArray(visitsResponse.data.data)
-                        ) {
-                          visits = visitsResponse.data.data
-                        }
-                      }
-
-                      if (visits.length > 0) {
-                        // Separate active and inactive visits
-                        const activeVisits = visits.filter(
-                          (v) =>
-                            v.isActive === 1 ||
-                            v.isActive === true ||
-                            v.isActive === '1',
-                        )
-                        const inactiveVisits = visits.filter(
-                          (v) =>
-                            !(
-                              v.isActive === 1 ||
-                              v.isActive === true ||
-                              v.isActive === '1'
-                            ),
-                        )
-
-                        // Sort inactive visits by date (newest first) as fallback
-                        const sortedInactiveVisits = [...inactiveVisits].sort(
-                          (a, b) => {
-                            const dateA = dayjs(
-                              a.createdAt ||
-                                a.CreatedAt ||
-                                a.visitDate ||
-                                a.date ||
-                                0,
-                            )
-                            const dateB = dayjs(
-                              b.createdAt ||
-                                b.CreatedAt ||
-                                b.visitDate ||
-                                b.date ||
-                                0,
-                            )
-                            return dateB.isAfter(dateA) ? 1 : -1
-                          },
-                        )
-
-                        // Build visit IDs list: active first, then inactive sorted by date
-                        visitIdsToCheck = [
-                          ...activeVisits
-                            .map((v) => v.id || v.visitId || v.VisitId)
-                            .filter(Boolean),
-                          ...sortedInactiveVisits
-                            .map((v) => v.id || v.visitId || v.VisitId)
-                            .filter(Boolean),
-                        ]
-                      }
-                    } catch (err) {
-                      console.error(
-                        `Error fetching visits for patient ${patientId}:`,
-                        err,
-                      )
-                      return
-                    }
-                  }
-
-                  // Try to fetch package data from visits
-                  for (const visitId of visitIdsToCheck) {
-                    if (
-                      !visitId ||
-                      visitId === 'null' ||
-                      visitId === null ||
-                      visitId === undefined
-                    )
-                      continue
-
-                    try {
-                      const packageResponse = await getPackageData(
-                        userDetails.accessToken,
-                        visitId,
-                      )
-
-                      // Handle different response structures
-                      let pkgData = null
-                      if (packageResponse) {
-                        if (
-                          packageResponse.status === 200 &&
-                          packageResponse.data
-                        ) {
-                          pkgData = packageResponse.data
-                        } else if (packageResponse.data) {
-                          pkgData = packageResponse.data
-                        } else if (packageResponse.status === 200) {
-                          // Response might be the data directly
-                          pkgData = packageResponse
-                        } else {
-                          pkgData = packageResponse
-                        }
-                      }
-
-                      // Check if package data exists and is a valid object
-                      // Support both camelCase and snake_case from backend (Doctor Suggested Package, Marketing Package from Package tab)
-                      const docPkg =
-                        pkgData.doctorSuggestedPackage ??
-                        pkgData.doctor_suggested_package ??
-                        pkgData.doctorsPackage ??
-                        pkgData.doctorPackage
-                      const mktPkg =
-                        pkgData.marketingPackage ?? pkgData.marketing_package
-                      const regAmt =
-                        pkgData.registrationAmount ??
-                        pkgData.registration_amount
-                      const hasPackageFields =
-                        docPkg !== undefined ||
-                        mktPkg !== undefined ||
-                        regAmt !== undefined
-
-                      if (
-                        pkgData &&
-                        typeof pkgData === 'object' &&
-                        !Array.isArray(pkgData) &&
-                        hasPackageFields
-                      ) {
-                        // Extract package values - handle null, undefined, and 0 values
-                        const doctorSuggestedPkg =
-                          docPkg !== null && docPkg !== undefined ? docPkg : 0
-
-                        const marketingPkg =
-                          mktPkg !== null && mktPkg !== undefined ? mktPkg : 0
-
-                        const registrationAmt =
-                          regAmt !== null && regAmt !== undefined ? regAmt : 0
-
-                        // Paid/pending from backend (getPackageService now returns these)
-                        const paid =
-                          pkgData.paidAmount ?? pkgData.paid_amount ?? 0
-                        const pending =
-                          pkgData.pendingAmount ?? pkgData.pending_amount ?? 0
-
-                        // Parse and store package data (store even if 0, as it confirms package exists)
-                        const packageData = {
-                          doctorsPackage:
-                            doctorSuggestedPkg !== null &&
-                            doctorSuggestedPkg !== undefined &&
-                            !isNaN(parseFloat(doctorSuggestedPkg))
-                              ? parseFloat(doctorSuggestedPkg)
-                              : 0,
-                          marketingPackage:
-                            marketingPkg !== null &&
-                            marketingPkg !== undefined &&
-                            !isNaN(parseFloat(marketingPkg))
-                              ? parseFloat(marketingPkg)
-                              : 0,
-                          registrationAmount:
-                            registrationAmt !== null &&
-                            registrationAmt !== undefined &&
-                            !isNaN(parseFloat(registrationAmt))
-                              ? parseFloat(registrationAmt)
-                              : 0,
-                          paidAmount:
-                            paid !== null &&
-                            paid !== undefined &&
-                            !isNaN(parseFloat(paid))
-                              ? parseFloat(paid)
-                              : 0,
-                          pendingAmount:
-                            pending !== null &&
-                            pending !== undefined &&
-                            !isNaN(parseFloat(pending))
-                              ? parseFloat(pending)
-                              : 0,
-                        }
-
-                        // Store with patient.id as primary key (in batch map)
-                        // Convert to string for consistent key matching (object keys are strings)
-                        const patientIdKey = String(patientId)
-                        batchPackageDataMap[patientIdKey] = packageData
-
-                        // Also store with number key for compatibility
-                        batchPackageDataMap[Number(patientId)] = packageData
-
-                        // Also store with patientDisplayId if different (for fallback lookup)
-                        if (
-                          patientDisplayId &&
-                          patientDisplayId !== patientId
-                        ) {
-                          batchPackageDataMap[String(patientDisplayId)] =
-                            packageData
-                          batchPackageDataMap[patientDisplayId] = packageData
-                        }
-
-                        // Debug log for successful package fetch (uncomment for debugging)
-                        // console.log(
-                        //   `[Package Fetch] Patient ID: ${patientId}, Visit ID: ${visitId}`,
-                        //   {
-                        //     doctorSuggestedPkg: packageData.doctorsPackage,
-                        //     marketingPkg: packageData.marketingPackage,
-                        //   },
-                        // )
-
-                        break // Use the first valid package data found
-                      }
-                    } catch (err) {
-                      // Continue to next visit if package fetch fails
-                      console.error(
-                        `Error fetching package for visit ${visitId}:`,
-                        err,
-                      )
-                    }
-                  }
-                }),
-              )
-
-              // Accumulate batch data into the main map
-              Object.assign(allPackageDataMap, batchPackageDataMap)
-
-              // Update state after each batch to show progress (merge with existing data)
-              setPatientPackageData((prev) => {
-                const merged = { ...prev, ...batchPackageDataMap }
-                // Debug log (uncomment for debugging):
-                // console.log(
-                //   `[Package State] Batch ${Math.floor(i / batchSize) + 1}: Added ${Object.keys(batchPackageDataMap).length} patients`,
-                // )
-                return merged
-              })
+            const idKey = String(patient.id)
+            packageMap[idKey] = packageData
+            packageMap[Number(patient.id)] = packageData
+            if (patient.patientId) {
+              packageMap[String(patient.patientId)] = packageData
+              packageMap[patient.patientId] = packageData
             }
+          })
 
-            // Final update with all accumulated data
-            setPatientPackageData((prev) => {
-              const final = { ...prev, ...allPackageDataMap }
-              console.log(
-                `[Package Data Loaded] Total patients with package data: ${Object.keys(final).length}`,
-              )
-              // Debug: Show sample of stored keys and values
-              const sampleEntries = Object.entries(final).slice(0, 3)
-              console.log(
-                '[Package Data Sample]',
-                sampleEntries.map(([key, value]) => ({
-                  key,
-                  keyType: typeof key,
-                  doctorsPackage: value.doctorsPackage,
-                  marketingPackage: value.marketingPackage,
-                })),
-              )
-              return final
-            })
-          } else {
-            setAutomatedSummaryData([])
-            setPatientPackageData({})
-          }
-        } catch (error) {
+          setAutomatedSummaryData(sortedData)
+          setPatientPackageData(packageMap)
+        } else {
+          setAutomatedSummaryData([])
+          setPatientPackageData({})
+        }
+      } catch (error) {
+        if (!cancelled) {
           console.error('Error fetching automated summary:', error)
           setAutomatedSummaryData([])
-        } finally {
+          setPatientPackageData({})
+        }
+      } finally {
+        if (!cancelled) {
           setIsLoadingAutomatedSummary(false)
         }
       }
+    })()
+
+    return () => {
+      cancelled = true
     }
-    fetchAutomatedSummary()
   }, [
     activeTab,
     userDetails.accessToken,
     hasDataSummaryAccess,
     loadTrackerOverrides,
+    automatedSummaryFromDate,
+    automatedSummaryToDate,
+    automatedSummaryBranch,
   ])
 
   // Fetch all patients for Summary Graph tab
@@ -3327,7 +3104,7 @@ function PatientTrackerReports() {
       })
     }
 
-    // Filter by treatment type
+    // Treatment type filter (search applied after row mapping)
     if (automatedSummaryTreatmentType) {
       const selectedType = automatedSummaryTreatmentType.trim()
       filteredData = filteredData.filter((patient) => {
@@ -3339,69 +3116,6 @@ function PatientTrackerReports() {
           treatmentType === selectedType ||
           treatmentType.startsWith(selectedType)
         )
-      })
-    }
-
-    // Filter by search query
-    if (automatedSummarySearch && automatedSummarySearch.trim()) {
-      const searchQuery = automatedSummarySearch.trim().toLowerCase()
-      filteredData = filteredData.filter((patient) => {
-        // Search in patientId
-        const patientId = (patient.patientId || patient.PatientId || '')
-          .toString()
-          .toLowerCase()
-        if (patientId.includes(searchQuery)) return true
-
-        // Search in patient name
-        const patientName = (
-          patient.patientName ||
-          patient.PatientName ||
-          patient.name ||
-          patient.Name ||
-          `${patient.firstName || ''} ${patient.lastName || ''}`.trim() ||
-          ''
-        )
-          .toString()
-          .toLowerCase()
-        if (patientName.includes(searchQuery)) return true
-
-        // Search in mobile number
-        const mobileNumber = (
-          patient.mobileNumber ||
-          patient.MobileNumber ||
-          patient.mobile ||
-          patient.Mobile ||
-          ''
-        )
-          .toString()
-          .toLowerCase()
-        if (mobileNumber.includes(searchQuery)) return true
-
-        // Search in referral name
-        const referralName = (
-          patient.referralName ||
-          patient.ReferralName ||
-          ''
-        )
-          .toString()
-          .toLowerCase()
-        if (referralName.includes(searchQuery)) return true
-
-        // Search in branch
-        const branch = (
-          patient.branch ||
-          patient.Branch ||
-          patient.branchName ||
-          patient.BranchName ||
-          patient.branchCode ||
-          patient.BranchCode ||
-          ''
-        )
-          .toString()
-          .toLowerCase()
-        if (branch.includes(searchQuery)) return true
-
-        return false
       })
     }
 
@@ -3424,7 +3138,7 @@ function PatientTrackerReports() {
       4: 'KMM',
     }
 
-    return filteredData.map((patient) => {
+    const mappedRows = filteredData.map((patient) => {
       // Get branch code - multiple fallback strategies
       let branchName = '-'
 
@@ -3596,9 +3310,28 @@ function PatientTrackerReports() {
             : 0
       }
 
-      // Determine cycle status based on registration amount
+      // Prefer tracker cycle status, else registration amount heuristic
       const cycleStatusValue =
-        calculatedRegistrationAmount > 0 ? 'Registered' : 'Follow up'
+        patient.cycleStatus ||
+        patient.trackerCycleStatus ||
+        (calculatedRegistrationAmount > 0 ? 'Registered' : 'Follow up')
+
+      const formatClinicalDate = (value) => {
+        if (
+          value === undefined ||
+          value === null ||
+          value === '' ||
+          value === '-'
+        ) {
+          return '-'
+        }
+        if (/^\d{2}-\d{2}-\d{4}$/.test(String(value))) return String(value)
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(String(value))) {
+          return String(value).replace(/\//g, '-')
+        }
+        const parsed = dayjs(value)
+        return parsed.isValid() ? parsed.format('DD-MM-YYYY') : String(value)
+      }
 
       const baseRow = {
         id: patient.id || patient.patientId || `patient-${Math.random()}`,
@@ -3636,43 +3369,20 @@ function PatientTrackerReports() {
           }
 
           // First priority: Get from fetched package data (from Patient Package tab)
-          let pkgData = null
+          let pkgLookup = null
           for (const key of possibleKeys) {
             if (patientPackageData[key]) {
-              pkgData = patientPackageData[key]
+              pkgLookup = patientPackageData[key]
               break
             }
           }
 
-          // Debug: Log lookup attempts (first 3 patients only to avoid spam)
-          if (Object.keys(patientPackageData).length > 0) {
-            const debugKey = `debug_doc_${patientDbId}`
-            if (
-              !window[debugKey] &&
-              Object.keys(window).filter((k) => k.startsWith('debug_doc_'))
-                .length < 3
-            ) {
-              window[debugKey] = true
-              console.log(
-                `[Package Lookup - Doctors] Patient ID: ${patientDbId} (${patient.patientName || 'Unknown'})`,
-                {
-                  found: !!pkgData,
-                  triedKeys: possibleKeys,
-                  sampleKeys: Object.keys(patientPackageData).slice(0, 5),
-                  result: pkgData
-                    ? { doctorsPackage: pkgData.doctorsPackage }
-                    : 'NOT FOUND',
-                },
-              )
-            }
-          }
-
           if (
-            pkgData &&
-            pkgData.doctorsPackage !== undefined &&
-            pkgData.doctorsPackage !== null
+            pkgLookup &&
+            pkgLookup.doctorsPackage !== undefined &&
+            pkgLookup.doctorsPackage !== null
           ) {
-            const value = parseFloat(pkgData.doctorsPackage)
+            const value = parseFloat(pkgLookup.doctorsPackage)
             return !isNaN(value) ? value : 0
           }
 
@@ -3702,42 +3412,38 @@ function PatientTrackerReports() {
           return 0
         })(),
         marketingPackage: (() => {
-          // Use patient.id (database ID) as primary key, with fallback to patientId
           const patientDbId = patient.id
           const patientDisplayId = patient.patientId || patient.PatientId
 
-          if (!patientDbId) return 0
+          if (!patientDbId) return Number(patient.marketingPackage) || 0
 
-          // Try multiple key formats for lookup
           const possibleKeys = [
-            String(patientDbId), // "1685"
-            Number(patientDbId), // 1685
-            patientDbId, // Original format
+            String(patientDbId),
+            Number(patientDbId),
+            patientDbId,
           ]
 
           if (patientDisplayId && patientDisplayId !== patientDbId) {
             possibleKeys.push(String(patientDisplayId), patientDisplayId)
           }
 
-          // First priority: Get from fetched package data (from Patient Package tab)
-          let pkgData = null
+          let pkgLookup = null
           for (const key of possibleKeys) {
             if (patientPackageData[key]) {
-              pkgData = patientPackageData[key]
+              pkgLookup = patientPackageData[key]
               break
             }
           }
 
           if (
-            pkgData &&
-            pkgData.marketingPackage !== undefined &&
-            pkgData.marketingPackage !== null
+            pkgLookup &&
+            pkgLookup.marketingPackage !== undefined &&
+            pkgLookup.marketingPackage !== null
           ) {
-            const value = parseFloat(pkgData.marketingPackage)
+            const value = parseFloat(pkgLookup.marketingPackage)
             return !isNaN(value) ? value : 0
           }
 
-          // Fallback to patient data fields (if package data not available)
           const marketingPkg =
             patient.marketingPackage ||
             patient.MarketingPackage ||
@@ -3769,7 +3475,7 @@ function PatientTrackerReports() {
             return typeof pkgData.paidAmount === 'number'
               ? pkgData.paidAmount
               : parseFloat(pkgData.paidAmount) || 0
-          return patient.paidAmount ?? patient.PaidAmount ?? 0
+          return Number(patient.paidAmount ?? patient.PaidAmount ?? 0) || 0
         })(),
         pendingAmount: (() => {
           if (
@@ -3790,25 +3496,36 @@ function PatientTrackerReports() {
               (parseFloat(pkgData.marketingPackage) || 0) -
                 (parseFloat(pkgData.paidAmount) || 0),
             )
-          return patient.pendingAmount ?? patient.PendingAmount ?? 0
+          return (
+            Number(patient.pendingAmount ?? patient.PendingAmount ?? 0) || 0
+          )
         })(),
-        icsiD1: patient.icsiD1 || patient.ICSI_D1 || patient.icsi_D1 || '-',
-        opu: patient.opu || patient.OPU || '-',
-        fetD1: patient.fetD1 || patient.FET_D1 || patient.fet_D1 || '-',
-        fet: patient.fet || patient.FET || '-',
+        icsiD1: formatClinicalDate(
+          patient.icsiD1 || patient.ICSI_D1 || patient.icsi_D1,
+        ),
+        opu: formatClinicalDate(patient.opu || patient.OPU),
+        fetD1: formatClinicalDate(
+          patient.fetD1 || patient.FET_D1 || patient.fet_D1,
+        ),
+        fet: formatClinicalDate(patient.fet || patient.FET),
         uptResult: patient.uptResult || patient.UPTResult || '-',
         numberOfEmbryos:
-          patient.numberOfEmbryos || patient.NumberOfEmbryos || 0,
+          Number(patient.numberOfEmbryos || patient.NumberOfEmbryos || 0) || 0,
         numberOfEmbryosUsed:
-          patient.numberOfEmbryosUsed || patient.NumberOfEmbryosUsed || 0,
+          Number(
+            patient.numberOfEmbryosUsed || patient.NumberOfEmbryosUsed || 0,
+          ) || 0,
         embryosRemaining:
-          patient.embryosRemaining || patient.EmbryosRemaining || 0,
+          Number(patient.embryosRemaining || patient.EmbryosRemaining || 0) ||
+          0,
         lastRenewalDate:
           patient.lastRenewalDate || patient.LastRenewalDate || null,
         numberOfEmbryosDiscarded:
-          patient.numberOfEmbryosDiscarded ||
-          patient.NumberOfEmbryosDiscarded ||
-          0,
+          Number(
+            patient.numberOfEmbryosDiscarded ||
+              patient.NumberOfEmbryosDiscarded ||
+              0,
+          ) || 0,
         hasTrackerEntry: false,
       }
 
@@ -3847,6 +3564,32 @@ function PatientTrackerReports() {
 
       return baseRow
     })
+
+    // Text search against displayed row values (fixes Name/mobileNo mismatches)
+    if (automatedSummarySearch && automatedSummarySearch.trim()) {
+      const q = automatedSummarySearch.trim().toLowerCase()
+      return mappedRows.filter((row) => {
+        const haystack = [
+          row.patientId,
+          row.patientName,
+          row.mobileNumber,
+          row.referralSource,
+          row.referralName,
+          row.branch,
+          row.plan,
+          row.treatmentType,
+          row.cycleStatus,
+          row.stageOfCycle,
+          row.uptResult,
+        ]
+          .filter((v) => v != null && v !== '-' && v !== '')
+          .join(' ')
+          .toLowerCase()
+        return haystack.includes(q)
+      })
+    }
+
+    return mappedRows
   }, [
     automatedSummaryData,
     userBranches,
@@ -4213,13 +3956,6 @@ function PatientTrackerReports() {
     '#dda0dd',
   ]
 
-  // Tab Panel Component
-  const TabPanel = ({ children, value, index }) => (
-    <div hidden={value !== index}>
-      {value === index && <Box>{children}</Box>}
-    </div>
-  )
-
   return (
     <Box sx={{ p: 1.5, bgcolor: '#f5f7fa', height: '100vh', overflow: 'auto' }}>
       <Breadcrumb />
@@ -4254,7 +3990,7 @@ function PatientTrackerReports() {
 
         {/* DATA TAB */}
         {hasDataSummaryAccess && (
-          <TabPanel value={activeTab} index={0}>
+          <PatientTrackerTabPanel value={activeTab} index={0}>
             <CardContent sx={{ p: 1.5 }}>
               {/* Search Bar Section */}
               <Card
@@ -4820,12 +4556,12 @@ function PatientTrackerReports() {
                 </Box>
               </Box>
             </CardContent>
-          </TabPanel>
+          </PatientTrackerTabPanel>
         )}
 
         {/* SUMMARY TAB */}
         {hasDataSummaryAccess && (
-          <TabPanel value={activeTab} index={1}>
+          <PatientTrackerTabPanel value={activeTab} index={1}>
             <CardContent sx={{ p: 1.5 }}>
               {/* Filters Section */}
               <Box
@@ -4929,21 +4665,36 @@ function PatientTrackerReports() {
                 )}
               </Box>
             </CardContent>
-          </TabPanel>
+          </PatientTrackerTabPanel>
         )}
 
         {/* SUMMARY AUTOMATED TAB */}
-        <TabPanel value={activeTab} index={hasDataSummaryAccess ? 2 : 0}>
+        <PatientTrackerTabPanel
+          value={activeTab}
+          index={hasDataSummaryAccess ? 2 : 0}
+        >
           <CardContent sx={{ p: 1.5 }}>
-            {/* Filters Section */}
+            {/* Single-line filters toolbar */}
             <Box
               sx={{
-                mb: 2,
+                mb: 1.5,
+                pt: 1.25,
                 display: 'flex',
-                gap: 1.5,
-                alignItems: 'center',
-                flexWrap: 'wrap',
+                flexWrap: 'nowrap',
+                alignItems: 'flex-start',
+                gap: 1,
                 width: '100%',
+                overflowX: 'auto',
+                overflowY: 'visible',
+                pb: 0.5,
+                // Keep outlined InputLabel / DatePicker labels from being clipped
+                '& .MuiFormControl-root, & .MuiAutocomplete-root': {
+                  overflow: 'visible',
+                },
+                '& .MuiOutlinedInput-notchedOutline legend': {
+                  maxWidth: '100%',
+                },
+                '& > *': { flexShrink: 0 },
               }}
             >
               <LocalizationProvider dateAdapter={AdapterDayjs}>
@@ -4955,7 +4706,7 @@ function PatientTrackerReports() {
                   slotProps={{
                     textField: {
                       size: 'small',
-                      sx: { width: 160 },
+                      sx: { width: 150 },
                     },
                   }}
                 />
@@ -4967,12 +4718,13 @@ function PatientTrackerReports() {
                   slotProps={{
                     textField: {
                       size: 'small',
-                      sx: { width: 160 },
+                      sx: { width: 150 },
                     },
                   }}
                 />
               </LocalizationProvider>
-              <FormControl sx={{ width: 130 }} size="small">
+
+              <FormControl sx={{ width: 110 }} size="small">
                 <InputLabel>Branch</InputLabel>
                 <Select
                   value={automatedSummaryBranch}
@@ -4986,34 +4738,43 @@ function PatientTrackerReports() {
                   ))}
                 </Select>
               </FormControl>
-              <FormControl sx={{ width: 180 }} size="small">
-                <InputLabel>Referral</InputLabel>
+
+              <FormControl sx={{ width: 150 }} size="small">
+                <InputLabel id="pt-referral-label" shrink>
+                  Referral
+                </InputLabel>
                 <Select
-                  value={automatedSummaryReferral}
+                  labelId="pt-referral-label"
+                  value={automatedSummaryReferral || ''}
                   onChange={(e) => setAutomatedSummaryReferral(e.target.value)}
                   label="Referral"
+                  displayEmpty
+                  notched
+                  renderValue={(v) => (v ? v : 'All')}
                 >
                   {automatedSummaryReferralOptions.map((option) => (
-                    <MenuItem key={option.value} value={option.value}>
+                    <MenuItem key={option.value || 'all'} value={option.value}>
                       {option.label}
                     </MenuItem>
                   ))}
                 </Select>
               </FormControl>
-              <FormControl sx={{ minWidth: 180 }} size="small">
-                <InputLabel id="patient-tracker-treatment-type-label" shrink>
-                  Treatment Type
+
+              <FormControl sx={{ width: 150 }} size="small">
+                <InputLabel id="pt-treatment-label" shrink>
+                  Treatment
                 </InputLabel>
                 <Select
-                  labelId="patient-tracker-treatment-type-label"
-                  value={automatedSummaryTreatmentType}
+                  labelId="pt-treatment-label"
+                  value={automatedSummaryTreatmentType || ''}
                   onChange={(e) =>
                     setAutomatedSummaryTreatmentType(e.target.value)
                   }
-                  label="Treatment Type"
+                  label="Treatment"
                   displayEmpty
+                  notched
                   renderValue={(v) => {
-                    if (v === '') return 'All'
+                    if (!v) return 'All'
                     const opt = automatedSummaryTreatmentTypeOptions.find(
                       (o) => o.value === v,
                     )
@@ -5027,107 +4788,199 @@ function PatientTrackerReports() {
                   ))}
                 </Select>
               </FormControl>
+
               <TextField
                 size="small"
-                placeholder="Filter table by ID, Name, Mobile..."
-                value={automatedSummarySearch}
-                onChange={(e) => setAutomatedSummarySearch(e.target.value)}
+                label="Search table"
+                placeholder="ID, name, mobile…"
+                value={tableSearchInput}
+                onChange={(e) => setTableSearchInput(e.target.value)}
+                autoComplete="off"
                 InputProps={{
                   startAdornment: (
                     <SearchIcon
-                      sx={{ color: 'text.secondary', mr: 1, fontSize: 20 }}
+                      sx={{ color: 'text.secondary', mr: 0.75, fontSize: 18 }}
                     />
                   ),
+                  endAdornment: (
+                    <IconButton
+                      size="small"
+                      aria-label="Clear table search"
+                      onClick={() => {
+                        setTableSearchInput('')
+                        setAutomatedSummarySearch('')
+                      }}
+                      edge="end"
+                      sx={{
+                        visibility: tableSearchInput ? 'visible' : 'hidden',
+                      }}
+                    >
+                      <CloseIcon sx={{ fontSize: 16 }} />
+                    </IconButton>
+                  ),
                 }}
-                sx={{
-                  width: 250,
-                  '& .MuiOutlinedInput-root': {
-                    '& fieldset': {
-                      borderColor: 'divider',
-                    },
-                    '&:hover fieldset': {
-                      borderColor: 'primary.main',
-                    },
-                    '&.Mui-focused fieldset': {
-                      borderColor: 'primary.main',
-                    },
-                  },
-                }}
+                sx={{ width: 190 }}
               />
-              <Box sx={{ width: 280, minWidth: 240 }}>
-                <PatientSearchAutocomplete
-                  label="Select patient for entry"
-                  placeholder="Search then open Edit / Data Entry"
-                  onSelectPatient={handleAutomatedPatientSelect}
-                  onSearch={debouncedAutomatedPatientSearch}
-                  isLoading={
-                    isLoadingAutomatedPatientSearch || entryDrawerLoading
+
+              <Autocomplete
+                size="small"
+                sx={{ width: 260, pt: 0 }}
+                options={automatedPatientSuggestions}
+                loading={isLoadingAutomatedPatientSearch || entryDrawerLoading}
+                value={entryPatientOption}
+                inputValue={entryPatientInput}
+                onInputChange={(_e, value, reason) => {
+                  setEntryPatientInput(value)
+                  if (reason === 'input') {
+                    debouncedAutomatedPatientSearch(value)
                   }
-                  suggestions={automatedPatientSuggestions}
-                />
-              </Box>
-              <Tooltip title="Export">
-                <span>
-                  <Button
-                    id="export-automated-summary-button"
-                    variant="outlined"
-                    size="small"
-                    aria-label="Export options"
-                    aria-haspopup="true"
-                    aria-expanded={Boolean(automatedExportMenuAnchor)}
-                    onClick={(e) =>
-                      setAutomatedExportMenuAnchor(e.currentTarget)
-                    }
-                    disabled={
-                      isLoadingAutomatedSummary ||
-                      automatedSummaryRows.length === 0
-                    }
-                    sx={{
-                      minWidth: 40,
-                      px: 1,
-                      ml: { xs: 0, sm: 'auto' },
+                  if (reason === 'clear') {
+                    setAutomatedPatientSuggestions([])
+                  }
+                }}
+                onChange={(_e, value) => {
+                  handleAutomatedPatientSelect(value)
+                  if (!value) {
+                    setEntryPatientInput('')
+                  }
+                }}
+                getOptionLabel={getAutomatedPatientOptionLabel}
+                isOptionEqualToValue={(option, value) =>
+                  String(option?.id || option?.patientId) ===
+                  String(value?.id || value?.patientId)
+                }
+                filterOptions={(x) => x}
+                noOptionsText={
+                  entryPatientInput.trim().length < 2
+                    ? 'Type at least 2 characters'
+                    : isLoadingAutomatedPatientSearch
+                      ? 'Searching…'
+                      : 'No patients found'
+                }
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Patient entry"
+                    placeholder="ID / name / mobile"
+                    InputProps={{
+                      ...params.InputProps,
+                      startAdornment: (
+                        <>
+                          <SearchIcon
+                            sx={{
+                              color: 'text.secondary',
+                              ml: 0.5,
+                              fontSize: 18,
+                            }}
+                          />
+                          {params.InputProps.startAdornment}
+                        </>
+                      ),
+                      endAdornment: (
+                        <>
+                          {isLoadingAutomatedPatientSearch ||
+                          entryDrawerLoading ? (
+                            <CircularProgress color="inherit" size={16} />
+                          ) : null}
+                          {params.InputProps.endAdornment}
+                        </>
+                      ),
                     }}
-                  >
-                    <MoreVertIcon />
-                  </Button>
-                </span>
-              </Tooltip>
-              <Menu
-                anchorEl={automatedExportMenuAnchor}
-                open={Boolean(automatedExportMenuAnchor)}
-                onClose={() => setAutomatedExportMenuAnchor(null)}
-                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-                slotProps={{
-                  list: {
-                    'aria-labelledby': 'export-automated-summary-button',
-                  },
+                  />
+                )}
+              />
+
+              <Box sx={{ pt: 0.5, position: 'relative' }}>
+                <Tooltip title="Export">
+                  <span>
+                    <Button
+                      ref={automatedExportButtonRef}
+                      id="export-automated-summary-button"
+                      variant="outlined"
+                      size="small"
+                      aria-label="Export options"
+                      aria-controls={
+                        automatedExportMenuAnchor
+                          ? 'export-automated-summary-menu'
+                          : undefined
+                      }
+                      aria-haspopup="true"
+                      aria-expanded={Boolean(automatedExportMenuAnchor)}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setAutomatedExportMenuAnchor(
+                          automatedExportButtonRef.current || e.currentTarget,
+                        )
+                      }}
+                      disabled={
+                        isLoadingAutomatedSummary ||
+                        automatedSummaryRows.length === 0
+                      }
+                      sx={{ minWidth: 36, px: 0.75, height: 40 }}
+                    >
+                      <MoreVertIcon fontSize="small" />
+                    </Button>
+                  </span>
+                </Tooltip>
+              </Box>
+            </Box>
+
+            <Menu
+              id="export-automated-summary-menu"
+              anchorEl={automatedExportMenuAnchor}
+              open={Boolean(automatedExportMenuAnchor)}
+              onClose={() => setAutomatedExportMenuAnchor(null)}
+              keepMounted={false}
+              disableScrollLock
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+              MenuListProps={{
+                'aria-labelledby': 'export-automated-summary-button',
+                dense: true,
+              }}
+              PaperProps={{
+                elevation: 3,
+                sx: { minWidth: 180, mt: 0.5 },
+              }}
+            >
+              <MenuItem
+                onClick={() => {
+                  setAutomatedExportMenuAnchor(null)
+                  handleExportAutomatedSummary('csv')
                 }}
               >
-                <MenuItem
-                  onClick={() => {
-                    setAutomatedExportMenuAnchor(null)
-                    handleExportAutomatedSummary('csv')
-                  }}
-                >
-                  <ListItemIcon>
-                    <FileDownloadIcon fontSize="small" />
-                  </ListItemIcon>
-                  Download as CSV
-                </MenuItem>
-                <MenuItem
-                  onClick={() => {
-                    setAutomatedExportMenuAnchor(null)
-                    handleExportAutomatedSummary('xlsx')
-                  }}
-                >
-                  <ListItemIcon>
-                    <FileDownloadIcon fontSize="small" />
-                  </ListItemIcon>
-                  Download as Excel
-                </MenuItem>
-              </Menu>
-            </Box>
+                <ListItemIcon>
+                  <FileDownloadIcon fontSize="small" />
+                </ListItemIcon>
+                Download as CSV
+              </MenuItem>
+              <MenuItem
+                onClick={() => {
+                  setAutomatedExportMenuAnchor(null)
+                  handleExportAutomatedSummary('xlsx')
+                }}
+              >
+                <ListItemIcon>
+                  <FileDownloadIcon fontSize="small" />
+                </ListItemIcon>
+                Download as Excel
+              </MenuItem>
+            </Menu>
+
+            {(tableSearchInput.trim() || automatedSummarySearch.trim()) && (
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: 'block', mb: 1 }}
+              >
+                Showing {automatedSummaryRows.length} result
+                {automatedSummaryRows.length === 1 ? '' : 's'}
+                {automatedSummarySearch.trim()
+                  ? ` for “${automatedSummarySearch.trim()}”`
+                  : ''}
+              </Typography>
+            )}
 
             {/* Data Grid Table */}
             <Box sx={{ height: 'calc(100vh - 300px)', width: '100%' }}>
@@ -5213,10 +5066,13 @@ function PatientTrackerReports() {
               onSaved={handleEntryDrawerSaved}
             />
           </CardContent>
-        </TabPanel>
+        </PatientTrackerTabPanel>
 
         {/* SUMMARY GRAPH TAB */}
-        <TabPanel value={activeTab} index={hasDataSummaryAccess ? 3 : 1}>
+        <PatientTrackerTabPanel
+          value={activeTab}
+          index={hasDataSummaryAccess ? 3 : 1}
+        >
           <CardContent sx={{ p: 1.5 }}>
             {/* Filters Section */}
             <Box
@@ -5559,7 +5415,7 @@ function PatientTrackerReports() {
               </Grid>
             )}
           </CardContent>
-        </TabPanel>
+        </PatientTrackerTabPanel>
       </Card>
 
       {/* Patient History pop-up (opened when clicking patient name in Summary Automated) */}

@@ -472,6 +472,31 @@ export const getAllPatientTracker = async (token, params = {}) => {
   return response.json()
 }
 
+export const getPatientTrackerSummaryAutomated = async (token, params = {}) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+
+  const query = new URLSearchParams()
+  if (params.fromDate) query.append('fromDate', params.fromDate)
+  if (params.toDate) query.append('toDate', params.toDate)
+  if (params.branchId) query.append('branchId', params.branchId)
+  if (params.branch) query.append('branch', params.branch)
+  const qs = query.toString()
+
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.GET_PATIENT_TRACKER_SUMMARY_AUTOMATED}${qs ? `?${qs}` : ''}`,
+    {
+      method: 'GET',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+
+  return response.json()
+}
+
 export const getPatientTrackerByPatientId = async (token, patientId) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)
@@ -513,6 +538,24 @@ export const editPatientTrackerData = async (token, payload) => {
   myHeaders.append('Content-Type', 'application/json')
   const response = await fetch(
     `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.EDIT_PATIENT_TRACKER}`,
+    {
+      method: 'PUT',
+      headers: myHeaders,
+      redirect: 'follow',
+      credentials: 'include',
+      body: JSON.stringify(payload),
+    },
+  )
+
+  return response.json()
+}
+
+export const upsertPatientTrackerEmbryologyUpt = async (token, payload) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.UPSERT_PATIENT_TRACKER_EMBRYOLOGY_UPT}`,
     {
       method: 'PUT',
       headers: myHeaders,

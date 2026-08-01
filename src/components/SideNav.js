@@ -582,12 +582,21 @@ function SideNav(props) {
       },
       {
         path: '/embryology',
-        name: 'Embroyology',
+        name: 'Embryology',
         relatedModule: 'embryology',
         Iconn: TbCheckupList,
-        // subRoutes:[
-
-        // ]
+        subRoutes: [
+          {
+            path: '/embryology',
+            name: 'Embryology',
+            relatedModule: 'embryology',
+          },
+          {
+            path: '/embryology/embryology-upt',
+            name: 'Embryology & UPT',
+            relatedModule: 'embryology',
+          },
+        ],
       },
       {
         path: '/scan',

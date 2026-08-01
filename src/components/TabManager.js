@@ -28,6 +28,7 @@ const routeTitleMap = {
   '/pharmacy': 'Pharmacy',
   '/lab': 'Lab',
   '/embryology': 'Embryology',
+  '/embryology/embryology-upt': 'Embryology & UPT',
   '/scan': 'Scan',
   '/reports': 'Reports',
   '/dailyreport': 'Daily Report',
