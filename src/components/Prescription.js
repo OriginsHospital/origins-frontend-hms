@@ -2874,6 +2874,16 @@ function Prescription({
                   ? resolvedHysteroscopyPatientId
                   : null
               }
+              patientName={
+                selectedPatient?.patientName || patientInfo?.patientName || ''
+              }
+              patientAge={
+                selectedPatient?.age ||
+                selectedPatient?.patientAge ||
+                patientInfo?.age ||
+                patientInfo?.patientAge ||
+                ''
+              }
               initialData={hysteroscopyReport}
               onSave={(payload) => {
                 const normalizedPayload = {

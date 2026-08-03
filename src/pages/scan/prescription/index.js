@@ -115,6 +115,52 @@ function ScanPrescriptionPage() {
     },
   })
 
+  const enhancePrescriptionPrintHtml = (html) => {
+    // Only boost prescription body tables/titles — never override header logo/address sizes
+    const printBoostStyles = `
+      <style id="prescription-print-boost">
+        body {
+          font-family: Arial, Helvetica, sans-serif;
+          color: #000;
+        }
+        table {
+          font-size: 15px !important;
+          line-height: 1.45 !important;
+        }
+        table th {
+          font-size: 15px !important;
+          font-weight: 700 !important;
+        }
+        table td {
+          font-size: 15px !important;
+          font-weight: 600 !important;
+        }
+        table td strong,
+        table td b {
+          font-weight: 700 !important;
+        }
+        h3 {
+          font-size: 20px !important;
+          font-weight: 700 !important;
+        }
+        h4 {
+          font-size: 18px !important;
+          font-weight: 700 !important;
+        }
+        @media print {
+          table, table th, table td { font-size: 11pt !important; }
+          h3 { font-size: 16pt !important; }
+          h4 { font-size: 13pt !important; }
+        }
+      </style>
+    `
+    if (typeof html !== 'string') return html
+    if (/<\/head>/i.test(html)) {
+      return html.replace(/<\/head>/i, `${printBoostStyles}</head>`)
+    }
+    return `${printBoostStyles}${html}`
+  }
+
   const openPrescriptionHtml = useCallback(
     async (row, mode) => {
       dispatch(showLoader())
@@ -131,7 +177,7 @@ function ScanPrescriptionPage() {
           )
           return
         }
-        const html = response.data
+        const html = enhancePrescriptionPrintHtml(response.data)
         if (mode === 'view') {
           setViewHtml(html)
           return

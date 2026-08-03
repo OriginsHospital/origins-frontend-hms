@@ -157,15 +157,23 @@ function ScanHysteroLapPage() {
         const report = await loadReport(row)
         if (!report) return
 
+        const reportWithPatient = {
+          ...report,
+          patientName:
+            report.patientName || row.patientName || row.PatientName || '',
+          age:
+            report.age || report.patientAge || row.age || row.patientAge || '',
+        }
+
         if (mode === 'view') {
           setViewTitle(
             `${report.formType || row.formType || 'Hystero/Lap'} — ${row.patientName}`,
           )
-          setViewHtml(buildHysteroLapPrintHtml(report))
+          setViewHtml(buildHysteroLapPrintHtml(reportWithPatient))
           return
         }
 
-        const opened = openHysteroLapPrintWindow(report)
+        const opened = openHysteroLapPrintWindow(reportWithPatient)
         if (!opened) {
           toast.error('Pop-up blocked. Allow pop-ups to print.', toastconfig)
         }

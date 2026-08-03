@@ -18,6 +18,7 @@ import dayjs from 'dayjs'
 import ImageIcon from '@mui/icons-material/Image'
 import DeleteIcon from '@mui/icons-material/Delete'
 import PrintIcon from '@mui/icons-material/Print'
+import { openHysteroLapPrintWindow } from '../utils/hysteroLapPrint'
 
 const BRANCH_OPTIONS = ['Khammam', 'Hanmkonda', 'Hyderabad', 'Sathupalli']
 const GYNAECOLOGIST_OPTIONS = [
@@ -89,13 +90,14 @@ function HysteroLapOperationNotesForm({
   formType,
   visitId,
   patientId,
+  patientName = '',
+  patientAge = '',
   initialData = null,
   onSave,
   onCancel,
   onImageUpload,
   onImageDelete,
 }) {
-  const printRef = useRef(null)
   const isFormDirtyRef = useRef(false)
   const imagesDirtyRef = useRef(false)
   const [form, setForm] = useState(emptyForm())
@@ -222,31 +224,18 @@ function HysteroLapOperationNotesForm({
   }
 
   const handlePrint = () => {
-    const printContent = printRef.current
-    if (!printContent) return
-
-    const printWindow = window.open('', '_blank', 'width=900,height=700')
-    if (!printWindow) return
-
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>${form.formType || formType || 'Hystero/Lap'} Operation Notes</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 24px; color: #111; }
-            h1 { font-size: 20px; margin-bottom: 16px; }
-            .field { margin-bottom: 10px; }
-            .label { font-weight: 600; display: block; margin-bottom: 2px; }
-            .value { white-space: pre-wrap; }
-          </style>
-        </head>
-        <body>${printContent.innerHTML}</body>
-      </html>
-    `)
-    printWindow.document.close()
-    printWindow.focus()
-    printWindow.print()
-    printWindow.close()
+    openHysteroLapPrintWindow({
+      ...form,
+      patientName:
+        patientName ||
+        initialData?.patientName ||
+        initialData?.PatientName ||
+        '',
+      age: patientAge || initialData?.age || initialData?.patientAge || '',
+      anesthesiaType: form.procedure,
+      distensionMedia: form.abnormality,
+      consultantName: form.expertConsultant,
+    })
   }
 
   const handleFileUpload = async (e) => {
@@ -299,9 +288,6 @@ function HysteroLapOperationNotesForm({
     }
   }
 
-  const formatDate = (value) =>
-    value && dayjs(value).isValid() ? dayjs(value).format('DD-MM-YYYY') : '—'
-
   const title =
     form.formType || formType
       ? `${form.formType || formType} Operation Notes`
@@ -312,112 +298,6 @@ function HysteroLapOperationNotesForm({
       <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
         {title}
       </Typography>
-
-      <Box ref={printRef} sx={{ display: 'none' }}>
-        <h1>{title}</h1>
-        <div className="field">
-          <span className="label">Clinical Diagnosis</span>
-          <span className="value">{form.clinicalDiagnosis || '—'}</span>
-        </div>
-        <div className="field">
-          <span className="label">LMP</span>
-          <span className="value">{formatDate(form.lmp)}</span>
-        </div>
-        <div className="field">
-          <span className="label">Day of Cycle</span>
-          <span className="value">{form.dayOfCycle || '—'}</span>
-        </div>
-        <div className="field">
-          <span className="label">Date of Admission</span>
-          <span className="value">{formatDate(form.admissionDate)}</span>
-        </div>
-        <div className="field">
-          <span className="label">Date of Procedure</span>
-          <span className="value">{formatDate(form.procedureDate)}</span>
-        </div>
-        <div className="field">
-          <span className="label">Date of Discharge</span>
-          <span className="value">{formatDate(form.dischargeDate)}</span>
-        </div>
-        <div className="field">
-          <span className="label">Type of Procedures</span>
-          <span className="value">{form.procedureType || '—'}</span>
-        </div>
-        <div className="field">
-          <span className="label">Final Diagnosis After Operation</span>
-          <span className="value">
-            {form.finalDiagnosisAfterOperation || '—'}
-          </span>
-        </div>
-        <div className="field">
-          <span className="label">Hospital</span>
-          <span className="value">{form.hospitalBranch || '—'}</span>
-        </div>
-        <div className="field">
-          <span className="label">Gynaecologist</span>
-          <span className="value">{form.gynecologist || '—'}</span>
-        </div>
-        <div className="field">
-          <span className="label">Assistant</span>
-          <span className="value">{form.assistant || '—'}</span>
-        </div>
-        <div className="field">
-          <span className="label">Anaesthetist</span>
-          <span className="value">{form.anesthetist || '—'}</span>
-        </div>
-        <div className="field">
-          <span className="label">OT Assistant</span>
-          <span className="value">{form.otAssistant || '—'}</span>
-        </div>
-        <div className="field">
-          <span className="label">Diagnosis</span>
-          <span className="value">{form.diagnosis || '—'}</span>
-        </div>
-        <div className="field">
-          <span className="label">Operative Findings</span>
-          <span className="value">{form.operativeFindings || '—'}</span>
-        </div>
-        <div className="field">
-          <span className="label">Procedure</span>
-          <span className="value">{form.procedure || '—'}</span>
-        </div>
-        <div className="field">
-          <span className="label">Entry</span>
-          <span className="value">{form.entry || '—'}</span>
-        </div>
-        <div className="field">
-          <span className="label">Uterus</span>
-          <span className="value">{form.uterus || '—'}</span>
-        </div>
-        <div className="field">
-          <span className="label">Endometrial Thickness</span>
-          <span className="value">{form.endometrialThickness || '—'}</span>
-        </div>
-        <div className="field">
-          <span className="label">Abnormality</span>
-          <span className="value">{form.abnormality || '—'}</span>
-        </div>
-        <div className="field">
-          <span className="label">Intra Operation Complication</span>
-          <span className="value">{form.intraopComplications || '—'}</span>
-        </div>
-        <div className="field">
-          <span className="label">Post Operation Course</span>
-          <span className="value">{form.postopCourse || '—'}</span>
-        </div>
-        <div className="field">
-          <span className="label">Review On</span>
-          <span className="value">{formatDate(form.reviewOn)}</span>
-        </div>
-        <div className="field">
-          <span className="label">Discharge Medication</span>
-          <span className="value">{form.dischargeMedications || '—'}</span>
-        </div>
-        <div className="field">
-          <span className="label">Consultant Name</span>
-          <span className="value">{form.expertConsultant || '—'}</span>
-        </div>
-      </Box>
 
       <Grid container spacing={2}>
         <Grid item xs={12} sm={6}>
