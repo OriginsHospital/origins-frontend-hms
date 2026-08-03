@@ -356,22 +356,35 @@ function RenderAccordianDetails({
       const breakupArray = Array.isArray(res) ? res : []
       console.log('Processing payment breakup array:', breakupArray)
 
-      if (details?.length != 0 && breakupArray.length > 0) {
-        let detailsCopy = details
-        detailsCopy = detailsCopy.map((medicineDetails) => {
-          // Match by id first, then by itemName
-          const itemResObject = breakupArray.find(
+      if (breakupArray.length > 0) {
+        // Match by refId (backend field) === line-bill id. Never match by itemName —
+        // that incorrectly copies one medicine's totalCost onto every same-named row.
+        const findBreakupForMedicine = (medicineDetails) => {
+          const medicineId = medicineDetails?.id
+          if (medicineId == null) return undefined
+          return breakupArray.find(
             (item) =>
-              item.id === medicineDetails.id ||
-              item.itemName == medicineDetails.itemName,
+              String(item.refId) === String(medicineId) ||
+              String(item.id) === String(medicineId),
           )
-          if (itemResObject) {
-            medicineDetails['refId'] = itemResObject?.refId
-            medicineDetails['totalCost'] = itemResObject?.totalCost
-            medicineDetails['type'] = itemResObject?.type
-            medicineDetails['purchaseDetails'] = itemResObject?.purchaseDetails
-            medicineDetails['itemPurchaseInformation'] =
-              itemResObject?.purchaseDetails.map((detail) => ({
+        }
+
+        setDetails((prevDetails) => {
+          if (!prevDetails?.length) return prevDetails
+
+          return prevDetails.map((medicineDetails) => {
+            const itemResObject = findBreakupForMedicine(medicineDetails)
+            if (!itemResObject) return medicineDetails
+
+            return {
+              ...medicineDetails,
+              refId: itemResObject?.refId,
+              totalCost: itemResObject?.totalCost,
+              type: itemResObject?.type,
+              purchaseDetails: itemResObject?.purchaseDetails,
+              itemPurchaseInformation: (
+                itemResObject?.purchaseDetails || []
+              ).map((detail) => ({
                 grnId: detail.grnId,
                 expiryDate: detail.expiryDate,
                 mrpPerTablet: detail.mrpPerTablet,
@@ -381,41 +394,9 @@ function RenderAccordianDetails({
                 nonPurchaseReason: detail.nonPurchaseReason || null,
                 initialUsedQuantity:
                   detail.initialUsedQuantity || detail.usedQuantity,
-              }))
-          }
-          return medicineDetails
-        })
-        setDetails(detailsCopy)
-        const reasonSnapshot = {}
-        detailsCopy.forEach((medicineInfo) => {
-          const parsedInfo = Array.isArray(medicineInfo.itemPurchaseInformation)
-            ? medicineInfo.itemPurchaseInformation
-            : []
-          reasonSnapshot[medicineInfo.id] =
-            parsedInfo.find((detail) => detail?.nonPurchaseReason)
-              ?.nonPurchaseReason || ''
-        })
-        setNonPurchaseReasons(reasonSnapshot)
-
-        // Recalculate prices with the new data (preserving coupon discounts)
-        const newItemPrices = {}
-        let newTotalAmount = 0
-
-        detailsCopy.forEach((medicineInfo) => {
-          const basePrice = medicineInfo.totalCost || 0
-          // Check if coupon is applied for this item
-          const couponApplied =
-            itemCoupons[medicineInfo.id]?.applied &&
-            itemCoupons[medicineInfo.id]?.discount === 100
-          // Apply coupon discount
-          const discountedPrice = couponApplied ? 0 : basePrice
-          newItemPrices[medicineInfo.id] = discountedPrice
-          newTotalAmount += discountedPrice
-        })
-
-        setPriceDetails({
-          itemPrices: newItemPrices,
-          totalAmount: newTotalAmount,
+              })),
+            }
+          })
         })
       }
 
@@ -1280,6 +1261,10 @@ function RenderAccordianDetails({
     return `Quantity: ${med?.prescriptionDetails} , Days - ${med?.prescriptionDays}`
   }
 
+  // GRN stock options keyed by medicine line-bill id — shared list caused one
+  // medicine's MRP to price every other medicine in the accordion.
+  const [availableGrnsByItemId, setAvailableGrnsByItemId] = useState({})
+
   // Calculate price for a medicine in PRESCRIBED section
   // Uses actual entered/packed quantity, not prescribed quantity
   const calculateMedicinePrice = (med) => {
@@ -1311,8 +1296,9 @@ function RenderAccordianDetails({
     const enteredQty = Number(med?.prescribedQuantity || 0)
     if (enteredQty === 0) return 0
 
-    // Average MRP from GRNs that still have stock (same set as Select GRN dropdown)
-    const grnsInStock = (availableGrns || []).filter(
+    // Average MRP from THIS medicine's GRNs only (never share across medicines)
+    const medicineAvailableGrns = availableGrnsByItemId[med.id] || []
+    const grnsInStock = medicineAvailableGrns.filter(
       (grn) => Number(grn.totalQuantity || 0) > 0,
     )
     if (grnsInStock.length > 0) {
@@ -1348,20 +1334,24 @@ function RenderAccordianDetails({
         type,
         selectedbranch,
       )
-      return res
+      return { res, itemId }
     },
-    onSuccess: (res) => {
+    onSuccess: ({ res, itemId }) => {
       console.log('data', res)
       if (res.status == 200) {
-        setAvailableGrns(res.data.availableGrnInfo)
+        setAvailableGrnsByItemId((prev) => ({
+          ...prev,
+          [itemId]: res.data.availableGrnInfo || [],
+        }))
       } else {
-        setAvailableGrns([])
+        setAvailableGrnsByItemId((prev) => ({
+          ...prev,
+          [itemId]: [],
+        }))
         toast.error(res.message)
       }
     },
   })
-
-  const [availableGrns, setAvailableGrns] = useState([])
 
   // Updated validation: Check if at least one medicine has quantity entered
   // Button enables when at least one medicine has valid GRN selections or quantity entered
@@ -2543,7 +2533,7 @@ function RenderAccordianDetails({
                 {column.label === 'PRESCRIBED' && (
                   <Autocomplete
                     className="flex-1"
-                    options={(availableGrns || []).filter(
+                    options={(availableGrnsByItemId[med.id] || []).filter(
                       (grn) => Number(grn.totalQuantity || 0) > 0,
                     )}
                     value={row.grnId}
@@ -2583,7 +2573,7 @@ function RenderAccordianDetails({
                         <div>
                           <span className="font-medium">Available:</span>{' '}
                           {
-                            availableGrns.find(
+                            (availableGrnsByItemId[med.id] || []).find(
                               (grn) => grn.grnId === row.grnId.grnId,
                             )?.totalQuantity
                           }

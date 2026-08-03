@@ -6,6 +6,7 @@ import {
   renderTimeViewClock,
 } from '@mui/x-date-pickers'
 import dayjs from 'dayjs'
+import customParseFormat from 'dayjs/plugin/customParseFormat'
 import React, { useCallback, useEffect, useState } from 'react'
 import { useDispatch } from 'react-redux'
 import NoteAltIcon from '@mui/icons-material/NoteAlt'
@@ -14,6 +15,42 @@ import DialogTitle from '@mui/material/DialogTitle'
 import DialogContent from '@mui/material/DialogContent'
 import DialogActions from '@mui/material/DialogActions'
 import TextField from '@mui/material/TextField'
+
+dayjs.extend(customParseFormat)
+
+const remapSheetKeysByColumns = (data, oldCols, newCols) => {
+  if (
+    !data ||
+    typeof data !== 'object' ||
+    !oldCols?.length ||
+    !newCols?.length
+  ) {
+    return data
+  }
+
+  const remapped = {}
+  Object.entries(data).forEach(([key, value]) => {
+    let newKey = key
+    for (let i = 0; i < oldCols.length; i++) {
+      const oldCol = oldCols[i]
+      const newCol = newCols[i]
+      if (!oldCol || !newCol || oldCol === newCol) continue
+      if (key === `${oldCol}-note` || key.startsWith(`${oldCol}-`)) {
+        newKey = `${newCol}${key.slice(oldCol.length)}`
+        break
+      }
+    }
+    remapped[newKey] = value
+  })
+  return remapped
+}
+
+const parseSheetDate = (value) => {
+  if (!value) return null
+  if (dayjs.isDayjs(value)) return value.isValid() ? value : null
+  const parsed = dayjs(value, 'DD/MM')
+  return parsed.isValid() ? parsed : null
+}
 
 const FollicularScanForm = ({
   folicularFormData,
@@ -27,6 +64,7 @@ const FollicularScanForm = ({
   onEraStartTimeChange,
   onUpdateEraStartTime,
   isUpdatingEraStartTime = false,
+  onDay1DateChange,
 }) => {
   const dispatch = useDispatch()
   const handleInputChange = useCallback(
@@ -68,6 +106,34 @@ const FollicularScanForm = ({
       }
     })
   }, [setFolicularTemplate])
+
+  const handleDay1DateChange = useCallback(
+    (newValue) => {
+      const start = parseSheetDate(newValue)
+      const oldCols = follicularTemplate?.columns
+      if (!start || !Array.isArray(oldCols) || oldCols.length === 0) return
+
+      const newCols = oldCols.map((_, index) =>
+        start.add(index, 'day').format('DD/MM'),
+      )
+      if (oldCols.join('|') === newCols.join('|')) return
+
+      setFolicularFormData((prev) =>
+        remapSheetKeysByColumns(prev, oldCols, newCols),
+      )
+      setFolicularTemplate((prev) => ({
+        ...(prev || {}),
+        columns: newCols,
+      }))
+      onDay1DateChange?.(oldCols, newCols)
+    },
+    [
+      follicularTemplate?.columns,
+      onDay1DateChange,
+      setFolicularFormData,
+      setFolicularTemplate,
+    ],
+  )
 
   const [noteModal, setNoteModal] = useState({
     open: false,
@@ -173,16 +239,54 @@ const FollicularScanForm = ({
             </th>
             {follicularTemplate?.columns?.map((day, index) => (
               <th
-                key={'folicular' + day}
+                key={'folicular' + day + '-' + index}
                 className={`bg-secondary text-white p-2 border text-center ${
                   isCurrentDate(day) ? 'ring-2 ring-green-400' : ''
                 }`}
                 colSpan={2}
               >
                 <div>{`Day ${index + 1}`}</div>
-                <div className="text-xs">
-                  {follicularTemplate?.columns[index]}
-                </div>
+                {index === 0 && canUpdate ? (
+                  <div className="mt-1 flex justify-center">
+                    <DatePicker
+                      value={parseSheetDate(day)}
+                      format="DD/MM"
+                      onChange={handleDay1DateChange}
+                      slotProps={{
+                        textField: {
+                          size: 'small',
+                          variant: 'standard',
+                          title: 'Change Day 1 date',
+                          sx: {
+                            minWidth: 72,
+                            input: {
+                              color: 'white',
+                              textAlign: 'center',
+                              fontSize: '0.75rem',
+                              padding: '2px 0',
+                              cursor: 'pointer',
+                            },
+                            '& .MuiInput-underline:before': {
+                              borderBottomColor: 'rgba(255,255,255,0.55)',
+                            },
+                            '& .MuiInput-underline:hover:before': {
+                              borderBottomColor: 'white',
+                            },
+                            '& .MuiInput-underline:after': {
+                              borderBottomColor: 'white',
+                            },
+                            '& .MuiSvgIcon-root': {
+                              color: 'white',
+                              fontSize: '1rem',
+                            },
+                          },
+                        },
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="text-xs">{day}</div>
+                )}
               </th>
             ))}
           </tr>

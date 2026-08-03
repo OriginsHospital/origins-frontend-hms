@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import Select from 'react-select'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useDispatch, useSelector } from 'react-redux'
@@ -467,7 +467,7 @@ function Prescription({
         const newCol = newCols[i]
         if (!oldCol || !newCol || oldCol === newCol) continue
         if (key === `${oldCol}-note` || key.startsWith(`${oldCol}-`)) {
-          newKey = key.replace(oldCol, newCol)
+          newKey = `${newCol}${key.slice(oldCol.length)}`
           break
         }
       }
@@ -475,6 +475,13 @@ function Prescription({
     })
     return remapped
   }
+
+  const handleDay1DateChange = useCallback((oldCols, newCols) => {
+    setMedicationFormData((prev) =>
+      remapTreatmentSheetKeys(prev, oldCols, newCols),
+    )
+    setScanFormData((prev) => remapTreatmentSheetKeys(prev, oldCols, newCols))
+  }, [])
 
   useEffect(() => {
     patientSpecificColumnsFixedRef.current = false
@@ -611,7 +618,7 @@ function Prescription({
         id: treatmentCycleId,
         template: JSON.stringify({
           follicularSheet: folicularFormData,
-          columns: icsiColumns || iuiColumns || follicularTemplate?.columns,
+          columns: follicularTemplate?.columns,
           rows: follicularTemplate?.rows,
           medicationRows: medicationFormData?.rows,
           medicationSheet: medicationFormData,
@@ -2478,13 +2485,10 @@ function Prescription({
               setFolicularFormData={setFolicularFormData}
               treatmentStatus={treatmentStatus}
               handleUpdateTreatmentSheet={handleUpdateTreatmentSheet}
-              follicularTemplate={
-                icsiColumns
-                  ? { ...(follicularTemplate || {}), columns: icsiColumns }
-                  : follicularTemplate
-              }
+              follicularTemplate={follicularTemplate}
               setFolicularTemplate={setFolicularTemplate}
               canUpdate={treatmentStatus?.END_ICSI == 0}
+              onDay1DateChange={handleDay1DateChange}
             />
 
             {/* Medication Sheet  */}
@@ -2492,7 +2496,7 @@ function Prescription({
               medicationFormData={medicationFormData}
               setMedicationFormData={setMedicationFormData}
               allBillTypeValues={allBillTypeValues}
-              columns={icsiColumns || follicularTemplate?.columns}
+              columns={follicularTemplate?.columns}
               medicationOptions={medicationOptionsFollicular}
             />
 
@@ -2501,7 +2505,7 @@ function Prescription({
               scanFormData={scanFormData}
               setScanFormData={setScanFormData}
               allBillTypeValues={allBillTypeValues}
-              columns={icsiColumns || follicularTemplate?.columns}
+              columns={follicularTemplate?.columns}
             />
           </>
         )}
@@ -2537,13 +2541,10 @@ function Prescription({
               setFolicularFormData={setFolicularFormData}
               treatmentStatus={treatmentStatus}
               handleUpdateTreatmentSheet={handleUpdateTreatmentSheet}
-              follicularTemplate={
-                iuiColumns
-                  ? { ...(follicularTemplate || {}), columns: iuiColumns }
-                  : follicularTemplate
-              }
+              follicularTemplate={follicularTemplate}
               setFolicularTemplate={setFolicularTemplate}
               canUpdate={treatmentStatus?.END_IUI == 0}
+              onDay1DateChange={handleDay1DateChange}
             />
 
             {/* Medication Sheet  */}
@@ -2551,7 +2552,7 @@ function Prescription({
               medicationFormData={medicationFormData}
               setMedicationFormData={setMedicationFormData}
               allBillTypeValues={allBillTypeValues}
-              columns={iuiColumns || follicularTemplate?.columns}
+              columns={follicularTemplate?.columns}
               medicationOptions={medicationOptionsFollicular}
             />
 
@@ -2560,7 +2561,7 @@ function Prescription({
               scanFormData={scanFormData}
               setScanFormData={setScanFormData}
               allBillTypeValues={allBillTypeValues}
-              columns={iuiColumns || follicularTemplate?.columns}
+              columns={follicularTemplate?.columns}
             />
           </>
         )}
@@ -2651,6 +2652,7 @@ function Prescription({
               follicularTemplate={follicularTemplate}
               setFolicularTemplate={setFolicularTemplate}
               canUpdate={treatmentStatus?.END_OITI == 0}
+              onDay1DateChange={handleDay1DateChange}
             />
 
             {/* Medication Sheet  */}
