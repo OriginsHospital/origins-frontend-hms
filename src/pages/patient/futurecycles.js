@@ -1,13 +1,16 @@
 import { withPermission } from '@/components/withPermission'
 import { getFutureCycles } from '@/constants/apis'
 import { ACCESS_TYPES } from '@/constants/constants'
+import { SearchOutlined } from '@mui/icons-material'
 import {
   Avatar,
   CircularProgress,
   FormControl,
+  InputAdornment,
   InputLabel,
   MenuItem,
   Select,
+  TextField,
 } from '@mui/material'
 import { DataGrid } from '@mui/x-data-grid'
 import { useQuery } from '@tanstack/react-query'
@@ -30,18 +33,30 @@ const MONTHS = [
   { value: 12, label: 'December' },
 ]
 
+const FALLBACK_TREATMENT_TYPES = [
+  'OI + TI',
+  'IUI Self',
+  'IUI Donor',
+  'ICSI',
+  'ICSI Self Oocyte + Donor Sperm',
+  'ICSI Donor Oocyte + Self Sperm',
+  'ICSI Donor Oocyte + Donor Sperm',
+]
+
 const getMonthLabel = (month) =>
   MONTHS.find((m) => m.value === month)?.label || month
 
 function FutureCyclesPage() {
   const userDetails = useSelector((store) => store.user)
   const dropdowns = useSelector((store) => store.dropdowns)
-  const { branches } = dropdowns || {}
+  const { branches, treatmentTypes } = dropdowns || {}
 
   const currentYear = new Date().getFullYear()
   const [branchId, setBranchId] = useState('')
   const [cycleMonth, setCycleMonth] = useState('')
   const [cycleYear, setCycleYear] = useState('')
+  const [treatmentType, setTreatmentType] = useState('')
+  const [searchText, setSearchText] = useState('')
 
   const yearOptions = useMemo(() => {
     const years = [{ value: '', label: 'All Years' }]
@@ -56,6 +71,21 @@ function FutureCyclesPage() {
     [branches],
   )
 
+  const treatmentTypeOptions = useMemo(() => {
+    if (Array.isArray(treatmentTypes) && treatmentTypes.length > 0) {
+      return treatmentTypes
+        .map((item) => {
+          const name =
+            typeof item === 'object'
+              ? (item?.name ?? item?.label ?? '')
+              : String(item)
+          return name
+        })
+        .filter(Boolean)
+    }
+    return FALLBACK_TREATMENT_TYPES
+  }, [treatmentTypes])
+
   const { data, isLoading, isFetching, isError } = useQuery({
     queryKey: ['futureCycles', branchId, cycleMonth, cycleYear],
     queryFn: () =>
@@ -69,14 +99,26 @@ function FutureCyclesPage() {
 
   const rows = useMemo(() => {
     const list = data?.data || []
-    return list.map((row, index) => ({
+    const mapped = list.map((row, index) => ({
       ...row,
       id: row.id || `${row.patientId}-${index}`,
       cityName: row.city?.name || '-',
       monthLabel: getMonthLabel(row.cycleMonth),
       branchDisplay: row.branch || row.branchName || '-',
     }))
-  }, [data])
+
+    const query = searchText.trim().toLowerCase()
+
+    return mapped.filter((row) => {
+      if (treatmentType && row.treatmentType !== treatmentType) {
+        return false
+      }
+      if (!query) return true
+      const name = String(row.patientName || '').toLowerCase()
+      const mobile = String(row.mobileNo || '').toLowerCase()
+      return name.includes(query) || mobile.includes(query)
+    })
+  }, [data, treatmentType, searchText])
 
   const columns = [
     {
@@ -199,6 +241,36 @@ function FutureCyclesPage() {
               ))}
             </Select>
           </FormControl>
+          <FormControl size="small" sx={{ minWidth: 200 }}>
+            <InputLabel id="fc-treatment-filter">Treatment Type</InputLabel>
+            <Select
+              labelId="fc-treatment-filter"
+              label="Treatment Type"
+              value={treatmentType}
+              onChange={(e) => setTreatmentType(e.target.value)}
+            >
+              <MenuItem value="">All Treatment Types</MenuItem>
+              {treatmentTypeOptions.map((name) => (
+                <MenuItem key={name} value={name}>
+                  {name}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+          <TextField
+            size="small"
+            placeholder="Search by name or mobile"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            sx={{ minWidth: 240 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchOutlined fontSize="small" />
+                </InputAdornment>
+              ),
+            }}
+          />
         </div>
 
         <div className="grow bg-white shadow rounded p-2">

@@ -146,6 +146,7 @@ export const API_ROUTES = {
   //Paths for Pharmacy details
   GET_PHARMACYITEMS_BY_DATE: '/pharmacy/getPharmacyDetailsByDate',
   SAVE_PHARMACYITEMS: '/pharmacy/updatePharmacyDetails',
+  MOVE_PENDING_TO_PRESCRIBED: '/pharmacy/movePendingToPrescribed',
   GET_PAYMENT_BREAKUP: '/pharmacy/generatePaymentBreakUp',
 
   GET_ITEM_SUGESSIONS: '/pharmacy/getItemSuggestion/',

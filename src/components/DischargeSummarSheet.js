@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Typography, Paper, Button, CircularProgress } from '@mui/material'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useDispatch, useSelector } from 'react-redux'
 import dynamic from 'next/dynamic'
 import ImageOutlinedIcon from '@mui/icons-material/ImageOutlined'
+import PrintIcon from '@mui/icons-material/Print'
 import {
   getDischargeSummaryTemplate,
   updateDischargeSummaryTemplate,
@@ -12,6 +13,10 @@ import {
 import { toastconfig } from '@/utils/toastconfig'
 import { closeModal } from '@/redux/modalSlice'
 import { toast } from 'react-toastify'
+import {
+  printDischargeSummary,
+  toBlackAndWhiteHtml,
+} from '@/utils/dischargeSummaryPrint'
 
 const JoditEditor = dynamic(() => import('jodit-react'), {
   ssr: false,
@@ -46,7 +51,7 @@ function DischargeSummarSheet({ TreatmentCycleId }) {
 
   useEffect(() => {
     if (dischargeSummaryTemplate?.data) {
-      setTemplate(dischargeSummaryTemplate.data.template)
+      setTemplate(toBlackAndWhiteHtml(dischargeSummaryTemplate.data.template))
     }
   }, [dischargeSummaryTemplate])
 
@@ -59,7 +64,7 @@ function DischargeSummarSheet({ TreatmentCycleId }) {
       const res = await updateDischargeSummaryTemplate(
         user.accessToken,
         TreatmentCycleId,
-        template,
+        toBlackAndWhiteHtml(template),
       )
       if (res.status === 200) {
         toast.success('Discharge summary updated successfully', toastconfig)
@@ -67,6 +72,14 @@ function DischargeSummarSheet({ TreatmentCycleId }) {
       return res
     },
   })
+
+  const handlePrint = useCallback(() => {
+    const editorHtml = editorRef.current?.value || template
+    const printed = printDischargeSummary(editorHtml)
+    if (!printed) {
+      toast.error('Unable to print. Allow pop-ups and try again.', toastconfig)
+    }
+  }, [template])
 
   const insertImageIntoEditor = (imageUrl) => {
     if (!imageUrl) return
@@ -153,7 +166,8 @@ function DischargeSummarSheet({ TreatmentCycleId }) {
           }
         },
       },
-      removeButtons: ['video'],
+      // Use dedicated Print button — Jodit print can scale/blur and hide colored headers
+      removeButtons: ['video', 'print'],
       showXPathInStatusbar: false,
     }),
     [TreatmentCycleId, user.accessToken],
@@ -200,6 +214,15 @@ function DischargeSummarSheet({ TreatmentCycleId }) {
           {isUploadingImage ? 'Uploading Image...' : 'Add Image'}
         </Button>
         <Button
+          color="inherit"
+          variant="outlined"
+          startIcon={<PrintIcon />}
+          onClick={handlePrint}
+          disabled={!template?.trim()}
+        >
+          Print
+        </Button>
+        <Button
           color="primary"
           variant="outlined"
           onClick={handleUpdate.mutate}
@@ -218,7 +241,8 @@ function DischargeSummarSheet({ TreatmentCycleId }) {
 
       <Typography variant="body2" color="text.secondary" className="mt-2">
         Use the image toolbar button, drag and drop, or Add Image to include
-        photos in the discharge summary. Click Update Sheet to save.
+        photos in the discharge summary. Click Print for a clear black-and-white
+        copy, or Update Sheet to save.
       </Typography>
 
       <Paper className="m-4 p-4">

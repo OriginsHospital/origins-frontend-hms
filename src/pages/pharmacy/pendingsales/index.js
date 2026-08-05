@@ -28,7 +28,10 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import dayjs from 'dayjs'
 import { useDispatch, useSelector } from 'react-redux'
 import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query'
-import { getPharmacyDetailsByDate, savePharmacyItems } from '@/constants/apis'
+import {
+  getPharmacyDetailsByDate,
+  movePendingToPrescribed,
+} from '@/constants/apis'
 import { toast, Bounce } from 'react-toastify'
 import PersonOutlineIcon from '@mui/icons-material/PersonOutline'
 import { useRouter } from 'next/router'
@@ -46,6 +49,32 @@ const toastconfig = {
   progress: undefined,
   theme: 'light',
   transition: Bounce,
+}
+
+/** Display names in uniform Title Case (e.g. VADUGULA NAVEEN → Vadugula Naveen). */
+const toTitleCaseName = (name) => {
+  if (!name || typeof name !== 'string') return ''
+  return name
+    .trim()
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) =>
+      word
+        .split('-')
+        .map((part) =>
+          part
+            .split('.')
+            .map((segment) =>
+              segment
+                ? segment.charAt(0).toUpperCase() + segment.slice(1)
+                : segment,
+            )
+            .join('.'),
+        )
+        .join('-'),
+    )
+    .join(' ')
 }
 
 function PendingSalesPage() {
@@ -132,17 +161,28 @@ function PendingSalesPage() {
         return []
       }
 
-      // Filter items with balance > 0 (prescribedQuantity - purchaseQuantity > 0)
+      // Pending Sales = leftover qty on items NOT already in PRESCRIBED
+      // (typically PAID/PACKED with prescribed > purchase). Pure PRESCRIBED
+      // lines belong on Pharmacy → Prescribed and must not reappear here.
+      const isPendingSalesItem = (item) => {
+        const purchaseQty = Number(item.purchaseQuantity || 0)
+        const prescribedQty = Number(item.prescribedQuantity || 0)
+        const balance = prescribedQty - purchaseQty
+        if (balance <= 0) return false
+
+        const stage = String(item.itemStage || '').toUpperCase()
+        if (stage === 'PRESCRIBED') return false
+        if (purchaseQty === 0 && stage !== 'PAID' && stage !== 'PACKED') {
+          return false
+        }
+        return true
+      }
+
       const pendingItems = []
       fetchedData.forEach((patientHeader) => {
         const filteredItems = parseItemDetails(
           patientHeader?.itemDetails,
-        ).filter((item) => {
-          const purchaseQty = item.purchaseQuantity || 0
-          const prescribedQty = item.prescribedQuantity || 0
-          const balance = prescribedQty - purchaseQty
-          return balance > 0
-        })
+        ).filter(isPendingSalesItem)
 
         if (filteredItems && filteredItems.length > 0) {
           pendingItems.push({
@@ -213,26 +253,42 @@ function PendingSalesPage() {
     })
   }
 
-  // Mutation to move items back to PRESCRIBED (bulk operation)
+  // Move only selected pending items → PRESCRIBED; they leave this list
   const moveToPrescribedMutation = useMutation({
     mutationFn: async (payload) => {
-      // For moving back to PRESCRIBED, we need to:
-      // 1. Set purchaseQuantity to 0
-      // 2. Clear itemPurchaseInformation
-      // This will make the itemStage become 'PRESCRIBED' based on the query logic
-      const res = await savePharmacyItems(user?.accessToken, {
-        movetopackedstage: payload,
-      })
+      const res = await movePendingToPrescribed(user?.accessToken, payload)
       return res
     },
     onSuccess: (res, variables) => {
       if (res?.status === 200) {
+        const movedIds = new Set(variables.map((item) => item.id))
         const count = variables.length
+
+        // Instantly remove moved rows so they disappear from Pending Sales
+        queryClient.setQueryData(
+          ['pendingSalesByDate', date, selectedbranch],
+          (old) => {
+            if (!Array.isArray(old)) return old
+            return old
+              .map((patient) => ({
+                ...patient,
+                itemDetails: (patient.itemDetails || []).filter(
+                  (item) => !movedIds.has(item.id),
+                ),
+              }))
+              .filter((patient) => (patient.itemDetails || []).length > 0)
+          },
+        )
+
+        setSelectedItems((prev) =>
+          prev.filter((item) => !movedIds.has(item.id)),
+        )
+
         toast.success(
-          `${count} item(s) moved to Prescribed successfully`,
+          `${count} item(s) moved to Prescribed for today`,
           toastconfig,
         )
-        setSelectedItems([]) // Clear selections after successful move
+
         queryClient.invalidateQueries(['pendingSalesByDate'])
         queryClient.invalidateQueries(['pharmacyModuleInfoByDate'])
       } else {
@@ -251,17 +307,15 @@ function PendingSalesPage() {
       return
     }
 
+    const todayLabel = dayjs().format('DD-MM-YYYY')
     if (
       confirm(
-        `Move ${selectedItems.length} selected item(s) back to Prescribed? This will reset the purchase quantity to 0 for all selected items.`,
+        `Move ${selectedItems.length} selected item(s) to Prescribed for today (${todayLabel})?\n\n• Only checked items will be moved\n• Purchased quantity will not change\n• Pending quantity will appear under Pharmacy → Prescribed on today's date\n• Moved items will leave Pending Sales`,
       )
     ) {
-      // Create payload for all selected items
       const payload = selectedItems.map((item) => ({
         id: item.id,
         type: item.type,
-        purchaseQuantity: 0, // Reset to 0 to move back to PRESCRIBED
-        itemPurchaseInformation: [], // Clear purchase information
       }))
 
       moveToPrescribedMutation.mutate(payload)
@@ -360,6 +414,9 @@ function PendingSalesPage() {
           {patientData.map((patient, index) => {
             const appointmentId = patient.appointmentId
             const isExpanded = expandedId === appointmentId
+            const patientName = toTitleCaseName(patient.patientName)
+            const spouseName = toTitleCaseName(patient.spouseName)
+            const doctorName = toTitleCaseName(patient.doctorName)
 
             return (
               <Accordion
@@ -382,7 +439,7 @@ function PendingSalesPage() {
                           ? patient.photoPath
                           : undefined
                       }
-                      alt={patient.patientName}
+                      alt={patientName}
                       sx={{ width: 56, height: 56 }}
                     />
                     <div className="flex flex-col flex-1 min-w-0">
@@ -395,11 +452,11 @@ function PendingSalesPage() {
                           textOverflow: 'ellipsis',
                           whiteSpace: 'nowrap',
                         }}
-                        title={patient.patientName}
+                        title={patientName}
                       >
-                        {patient.patientName}
+                        {patientName}
                       </Typography>
-                      {patient.spouseName && (
+                      {spouseName && (
                         <Typography
                           variant="body2"
                           className="font-semibold text-gray-800"
@@ -409,14 +466,14 @@ function PendingSalesPage() {
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap',
                           }}
-                          title={patient.spouseName}
+                          title={spouseName}
                         >
-                          {patient.spouseName}
+                          {spouseName}
                         </Typography>
                       )}
                       <div className="flex items-center gap-2 text-sm text-gray-600 mt-1">
                         <PersonOutlineIcon className="w-4 h-4" />
-                        <span>{patient.doctorName}</span>
+                        <span>{doctorName}</span>
                       </div>
                     </div>
                     <Chip

@@ -1994,6 +1994,24 @@ export const savePharmacyItems = async (token, payload) => {
   return response.json()
 }
 
+/** Pending Sales: move unsold balance to Prescribed without changing purchase qty */
+export const movePendingToPrescribed = async (token, items) => {
+  const myHeaders = new Headers()
+  myHeaders.append('Authorization', `Bearer ${token}`)
+  myHeaders.append('Content-Type', 'application/json')
+  const response = await fetch(
+    `${process.env.NEXT_PUBLIC_API_BASE_URL}${API_ROUTES.MOVE_PENDING_TO_PRESCRIBED}`,
+    {
+      method: 'PUT',
+      headers: myHeaders,
+      body: JSON.stringify({ movePendingToPrescribed: items }),
+      redirect: 'follow',
+      credentials: 'include',
+    },
+  )
+  return response.json()
+}
+
 export const getReportsByDate = async (token, fromDate, toDate, branch) => {
   const myHeaders = new Headers()
   myHeaders.append('Authorization', `Bearer ${token}`)

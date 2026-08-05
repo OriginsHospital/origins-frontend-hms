@@ -625,6 +625,11 @@ function SideNav(props) {
             name: 'Hystero/Lap',
             relatedModule: 'scanModule',
           },
+          {
+            path: '/scan/discharge-card',
+            name: 'Discharge Card',
+            relatedModule: 'scanModule',
+          },
         ],
       },
 

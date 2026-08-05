@@ -64,6 +64,7 @@ import OPDSheet from '@/components/OPDSheet'
 import { DateCalendar } from '@mui/x-date-pickers'
 import dynamic from 'next/dynamic'
 import DischargeSummarSheet from '@/components/DischargeSummarSheet'
+import DischargeCard from '@/components/DischargeCard'
 import PickupSheet from '@/components/PickupSheet'
 import { hideLoader, showLoader } from '@/redux/loaderSlice'
 import { useRouter } from 'next/router'
@@ -1939,6 +1940,13 @@ export default function Appointments() {
                         Discharge Summary
                       </Button>
                     )}
+                    <Button
+                      variant="outlined"
+                      className="text-secondary capitalize col-span-3 "
+                      onClick={() => dispatch(openModal('DischargeCard'))}
+                    >
+                      Discharge Card
+                    </Button>
                     {patientDetails?.patientInfo?.activeVisitId && (
                       <Button
                         variant="outlined"
@@ -1958,6 +1966,13 @@ export default function Appointments() {
                 )}
                 {selectedPatient?.type === 'Consultation' && (
                   <div className="flex gap-3">
+                    <Button
+                      variant="outlined"
+                      className="text-secondary capitalize"
+                      onClick={() => dispatch(openModal('DischargeCard'))}
+                    >
+                      Discharge Card
+                    </Button>
                     {patientDetails?.patientInfo?.activeVisitId && (
                       <Button
                         variant="outlined"
@@ -2000,6 +2015,16 @@ export default function Appointments() {
                     />
                   </Modal>
                 )}
+                <Modal
+                  uniqueKey="DischargeCard"
+                  maxWidth="md"
+                  closeOnOutsideClick={true}
+                >
+                  <DischargeCard
+                    patientInfo={patientDetails?.patientInfo}
+                    treatmentCycleId={sheetTreatmentCycleId}
+                  />
+                </Modal>
                 <Modal
                   uniqueKey="PickupSheet"
                   maxWidth="xl"

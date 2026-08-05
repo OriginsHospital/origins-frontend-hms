@@ -231,6 +231,7 @@ function PatientPrescription({
   appointmentId,
   activeVisitAppointments,
   patientId,
+  patientName,
 }) {
   const user = useSelector((store) => store.user)
   const { billTypes } = useSelector((store) => store.dropdowns)
@@ -847,15 +848,19 @@ function PatientPrescription({
       >
         <div className="flex max-h-[min(92vh,960px)] min-h-0 flex-col overflow-hidden">
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-7 pt-4 sm:px-8">
-            <div className="flex items-start justify-between gap-4 border-b border-gray-100 pb-3">
+            <div className="relative flex items-center justify-between gap-4 border-b border-gray-100 pb-3">
               <span className="text-xl font-semibold text-secondary">
                 Patient Prescription
               </span>
+              {patientName ? (
+                <span className="pointer-events-none absolute left-1/2 max-w-[50%] -translate-x-1/2 truncate text-center text-xl font-bold text-gray-900">
+                  {patientName}
+                </span>
+              ) : null}
 
               <IconButton
                 onClick={() => dispatch(closeModal())}
                 size="small"
-                sx={{ mt: -0.5 }}
                 aria-label="Close prescription"
               >
                 <Close />

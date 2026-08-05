@@ -219,25 +219,20 @@ function RenderAccordianDetails({
   }
 
   const handleGrnRowChange = (medicineId, index, field, value) => {
+    const normalizedValue =
+      field === 'usedQuantity' || field === 'returnedQuantity'
+        ? value === '' || value === null || value === undefined
+          ? 0
+          : Number(value)
+        : value
+
     setGrnRows((prev) => ({
       ...prev,
       [medicineId]: prev[medicineId].map((row, i) =>
         i === index
           ? {
               ...row,
-              [field]: value,
-              // Calculate finalQuantity when usedQuantity or returnedQuantity changes
-              // finalQuantity:
-              //   field === 'usedQuantity' || field === 'returnedQuantity'
-              //     ? Number(
-              //       field === 'usedQuantity' ? value : row.usedQuantity,
-              //     ) -
-              //     Number(
-              //       field === 'returnedQuantity'
-              //         ? value
-              //         : row.returnedQuantity || 0,
-              //     )
-              //     : row.finalQuantity,
+              [field]: normalizedValue,
             }
           : row,
       ),
@@ -246,12 +241,30 @@ function RenderAccordianDetails({
 
   const validateGrnSelections = (medicineId, prescribedQuantity) => {
     const grnInfo = grnRows[medicineId] || []
-    const totalPackedQuantity = grnInfo.reduce(
-      (sum, row) =>
-        sum + Number(row.usedQuantity || 0) - Number(row.returnedQuantity || 0),
-      0,
+    if (!grnInfo.length) return false
+
+    // Use initial packed qty when present (PACKED edit); otherwise entered qty (PRESCRIBED)
+    const totalPackedQuantity = grnInfo.reduce((sum, row) => {
+      const initialQty = Number(
+        row.initialUsedQuantity ?? row.usedQuantity ?? 0,
+      )
+      const returnedQty = Number(row.returnedQuantity || 0)
+      return sum + initialQty - returnedQty
+    }, 0)
+
+    const hasInvalidReturn = grnInfo.some((row) => {
+      const initialQty = Number(
+        row.initialUsedQuantity ?? row.usedQuantity ?? 0,
+      )
+      const returnedQty = Number(row.returnedQuantity || 0)
+      return returnedQty < 0 || returnedQty > initialQty
+    })
+
+    return (
+      !hasInvalidReturn &&
+      totalPackedQuantity >= 0 &&
+      totalPackedQuantity <= Number(prescribedQuantity || 0)
     )
-    return totalPackedQuantity <= prescribedQuantity
   }
   const validateAndCallAPI = () => {
     // Filter to only include medicines that have quantities entered (GRN rows selected)
@@ -382,6 +395,10 @@ function RenderAccordianDetails({
               totalCost: itemResObject?.totalCost,
               type: itemResObject?.type,
               purchaseDetails: itemResObject?.purchaseDetails,
+              purchaseQuantity: (itemResObject?.purchaseDetails || []).reduce(
+                (sum, detail) => sum + Number(detail.usedQuantity || 0),
+                0,
+              ),
               itemPurchaseInformation: (
                 itemResObject?.purchaseDetails || []
               ).map((detail) => ({
@@ -402,6 +419,14 @@ function RenderAccordianDetails({
 
       if (variables.clickedFromPacked) {
         setSaveEnabled(false)
+        if (variables.editMedicineId != null) {
+          dispatch(closeModal(`pack-modal-${variables.editMedicineId}`))
+          setGrnRows((prev) => {
+            const next = { ...prev }
+            delete next[variables.editMedicineId]
+            return next
+          })
+        }
         queryClient.invalidateQueries(['pharmacyModuleInfoByDate'])
         toast.success('Data updated successfully', toastconfig)
       }
@@ -994,7 +1019,7 @@ function RenderAccordianDetails({
       console.log(response)
     },
   })
-  const handleButtonAction = (isSaveEnabled) => {
+  const handleButtonAction = (isSaveEnabled, editMedicineId = null) => {
     let raiseToast = false
     details.map((medData) => {
       if (medData.purchaseQuantity > medData.prescribedQuantity) {
@@ -1020,10 +1045,10 @@ function RenderAccordianDetails({
             // This item has been modified - use new GRN data
             const itemGrnRows = grnRows[itemInfo.id]
 
-            // Calculate total quantities
+            // Calculate total quantities from initial packed − returns
             const totalUsedQuantity = itemGrnRows.reduce(
               (sum, row) =>
-                sum + Number(row.initialUsedQuantity || row.usedQuantity || 0),
+                sum + Number(row.initialUsedQuantity ?? row.usedQuantity ?? 0),
               0,
             )
             const totalReturnedQuantity = itemGrnRows.reduce(
@@ -1044,24 +1069,30 @@ function RenderAccordianDetails({
 
             // Format GRN information for modified items
             const itemPurchaseInformation = itemGrnRows
-              .filter(
-                (row) =>
-                  row.grnId &&
-                  (row.usedQuantity > 0 || row.returnedQuantity > 0),
-              )
-              .map((row) => ({
-                grnId: row.grnId.grnId,
-                expiryDate: row.grnId.expiryDate,
-                mrpPerTablet: row.grnId.mrpPerTablet,
-                usedQuantity: Number(
-                  row.initialUsedQuantity - row.returnedQuantity || 0,
-                ),
-                returnedQuantity: Number(row.returnedQuantity || 0),
-                initialUsedQuantity:
-                  Number(row.initialUsedQuantity) || Number(row.usedQuantity),
-                batchNo: row.grnId.batchNo,
-                nonPurchaseReason,
-              }))
+              .filter((row) => {
+                if (!row.grnId) return false
+                const initialQty = Number(
+                  row.initialUsedQuantity ?? row.usedQuantity ?? 0,
+                )
+                const returnedQty = Number(row.returnedQuantity || 0)
+                return initialQty > 0 || returnedQty > 0
+              })
+              .map((row) => {
+                const initialQty = Number(
+                  row.initialUsedQuantity ?? row.usedQuantity ?? 0,
+                )
+                const returnedQty = Number(row.returnedQuantity || 0)
+                return {
+                  grnId: row.grnId.grnId,
+                  expiryDate: row.grnId.expiryDate,
+                  mrpPerTablet: row.grnId.mrpPerTablet,
+                  usedQuantity: Math.max(0, initialQty - returnedQty),
+                  returnedQuantity: returnedQty,
+                  initialUsedQuantity: initialQty,
+                  batchNo: row.grnId.batchNo,
+                  nonPurchaseReason,
+                }
+              })
 
             dbFormat.push({
               id: itemInfo.id,
@@ -1119,6 +1150,7 @@ function RenderAccordianDetails({
         paymentBreakup.mutate({
           generateBreakUp: dbFormat,
           clickedFromPacked: true,
+          editMedicineId,
         })
       } else {
         console.log(hdrKey)
@@ -1557,30 +1589,55 @@ function RenderAccordianDetails({
   }
 
   const handleEdit = (med, index) => {
+    // Parse existing GRN information
+    let existingGrns =
+      typeof med.itemPurchaseInformation === 'string'
+        ? (() => {
+            try {
+              return JSON.parse(med.itemPurchaseInformation)
+            } catch {
+              return []
+            }
+          })()
+        : med.itemPurchaseInformation
+
+    if (!Array.isArray(existingGrns)) {
+      existingGrns = []
+    }
+
+    if (existingGrns.length === 0) {
+      toast.error('No packed GRN details found for this medicine', toastconfig)
+      return
+    }
+
     getGrnInfo.mutate(med?.id)
     dispatch(openModal(`pack-modal-${med?.id}`))
 
-    // Parse existing GRN information
-    const existingGrns =
-      typeof med.itemPurchaseInformation === 'string'
-        ? JSON.parse(med.itemPurchaseInformation)
-        : med.itemPurchaseInformation
     console.log('existingGrns', existingGrns)
-    // Set GRN rows with all three quantities
+    // Set GRN rows with all three quantities for return/edit flow
     setGrnRows((prev) => ({
       ...prev,
-      [med.id]: existingGrns.map((info) => ({
-        grnId: {
-          grnId: info.grnId,
-          expiryDate: info.expiryDate,
-          mrpPerTablet: info.mrpPerTablet,
-          totalQuantity: info.initialUsedQuantity, // Use initial quantity as total
-          batchNo: info.batchNo,
-        },
-        initialUsedQuantity: info.initialUsedQuantity, // Original packed quantity
-        usedQuantity: info.usedQuantity, // Current quantity after returns
-        returnedQuantity: info.returnedQuantity || 0,
-      })),
+      [med.id]: existingGrns.map((info) => {
+        const initialQty = Number(
+          info.initialUsedQuantity ?? info.usedQuantity ?? 0,
+        )
+        const returnedQty = Number(info.returnedQuantity || 0)
+        const currentQty = Number(
+          info.usedQuantity ?? Math.max(0, initialQty - returnedQty),
+        )
+        return {
+          grnId: {
+            grnId: info.grnId,
+            expiryDate: info.expiryDate,
+            mrpPerTablet: info.mrpPerTablet,
+            totalQuantity: initialQty,
+            batchNo: info.batchNo,
+          },
+          initialUsedQuantity: initialQty,
+          usedQuantity: currentQty,
+          returnedQuantity: returnedQty,
+        }
+      }),
     }))
   }
   return (
@@ -2458,7 +2515,7 @@ function RenderAccordianDetails({
             <span className="text-lg font-bold">{med.itemName}</span>
             <div className="mb-4 p-3 bg-gray-50 rounded-lg">
               {column.label === 'PACKED' ? (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div>
                     <Typography variant="subtitle2" color="textSecondary">
                       Initial Packed
@@ -2483,6 +2540,17 @@ function RenderAccordianDetails({
                             row.initialUsedQuantity || row.usedQuantity || 0,
                           ) -
                           Number(row.returnedQuantity || 0),
+                        0,
+                      ) || 0}
+                    </Typography>
+                  </div>
+                  <div>
+                    <Typography variant="subtitle2" color="textSecondary">
+                      Returned
+                    </Typography>
+                    <Typography variant="h6" className="text-orange-500">
+                      {grnRows[med.id]?.reduce(
+                        (sum, row) => sum + Number(row.returnedQuantity || 0),
                         0,
                       ) || 0}
                     </Typography>
@@ -2588,7 +2656,7 @@ function RenderAccordianDetails({
                 )}
                 <TextField
                   type="number"
-                  label="Quantity"
+                  label={column.label === 'PACKED' ? 'Packed Qty' : 'Quantity'}
                   size="small"
                   value={row.initialUsedQuantity || row.usedQuantity}
                   onChange={(e) =>
@@ -2624,25 +2692,65 @@ function RenderAccordianDetails({
                   <>
                     <TextField
                       type="number"
+                      label="Return Qty"
+                      size="small"
+                      value={row.returnedQuantity || 0}
+                      onChange={(e) =>
+                        handleGrnRowChange(
+                          med.id,
+                          index,
+                          'returnedQuantity',
+                          e.target.value,
+                        )
+                      }
+                      error={
+                        Number(row.returnedQuantity || 0) >
+                        Number(row.initialUsedQuantity || row.usedQuantity || 0)
+                      }
+                      helperText={
+                        Number(row.returnedQuantity || 0) >
+                        Number(row.initialUsedQuantity || row.usedQuantity || 0)
+                          ? 'Cannot exceed packed quantity'
+                          : ''
+                      }
+                      sx={{ width: 120 }}
+                      InputProps={{
+                        inputProps: {
+                          min: 0,
+                          max: Number(
+                            row.initialUsedQuantity || row.usedQuantity || 0,
+                          ),
+                        },
+                      }}
+                    />
+                    <TextField
+                      type="number"
                       label="Final Qty"
                       size="small"
-                      value={row.initialUsedQuantity || row.usedQuantity || 0}
+                      value={Math.max(
+                        0,
+                        Number(
+                          row.initialUsedQuantity || row.usedQuantity || 0,
+                        ) - Number(row.returnedQuantity || 0),
+                      )}
                       disabled
                       sx={{ width: 120 }}
                     />
                   </>
                 )}
 
-                <IconButton
-                  onClick={() => {
-                    setGrnRows((prev) => ({
-                      ...prev,
-                      [med.id]: prev[med.id].filter((_, i) => i !== index),
-                    }))
-                  }}
-                >
-                  <DeleteOutline color="error" />
-                </IconButton>
+                {column.label !== 'PACKED' && (
+                  <IconButton
+                    onClick={() => {
+                      setGrnRows((prev) => ({
+                        ...prev,
+                        [med.id]: prev[med.id].filter((_, i) => i !== index),
+                      }))
+                    }}
+                  >
+                    <DeleteOutline color="error" />
+                  </IconButton>
+                )}
               </div>
             ))}
 
@@ -2685,7 +2793,9 @@ function RenderAccordianDetails({
                   className="text-white capitalize "
                   onClick={() => {
                     if (validateGrnSelections(med.id, med.prescribedQuantity)) {
-                      handleButtonAction(true)
+                      handleButtonAction(true, med.id)
+                    } else {
+                      toast.error('Please check return quantities', toastconfig)
                     }
                   }}
                   disabled={

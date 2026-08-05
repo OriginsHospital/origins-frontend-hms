@@ -2014,6 +2014,20 @@ function Prescription({
         appointmentId={appointmentId}
         activeVisitAppointments={activeVisitAppointments}
         patientId={patientInfo?.patientId}
+        patientName={
+          selectedPatient?.patientName ||
+          patientInfo?.patientName ||
+          patientInfo?.name ||
+          patientInfo?.fullName ||
+          [
+            patientInfo?.firstName,
+            patientInfo?.middleName,
+            patientInfo?.lastName,
+          ]
+            .filter(Boolean)
+            .join(' ') ||
+          ''
+        }
       />
 
       <SpousePrescription
