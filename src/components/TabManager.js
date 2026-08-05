@@ -33,6 +33,9 @@ const routeTitleMap = {
   '/reports': 'Reports',
   '/dailyreport': 'Daily Report',
   '/ipmodule': 'IP Module',
+  '/book-option': 'Book Option',
+  '/admin/layouts': 'Master Layouts',
+  '/ipmodule/layouts': 'Master Layouts',
 }
 
 export default function TabManager({ children }) {

@@ -684,6 +684,11 @@ function SideNav(props) {
             relatedModule: 'masterData',
             // icon: <BiAnalyse size={30} />,
           },
+          {
+            path: '/admin/layouts',
+            name: 'Master Layouts',
+            relatedModule: 'masterData',
+          },
           // {
           //   path: '/admin/reports',
           //   name: 'Reports',
@@ -717,7 +722,18 @@ function SideNav(props) {
         name: 'IP Module',
         relatedModule: 'ipmodule',
         Iconn: TbBuildingCommunity,
-        subRoutes: [],
+        subRoutes: [
+          {
+            path: '/ipmodule',
+            name: 'IP List',
+            relatedModule: 'ipmodule',
+          },
+          {
+            path: '/book-option',
+            name: 'Book Option',
+            relatedModule: 'ipmodule',
+          },
+        ],
       },
     ]
 

@@ -208,6 +208,11 @@ const HoverDevCards = () => {
             // icon: <BiAnalyse size={30} />,
           },
           {
+            path: '/admin/layouts',
+            name: 'Master Layouts',
+            relatedModule: 'masterData',
+          },
+          {
             path: '/admin/reports',
             name: 'Reports',
             // icon: <FaMoneyBill size={30} />,
@@ -267,6 +272,13 @@ const HoverDevCards = () => {
       {
         path: '/ipmodule',
         name: 'IP Module',
+        relatedModule: 'ipmodule',
+        Iconn: TbBuilding,
+        subRoutes: [],
+      },
+      {
+        path: '/book-option',
+        name: 'Book Option',
         relatedModule: 'ipmodule',
         Iconn: TbBuilding,
         subRoutes: [],

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSelector } from 'react-redux'
+import { useRouter } from 'next/router'
 import {
   Box,
   Button,
@@ -69,6 +70,7 @@ const DEFAULT_GENDER_OPTIONS = [
 const defaultPatientType = [{ value: 1, label: 'General' }]
 
 const LayoutsPage = () => {
+  const router = useRouter()
   const queryClient = useQueryClient()
   const dropdowns = useSelector((store) => store.dropdowns)
   const user = useSelector((store) => store.user)
@@ -572,8 +574,13 @@ const LayoutsPage = () => {
       return
     }
 
-    setBookingModalState({ open: true, bed, activeTab: 0 })
-    resetBookingForms()
+    // Booking moved to Book Option page
+    router.push({
+      pathname: '/book-option',
+      query: {
+        branchId: selectedBranch || '',
+      },
+    })
   }
 
   const handleSearchInputChange = (event) => {
@@ -1537,19 +1544,33 @@ const LayoutsPage = () => {
             Layouts
           </Typography>
           <Typography variant="body2" color="textSecondary">
-            Interactive Bed Management with Registration Integration
+            Bed status overview. Use Book Option to admit patients; Master
+            Layouts to configure floors, rooms and beds.
           </Typography>
         </div>
-        <Button
-          variant="contained"
-          onClick={() => {
-            resetRegisterForm(selectedBranch || registerForm.branchId || '')
-            setRegisterModalOpen(true)
-            setRegisterErrors({})
-          }}
-        >
-          Register Building
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outlined"
+            onClick={() =>
+              router.push({
+                pathname: '/book-option',
+                query: selectedBranch ? { branchId: selectedBranch } : {},
+              })
+            }
+          >
+            Book Option
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              resetRegisterForm(selectedBranch || registerForm.branchId || '')
+              setRegisterModalOpen(true)
+              setRegisterErrors({})
+            }}
+          >
+            Register Building
+          </Button>
+        </div>
       </div>
 
       <Box

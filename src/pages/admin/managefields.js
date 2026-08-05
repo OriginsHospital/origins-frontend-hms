@@ -1882,6 +1882,23 @@ function Managefields() {
             {'Master Data'}
           </span>
 
+          <div className="px-4">
+            <Button
+              fullWidth
+              variant="contained"
+              onClick={() => router.push('/admin/layouts')}
+            >
+              Master Layouts
+            </Button>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              className="block mt-1 text-center"
+            >
+              Floors, rooms & beds
+            </Typography>
+          </div>
+
           {/* Add the search input */}
           <div className="px-4">
             <TextField
