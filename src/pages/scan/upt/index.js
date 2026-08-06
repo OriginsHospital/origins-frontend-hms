@@ -29,6 +29,8 @@ import EditIcon from '@mui/icons-material/Edit'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import AddIcon from '@mui/icons-material/Add'
+import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf'
+import TableViewIcon from '@mui/icons-material/TableView'
 import { DatePicker } from '@mui/x-date-pickers/DatePicker'
 import { DataGrid } from '@mui/x-data-grid'
 import dayjs from 'dayjs'
@@ -48,6 +50,7 @@ import {
   deleteUptResult,
 } from '@/constants/apis'
 import { toastconfig } from '@/utils/toastconfig'
+import { exportAsExcel, exportAsPDF } from '@/utils/reportExport'
 
 const CYCLE_TYPE_OPTIONS = [
   { value: 'IVF', label: 'IVF' },
@@ -58,6 +61,17 @@ const CYCLE_TYPE_OPTIONS = [
 const UPT_RESULT_OPTIONS = [
   { value: 'Positive', label: 'Positive' },
   { value: 'Negative', label: 'Negative' },
+]
+
+const EXPORT_COLUMNS = [
+  { field: 'resultDate', headerName: 'Date' },
+  { field: 'branchCode', headerName: 'Branch' },
+  { field: 'originsId', headerName: 'Patient ID' },
+  { field: 'patientName', headerName: 'Patient Name' },
+  { field: 'mobileNumber', headerName: 'Mobile' },
+  { field: 'cycleType', headerName: 'Cycle Type' },
+  { field: 'uptResult', headerName: 'UPT Result' },
+  { field: 'createdByNurseName', headerName: 'Created By' },
 ]
 
 const emptyForm = (defaultBranchId = '') => ({
@@ -371,6 +385,59 @@ function UptResultsPage() {
   const applySearch = () => {
     setAppliedSearch(listSearch.trim())
   }
+
+  const getExportRows = useCallback(() => {
+    return (listRows || []).map((row) => ({
+      resultDate: formatDateDisplay(row.resultDate),
+      branchCode: row.branchCode || row.branchName || '',
+      originsId: row.originsId || '',
+      patientName: row.patientName || '',
+      mobileNumber: row.mobileNumber || '',
+      cycleType: row.cycleType || '',
+      uptResult: row.uptResult || '',
+      createdByNurseName: row.createdByNurseName || '',
+    }))
+  }, [listRows])
+
+  const getExportBranchLabel = useCallback(() => {
+    if (!filterBranchId) return null
+    const branch = branches.find((b) => String(b.id) === String(filterBranchId))
+    return branch?.branchCode || branch?.name || null
+  }, [branches, filterBranchId])
+
+  const handleExport = useCallback(
+    (format) => {
+      if (!listRows?.length) {
+        toast.error(
+          'No records to export for the selected filters',
+          toastconfig,
+        )
+        return
+      }
+
+      const options = {
+        reportName: 'UPT_Results',
+        branchName: getExportBranchLabel() || undefined,
+      }
+
+      try {
+        if (format === 'pdf') {
+          exportAsPDF(getExportRows(), EXPORT_COLUMNS, options)
+          toast.success('PDF downloaded', toastconfig)
+        } else {
+          exportAsExcel(getExportRows(), EXPORT_COLUMNS, options)
+          toast.success('Excel file downloaded', toastconfig)
+        }
+      } catch (err) {
+        console.error(err)
+        toast.error(
+          err?.message || `Failed to export ${format.toUpperCase()}`,
+          toastconfig,
+        )
+      }
+    },
+    [getExportBranchLabel, getExportRows, listRows],
+  )
 
   const columns = useMemo(
     () => [
@@ -896,7 +963,29 @@ function UptResultsPage() {
                 label={`${listRows.length} record${listRows.length === 1 ? '' : 's'}`}
                 variant="outlined"
               />
-              <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
+              <Box
+                sx={{ ml: 'auto', display: 'flex', gap: 1, flexWrap: 'wrap' }}
+              >
+                <Button
+                  variant="outlined"
+                  size="small"
+                  color="success"
+                  startIcon={<TableViewIcon />}
+                  onClick={() => handleExport('excel')}
+                  disabled={!listRows.length || isLoadingList}
+                >
+                  Excel
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  color="error"
+                  startIcon={<PictureAsPdfIcon />}
+                  onClick={() => handleExport('pdf')}
+                  disabled={!listRows.length || isLoadingList}
+                >
+                  PDF
+                </Button>
                 <Button
                   variant="outlined"
                   size="small"
