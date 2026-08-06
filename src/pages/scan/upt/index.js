@@ -14,6 +14,9 @@ import {
   Grid,
   IconButton,
   InputLabel,
+  ListItemIcon,
+  ListItemText,
+  Menu,
   MenuItem,
   Select,
   Tab,
@@ -31,6 +34,8 @@ import RefreshIcon from '@mui/icons-material/Refresh'
 import AddIcon from '@mui/icons-material/Add'
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf'
 import TableViewIcon from '@mui/icons-material/TableView'
+import MoreVertIcon from '@mui/icons-material/MoreVert'
+import SearchIcon from '@mui/icons-material/Search'
 import { DatePicker } from '@mui/x-date-pickers/DatePicker'
 import { DataGrid } from '@mui/x-data-grid'
 import dayjs from 'dayjs'
@@ -142,6 +147,7 @@ function UptResultsPage() {
   const [filterNurseId, setFilterNurseId] = useState('')
   const [listSearch, setListSearch] = useState('')
   const [appliedSearch, setAppliedSearch] = useState('')
+  const [exportMenuAnchor, setExportMenuAnchor] = useState(null)
 
   useEffect(() => {
     if (defaultBranchId && !form.branchId) {
@@ -569,19 +575,11 @@ function UptResultsPage() {
   return (
     <div className="p-4 md:p-6 h-full overflow-y-auto">
       <Breadcrumb />
-      <Box sx={{ mb: 1, mt: 1 }}>
-        <Typography variant="h5" fontWeight={700} className="text-secondary">
-          UPT Results
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Record urine pregnancy test results and review entries with filters.
-        </Typography>
-      </Box>
 
       <Tabs
         value={pageTab}
         onChange={(_e, next) => setPageTab(next)}
-        sx={{ borderBottom: 1, borderColor: 'divider' }}
+        sx={{ borderBottom: 1, borderColor: 'divider', mt: 1 }}
       >
         <Tab label={isEditMode ? 'Edit Entry' : 'Data Entry'} />
         <Tab label="Results List" />
@@ -812,40 +810,42 @@ function UptResultsPage() {
       </TabPanel>
 
       <TabPanel value={pageTab} index={1}>
-        <div className="w-full flex flex-col lg:flex-row gap-4">
+        <Box
+          className="bg-white shadow rounded"
+          sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1.5 }}
+        >
           <Box
-            className="bg-white shadow rounded"
             sx={{
-              width: { xs: '100%', lg: 280 },
-              flexShrink: 0,
-              p: 2,
               display: 'flex',
-              flexDirection: 'column',
-              gap: 2,
+              flexWrap: 'wrap',
+              gap: 1.25,
+              alignItems: 'center',
             }}
           >
-            <Typography
-              variant="subtitle2"
-              className="text-secondary font-semibold"
-            >
-              Filters
-            </Typography>
-
             <DatePicker
-              label="From Date"
+              label="From"
               value={fromDate}
               onChange={setFromDate}
               format="DD/MM/YYYY"
-              slotProps={{ textField: { size: 'small', fullWidth: true } }}
+              slotProps={{
+                textField: {
+                  size: 'small',
+                  sx: { width: { xs: '100%', sm: 150 } },
+                },
+              }}
             />
             <DatePicker
-              label="To Date"
+              label="To"
               value={toDate}
               onChange={setToDate}
               format="DD/MM/YYYY"
-              slotProps={{ textField: { size: 'small', fullWidth: true } }}
+              slotProps={{
+                textField: {
+                  size: 'small',
+                  sx: { width: { xs: '100%', sm: 150 } },
+                },
+              }}
             />
-
             <Autocomplete
               size="small"
               options={branches}
@@ -857,15 +857,16 @@ function UptResultsPage() {
                 null
               }
               onChange={(_e, value) => setFilterBranchId(value?.id ?? '')}
-              renderInput={(params) => (
-                <TextField {...params} label="Branch" fullWidth />
-              )}
+              sx={{ width: { xs: '100%', sm: 140 } }}
+              renderInput={(params) => <TextField {...params} label="Branch" />}
             />
-
-            <FormControl fullWidth size="small">
-              <InputLabel>Cycle Type</InputLabel>
+            <FormControl
+              size="small"
+              sx={{ minWidth: { xs: '100%', sm: 120 } }}
+            >
+              <InputLabel>Cycle</InputLabel>
               <Select
-                label="Cycle Type"
+                label="Cycle"
                 value={filterCycleType}
                 onChange={(e) => setFilterCycleType(e.target.value)}
               >
@@ -877,11 +878,13 @@ function UptResultsPage() {
                 ))}
               </Select>
             </FormControl>
-
-            <FormControl fullWidth size="small">
-              <InputLabel>UPT Result</InputLabel>
+            <FormControl
+              size="small"
+              sx={{ minWidth: { xs: '100%', sm: 120 } }}
+            >
+              <InputLabel>Result</InputLabel>
               <Select
-                label="UPT Result"
+                label="Result"
                 value={filterUptResult}
                 onChange={(e) => setFilterUptResult(e.target.value)}
               >
@@ -893,8 +896,10 @@ function UptResultsPage() {
                 ))}
               </Select>
             </FormControl>
-
-            <FormControl fullWidth size="small">
+            <FormControl
+              size="small"
+              sx={{ minWidth: { xs: '100%', sm: 150 } }}
+            >
               <InputLabel>Created By</InputLabel>
               <Select
                 label="Created By"
@@ -909,133 +914,164 @@ function UptResultsPage() {
                 ))}
               </Select>
             </FormControl>
-
             <TextField
               size="small"
-              label="Search"
-              placeholder="Patient, ID, mobile…"
+              placeholder="Search patient…"
               value={listSearch}
               onChange={(e) => setListSearch(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') applySearch()
               }}
-              fullWidth
+              sx={{ width: { xs: '100%', sm: 180 } }}
+              InputProps={{
+                endAdornment: (
+                  <IconButton
+                    size="small"
+                    onClick={applySearch}
+                    edge="end"
+                    aria-label="Search"
+                  >
+                    <SearchIcon fontSize="small" />
+                  </IconButton>
+                ),
+              }}
             />
+            <Button
+              variant="text"
+              size="small"
+              onClick={clearFilters}
+              sx={{ textTransform: 'none', whiteSpace: 'nowrap' }}
+            >
+              Reset
+            </Button>
+          </Box>
 
-            <Box sx={{ display: 'flex', gap: 1 }}>
+          <Divider />
+
+          <Box
+            sx={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: 1,
+              alignItems: 'center',
+            }}
+          >
+            <Typography variant="subtitle1" fontWeight={600}>
+              UPT Results
+            </Typography>
+            <Chip
+              size="small"
+              label={`${listRows.length} record${listRows.length === 1 ? '' : 's'}`}
+              variant="outlined"
+            />
+            <Box
+              sx={{
+                ml: 'auto',
+                display: 'flex',
+                gap: 0.75,
+                alignItems: 'center',
+              }}
+            >
+              <Tooltip title="Refresh">
+                <span>
+                  <IconButton
+                    size="small"
+                    onClick={() => refetchList()}
+                    disabled={isFetchingList}
+                    aria-label="Refresh"
+                  >
+                    <RefreshIcon fontSize="small" />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title="Export">
+                <span>
+                  <IconButton
+                    size="small"
+                    onClick={(e) => setExportMenuAnchor(e.currentTarget)}
+                    disabled={!listRows.length || isLoadingList}
+                    aria-label="Export options"
+                    aria-haspopup="true"
+                    aria-expanded={Boolean(exportMenuAnchor)}
+                  >
+                    <MoreVertIcon fontSize="small" />
+                  </IconButton>
+                </span>
+              </Tooltip>
               <Button
                 variant="contained"
                 size="small"
-                fullWidth
-                onClick={applySearch}
+                startIcon={<AddIcon />}
+                onClick={() => {
+                  handleClearForm()
+                  setPageTab(0)
+                }}
               >
-                Apply
-              </Button>
-              <Button
-                variant="outlined"
-                size="small"
-                fullWidth
-                onClick={clearFilters}
-              >
-                Reset
+                New Entry
               </Button>
             </Box>
           </Box>
+
+          <Menu
+            anchorEl={exportMenuAnchor}
+            open={Boolean(exportMenuAnchor)}
+            onClose={() => setExportMenuAnchor(null)}
+            keepMounted={false}
+            disableScrollLock
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+            PaperProps={{ elevation: 3, sx: { minWidth: 180, mt: 0.5 } }}
+          >
+            <MenuItem
+              onClick={() => {
+                setExportMenuAnchor(null)
+                handleExport('excel')
+              }}
+            >
+              <ListItemIcon>
+                <TableViewIcon fontSize="small" color="success" />
+              </ListItemIcon>
+              <ListItemText primary="Export Excel" />
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                setExportMenuAnchor(null)
+                handleExport('pdf')
+              }}
+            >
+              <ListItemIcon>
+                <PictureAsPdfIcon fontSize="small" color="error" />
+              </ListItemIcon>
+              <ListItemText primary="Export PDF" />
+            </MenuItem>
+          </Menu>
 
           <Box
-            className="bg-white shadow rounded grow"
-            sx={{ p: 2, minWidth: 0, display: 'flex', flexDirection: 'column' }}
+            sx={{
+              height: 'calc(100vh - 300px)',
+              minHeight: 400,
+              width: '100%',
+            }}
           >
-            <Box
-              sx={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: 1.5,
-                alignItems: 'center',
-                mb: 2,
+            <DataGrid
+              rows={listRows}
+              columns={columns}
+              loading={isLoadingList || isFetchingList}
+              disableRowSelectionOnClick
+              pageSizeOptions={[10, 25, 50]}
+              initialState={{
+                pagination: { paginationModel: { pageSize: 25, page: 0 } },
               }}
-            >
-              <Typography variant="subtitle1" fontWeight={600}>
-                UPT Results
-              </Typography>
-              <Chip
-                size="small"
-                label={`${listRows.length} record${listRows.length === 1 ? '' : 's'}`}
-                variant="outlined"
-              />
-              <Box
-                sx={{ ml: 'auto', display: 'flex', gap: 1, flexWrap: 'wrap' }}
-              >
-                <Button
-                  variant="outlined"
-                  size="small"
-                  color="success"
-                  startIcon={<TableViewIcon />}
-                  onClick={() => handleExport('excel')}
-                  disabled={!listRows.length || isLoadingList}
-                >
-                  Excel
-                </Button>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  color="error"
-                  startIcon={<PictureAsPdfIcon />}
-                  onClick={() => handleExport('pdf')}
-                  disabled={!listRows.length || isLoadingList}
-                >
-                  PDF
-                </Button>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  startIcon={<RefreshIcon />}
-                  onClick={() => refetchList()}
-                  disabled={isFetchingList}
-                >
-                  Refresh
-                </Button>
-                <Button
-                  variant="contained"
-                  size="small"
-                  startIcon={<AddIcon />}
-                  onClick={() => {
-                    handleClearForm()
-                    setPageTab(0)
-                  }}
-                >
-                  New Entry
-                </Button>
-              </Box>
-            </Box>
-
-            <Box
-              sx={{
-                height: 'calc(100vh - 320px)',
-                minHeight: 400,
-                width: '100%',
+              slots={{
+                noRowsOverlay: () => (
+                  <div className="flex items-center justify-center h-full text-gray-400">
+                    No UPT results found for the selected filters
+                  </div>
+                ),
               }}
-            >
-              <DataGrid
-                rows={listRows}
-                columns={columns}
-                loading={isLoadingList || isFetchingList}
-                disableRowSelectionOnClick
-                pageSizeOptions={[10, 25, 50]}
-                initialState={{
-                  pagination: { paginationModel: { pageSize: 25, page: 0 } },
-                }}
-                slots={{
-                  noRowsOverlay: () => (
-                    <div className="flex items-center justify-center h-full text-gray-400">
-                      No UPT results found for the selected filters
-                    </div>
-                  ),
-                }}
-              />
-            </Box>
+            />
           </Box>
-        </div>
+        </Box>
       </TabPanel>
 
       <Dialog
