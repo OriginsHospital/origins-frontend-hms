@@ -25,8 +25,6 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
-import SaveIcon from '@mui/icons-material/Save'
-import RestartAltIcon from '@mui/icons-material/RestartAlt'
 import VisibilityIcon from '@mui/icons-material/Visibility'
 import EditIcon from '@mui/icons-material/Edit'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
@@ -36,8 +34,24 @@ import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf'
 import TableViewIcon from '@mui/icons-material/TableView'
 import MoreVertIcon from '@mui/icons-material/MoreVert'
 import SearchIcon from '@mui/icons-material/Search'
+import CloseIcon from '@mui/icons-material/Close'
 import { DatePicker } from '@mui/x-date-pickers/DatePicker'
 import { DataGrid } from '@mui/x-data-grid'
+import {
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip as RechartsTooltip,
+  Legend,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  LineChart,
+  Line,
+} from 'recharts'
 import dayjs from 'dayjs'
 import { debounce } from 'lodash'
 import { toast } from 'react-toastify'
@@ -78,6 +92,22 @@ const EXPORT_COLUMNS = [
   { field: 'uptResult', headerName: 'UPT Result' },
   { field: 'createdByNurseName', headerName: 'Created By' },
 ]
+
+const CHART_COLORS = [
+  '#06aee9',
+  '#2ecc71',
+  '#e74c3c',
+  '#f39c12',
+  '#9b59b6',
+  '#1abc9c',
+  '#34495e',
+  '#e67e22',
+]
+
+const RESULT_COLORS = {
+  Positive: '#2ecc71',
+  Negative: '#95a5a6',
+}
 
 const emptyForm = (defaultBranchId = '') => ({
   id: null,
@@ -122,6 +152,181 @@ const TabPanel = ({ children, value, index }) => (
   </div>
 )
 
+const countBy = (rows, keyFn) => {
+  const map = new Map()
+  rows.forEach((row) => {
+    const key = keyFn(row) || 'Unknown'
+    map.set(key, (map.get(key) || 0) + 1)
+  })
+  return Array.from(map.entries())
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value)
+}
+
+const FilterBar = ({
+  fromDate,
+  setFromDate,
+  toDate,
+  setToDate,
+  branches,
+  filterBranchId,
+  setFilterBranchId,
+  filterCycleType,
+  setFilterCycleType,
+  filterUptResult,
+  setFilterUptResult,
+  filterNurseId,
+  setFilterNurseId,
+  staffNurses,
+  listSearch,
+  setListSearch,
+  onSearch,
+  onReset,
+}) => (
+  <Box
+    sx={{
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: 1.25,
+      alignItems: 'center',
+    }}
+  >
+    <DatePicker
+      label="From"
+      value={fromDate}
+      onChange={setFromDate}
+      format="DD/MM/YYYY"
+      slotProps={{
+        textField: { size: 'small', sx: { width: { xs: '100%', sm: 150 } } },
+      }}
+    />
+    <DatePicker
+      label="To"
+      value={toDate}
+      onChange={setToDate}
+      format="DD/MM/YYYY"
+      slotProps={{
+        textField: { size: 'small', sx: { width: { xs: '100%', sm: 150 } } },
+      }}
+    />
+    <Autocomplete
+      size="small"
+      options={branches}
+      getOptionLabel={(option) => option?.branchCode || option?.name || ''}
+      value={
+        branches.find((b) => String(b.id) === String(filterBranchId)) || null
+      }
+      onChange={(_e, value) => setFilterBranchId(value?.id ?? '')}
+      sx={{ width: { xs: '100%', sm: 140 } }}
+      renderInput={(params) => <TextField {...params} label="Branch" />}
+    />
+    <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 120 } }}>
+      <InputLabel>Cycle</InputLabel>
+      <Select
+        label="Cycle"
+        value={filterCycleType}
+        onChange={(e) => setFilterCycleType(e.target.value)}
+      >
+        <MenuItem value="">All</MenuItem>
+        {CYCLE_TYPE_OPTIONS.map((opt) => (
+          <MenuItem key={opt.value} value={opt.value}>
+            {opt.label}
+          </MenuItem>
+        ))}
+      </Select>
+    </FormControl>
+    <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 120 } }}>
+      <InputLabel>Result</InputLabel>
+      <Select
+        label="Result"
+        value={filterUptResult}
+        onChange={(e) => setFilterUptResult(e.target.value)}
+      >
+        <MenuItem value="">All</MenuItem>
+        {UPT_RESULT_OPTIONS.map((opt) => (
+          <MenuItem key={opt.value} value={opt.value}>
+            {opt.label}
+          </MenuItem>
+        ))}
+      </Select>
+    </FormControl>
+    <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 150 } }}>
+      <InputLabel>Created By</InputLabel>
+      <Select
+        label="Created By"
+        value={filterNurseId}
+        onChange={(e) => setFilterNurseId(e.target.value)}
+      >
+        <MenuItem value="">All</MenuItem>
+        {staffNurses.map((nurse) => (
+          <MenuItem key={nurse.id} value={nurse.id}>
+            {nurse.personName}
+          </MenuItem>
+        ))}
+      </Select>
+    </FormControl>
+    {onSearch && (
+      <TextField
+        size="small"
+        placeholder="Search patient…"
+        value={listSearch}
+        onChange={(e) => setListSearch(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') onSearch()
+        }}
+        sx={{ width: { xs: '100%', sm: 180 } }}
+        InputProps={{
+          endAdornment: (
+            <IconButton
+              size="small"
+              onClick={onSearch}
+              edge="end"
+              aria-label="Search"
+            >
+              <SearchIcon fontSize="small" />
+            </IconButton>
+          ),
+        }}
+      />
+    )}
+    <Button
+      variant="text"
+      size="small"
+      onClick={onReset}
+      sx={{ textTransform: 'none', whiteSpace: 'nowrap' }}
+    >
+      Reset
+    </Button>
+  </Box>
+)
+
+const ChartCard = ({ title, totalLabel, children, height = 320 }) => (
+  <Box
+    className="bg-white shadow rounded"
+    sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}
+  >
+    <Box
+      sx={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        mb: 1,
+        gap: 1,
+      }}
+    >
+      <Typography variant="subtitle1" fontWeight={600}>
+        {title}
+      </Typography>
+      {totalLabel ? (
+        <Typography variant="caption" color="text.secondary" fontWeight={600}>
+          {totalLabel}
+        </Typography>
+      ) : null}
+    </Box>
+    <Box sx={{ flex: 1, minHeight: height }}>{children}</Box>
+  </Box>
+)
+
 function UptResultsPage() {
   const user = useSelector((store) => store.user)
   const accessToken = user?.accessToken
@@ -131,6 +336,7 @@ function UptResultsPage() {
   const defaultBranchId = branches[0]?.id ?? ''
 
   const [pageTab, setPageTab] = useState(0)
+  const [entryOpen, setEntryOpen] = useState(false)
   const [form, setForm] = useState(() => emptyForm(defaultBranchId))
   const [patientSuggestions, setPatientSuggestions] = useState([])
   const [isSearchingPatients, setIsSearchingPatients] = useState(false)
@@ -138,7 +344,9 @@ function UptResultsPage() {
   const [viewRecord, setViewRecord] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [exportMenuAnchor, setExportMenuAnchor] = useState(null)
 
+  // Results filters
   const [fromDate, setFromDate] = useState(dayjs().subtract(30, 'day'))
   const [toDate, setToDate] = useState(dayjs())
   const [filterBranchId, setFilterBranchId] = useState('')
@@ -147,7 +355,16 @@ function UptResultsPage() {
   const [filterNurseId, setFilterNurseId] = useState('')
   const [listSearch, setListSearch] = useState('')
   const [appliedSearch, setAppliedSearch] = useState('')
-  const [exportMenuAnchor, setExportMenuAnchor] = useState(null)
+
+  // Summary filters
+  const [summaryFromDate, setSummaryFromDate] = useState(
+    dayjs().subtract(30, 'day'),
+  )
+  const [summaryToDate, setSummaryToDate] = useState(dayjs())
+  const [summaryBranchId, setSummaryBranchId] = useState('')
+  const [summaryCycleType, setSummaryCycleType] = useState('')
+  const [summaryUptResult, setSummaryUptResult] = useState('')
+  const [summaryNurseId, setSummaryNurseId] = useState('')
 
   useEffect(() => {
     if (defaultBranchId && !form.branchId) {
@@ -195,7 +412,6 @@ function UptResultsPage() {
   })
 
   const staffNurses = useMemo(() => {
-    // Prefer mappingId 5 (injection sheet nurse), also include 6 if present
     const by5 = otDropdowns?.data?.find((item) => item.mappingId === 5)
     const by6 = otDropdowns?.data?.find((item) => item.mappingId === 6)
     const list = [...(by5?.personList || []), ...(by6?.personList || [])]
@@ -228,6 +444,27 @@ function UptResultsPage() {
     ],
   )
 
+  const summaryQueryParams = useMemo(
+    () => ({
+      fromDate: summaryFromDate
+        ? dayjs(summaryFromDate).format('YYYY-MM-DD')
+        : '',
+      toDate: summaryToDate ? dayjs(summaryToDate).format('YYYY-MM-DD') : '',
+      branchId: summaryBranchId || '',
+      cycleType: summaryCycleType || '',
+      uptResult: summaryUptResult || '',
+      createdByNurseId: summaryNurseId || '',
+    }),
+    [
+      summaryFromDate,
+      summaryToDate,
+      summaryBranchId,
+      summaryCycleType,
+      summaryUptResult,
+      summaryNurseId,
+    ],
+  )
+
   const {
     data: listRows = [],
     isLoading: isLoadingList,
@@ -235,22 +472,102 @@ function UptResultsPage() {
     refetch: refetchList,
   } = useQuery({
     queryKey: ['uptResults', listQueryParams],
-    enabled: !!accessToken && !!fromDate,
+    enabled: !!accessToken && !!fromDate && pageTab === 0,
     queryFn: async () => {
       const response = await getUptResults(accessToken, listQueryParams)
       if (response?.status === 200) {
-        return (response.data || []).map((row) => ({
-          ...row,
-          id: row.id,
-        }))
+        return (response.data || []).map((row) => ({ ...row, id: row.id }))
       }
       throw new Error(response?.message || 'Failed to load UPT results')
     },
   })
 
+  const {
+    data: summaryRows = [],
+    isLoading: isLoadingSummary,
+    isFetching: isFetchingSummary,
+  } = useQuery({
+    queryKey: ['uptResultsSummary', summaryQueryParams],
+    enabled: !!accessToken && !!summaryFromDate && pageTab === 1,
+    queryFn: async () => {
+      const response = await getUptResults(accessToken, summaryQueryParams)
+      if (response?.status === 200) {
+        return response.data || []
+      }
+      throw new Error(response?.message || 'Failed to load UPT summary')
+    },
+  })
+
+  const summaryStats = useMemo(() => {
+    const total = summaryRows.length
+    const positive = summaryRows.filter(
+      (r) => r.uptResult === 'Positive',
+    ).length
+    const negative = summaryRows.filter(
+      (r) => r.uptResult === 'Negative',
+    ).length
+    const positivityRate = total
+      ? Math.round((positive / total) * 1000) / 10
+      : 0
+
+    const byResult = countBy(summaryRows, (r) => r.uptResult)
+    const byCycle = countBy(summaryRows, (r) => r.cycleType)
+    const byBranch = countBy(
+      summaryRows,
+      (r) => r.branchCode || r.branchName || 'Unknown',
+    )
+    const byNurse = countBy(
+      summaryRows,
+      (r) => r.createdByNurseName || 'Unknown',
+    ).slice(0, 8)
+
+    const trendMap = new Map()
+    summaryRows.forEach((row) => {
+      const key = dayjs(row.resultDate).isValid()
+        ? dayjs(row.resultDate).format('YYYY-MM-DD')
+        : null
+      if (!key) return
+      if (!trendMap.has(key)) {
+        trendMap.set(key, { date: key, Positive: 0, Negative: 0, Total: 0 })
+      }
+      const bucket = trendMap.get(key)
+      if (row.uptResult === 'Positive') bucket.Positive += 1
+      else if (row.uptResult === 'Negative') bucket.Negative += 1
+      bucket.Total += 1
+    })
+    const trend = Array.from(trendMap.values())
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((item) => ({
+        ...item,
+        label: dayjs(item.date).format('DD MMM'),
+      }))
+
+    return {
+      total,
+      positive,
+      negative,
+      positivityRate,
+      byResult,
+      byCycle,
+      byBranch,
+      byNurse,
+      trend,
+    }
+  }, [summaryRows])
+
   const handleClearForm = () => {
     setForm(emptyForm(defaultBranchId))
     setPatientSuggestions([])
+  }
+
+  const openNewEntry = () => {
+    handleClearForm()
+    setEntryOpen(true)
+  }
+
+  const closeEntry = () => {
+    setEntryOpen(false)
+    handleClearForm()
   }
 
   const handleSelectPatient = (patient) => {
@@ -317,9 +634,9 @@ function UptResultsPage() {
             : 'UPT result saved successfully',
           toastconfig,
         )
-        handleClearForm()
+        closeEntry()
         queryClient.invalidateQueries({ queryKey: ['uptResults'] })
-        setPageTab(1)
+        queryClient.invalidateQueries({ queryKey: ['uptResultsSummary'] })
       } else {
         toast.error(
           response?.message || 'Failed to save UPT result',
@@ -355,6 +672,7 @@ function UptResultsPage() {
     })
     setPatientSuggestions([patient])
     setPageTab(0)
+    setEntryOpen(true)
   }
 
   const handleDelete = async () => {
@@ -366,6 +684,7 @@ function UptResultsPage() {
         toast.success('UPT result deleted', toastconfig)
         setDeleteTarget(null)
         queryClient.invalidateQueries({ queryKey: ['uptResults'] })
+        queryClient.invalidateQueries({ queryKey: ['uptResultsSummary'] })
       } else {
         toast.error(response?.message || 'Failed to delete', toastconfig)
       }
@@ -388,9 +707,16 @@ function UptResultsPage() {
     setAppliedSearch('')
   }
 
-  const applySearch = () => {
-    setAppliedSearch(listSearch.trim())
+  const clearSummaryFilters = () => {
+    setSummaryFromDate(dayjs().subtract(30, 'day'))
+    setSummaryToDate(dayjs())
+    setSummaryBranchId('')
+    setSummaryCycleType('')
+    setSummaryUptResult('')
+    setSummaryNurseId('')
   }
+
+  const applySearch = () => setAppliedSearch(listSearch.trim())
 
   const getExportRows = useCallback(() => {
     return (listRows || []).map((row) => ({
@@ -420,12 +746,10 @@ function UptResultsPage() {
         )
         return
       }
-
       const options = {
         reportName: 'UPT_Results',
         branchName: getExportBranchLabel() || undefined,
       }
-
       try {
         if (format === 'pdf') {
           exportAsPDF(getExportRows(), EXPORT_COLUMNS, options)
@@ -459,22 +783,14 @@ function UptResultsPage() {
         width: 100,
         valueGetter: (_v, row) => row.branchCode || row.branchName || '—',
       },
-      {
-        field: 'originsId',
-        headerName: 'Patient ID',
-        width: 120,
-      },
+      { field: 'originsId', headerName: 'Patient ID', width: 120 },
       {
         field: 'patientName',
         headerName: 'Patient Name',
         flex: 1.2,
         minWidth: 160,
       },
-      {
-        field: 'cycleType',
-        headerName: 'Cycle Type',
-        width: 110,
-      },
+      { field: 'cycleType', headerName: 'Cycle Type', width: 110 },
       {
         field: 'uptResult',
         headerName: 'UPT Result',
@@ -485,13 +801,7 @@ function UptResultsPage() {
             <Chip
               size="small"
               label={params.value || '—'}
-              color={
-                positive
-                  ? 'success'
-                  : params.value === 'Negative'
-                    ? 'default'
-                    : 'default'
-              }
+              color={positive ? 'success' : 'default'}
               variant={positive ? 'filled' : 'outlined'}
               sx={{
                 fontWeight: 600,
@@ -571,6 +881,8 @@ function UptResultsPage() {
   )
 
   const isEditMode = Boolean(form.id)
+  const pieLabel = ({ name, percent }) =>
+    `${name} ${(percent * 100).toFixed(0)}%`
 
   return (
     <div className="p-4 md:p-6 h-full overflow-y-auto">
@@ -581,370 +893,35 @@ function UptResultsPage() {
         onChange={(_e, next) => setPageTab(next)}
         sx={{ borderBottom: 1, borderColor: 'divider', mt: 1 }}
       >
-        <Tab label={isEditMode ? 'Edit Entry' : 'Data Entry'} />
-        <Tab label="Results List" />
+        <Tab label="Results" />
+        <Tab label="Summary" />
       </Tabs>
 
       <TabPanel value={pageTab} index={0}>
         <Box
           className="bg-white shadow rounded"
-          sx={{ maxWidth: 880, p: { xs: 2, md: 3 } }}
-        >
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              mb: 2,
-              flexWrap: 'wrap',
-              gap: 1,
-            }}
-          >
-            <Typography variant="subtitle1" fontWeight={600}>
-              {isEditMode ? 'Update UPT Result' : 'New UPT Result'}
-            </Typography>
-            {isEditMode && (
-              <Chip
-                size="small"
-                color="info"
-                variant="outlined"
-                label={`Editing #${form.id}`}
-                onDelete={handleClearForm}
-              />
-            )}
-          </Box>
-
-          <Grid container spacing={2.5}>
-            <Grid item xs={12} sm={6}>
-              <DatePicker
-                label="Date"
-                value={form.resultDate}
-                onChange={(v) => setField('resultDate', v)}
-                format="DD/MM/YYYY"
-                slotProps={{
-                  textField: {
-                    size: 'small',
-                    fullWidth: true,
-                    required: true,
-                  },
-                }}
-              />
-            </Grid>
-
-            <Grid item xs={12} sm={6}>
-              <Autocomplete
-                options={branches}
-                getOptionLabel={(option) =>
-                  option?.branchCode || option?.name || ''
-                }
-                value={
-                  branches.find(
-                    (b) => String(b.id) === String(form.branchId),
-                  ) || null
-                }
-                onChange={(_e, value) => setField('branchId', value?.id ?? '')}
-                renderInput={(params) => (
-                  <TextField {...params} label="Branch" size="small" required />
-                )}
-                clearIcon={null}
-              />
-            </Grid>
-
-            <Grid item xs={12}>
-              <Autocomplete
-                options={patientSuggestions}
-                loading={isSearchingPatients}
-                value={form.selectedPatient}
-                onChange={(_e, value) => handleSelectPatient(value)}
-                onInputChange={(_e, value, reason) => {
-                  if (reason === 'input') {
-                    debouncedPatientSearch(value)
-                  }
-                }}
-                getOptionLabel={getPatientLabel}
-                isOptionEqualToValue={(option, value) =>
-                  String(option?.id || option?.patientId) ===
-                  String(value?.id || value?.patientId)
-                }
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Patient Name"
-                    placeholder="Search by name, ID, or mobile"
-                    size="small"
-                    required
-                    InputProps={{
-                      ...params.InputProps,
-                      endAdornment: (
-                        <>
-                          {isSearchingPatients ? (
-                            <CircularProgress color="inherit" size={18} />
-                          ) : null}
-                          {params.InputProps.endAdornment}
-                        </>
-                      ),
-                    }}
-                  />
-                )}
-              />
-              {form.selectedPatient && (
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    gap: 1,
-                    alignItems: 'center',
-                    mt: 1,
-                  }}
-                >
-                  <Chip
-                    label={
-                      form.selectedPatient.patientId ||
-                      form.selectedPatient.PatientId ||
-                      '—'
-                    }
-                    size="small"
-                    color="primary"
-                    variant="outlined"
-                  />
-                  <Typography variant="body2" fontWeight={600}>
-                    {getPatientDisplayName(form.selectedPatient)}
-                  </Typography>
-                  {(form.selectedPatient.mobileNo ||
-                    form.selectedPatient.mobileNumber) && (
-                    <Typography variant="body2" color="text.secondary">
-                      {form.selectedPatient.mobileNo ||
-                        form.selectedPatient.mobileNumber}
-                    </Typography>
-                  )}
-                </Box>
-              )}
-            </Grid>
-
-            <Grid item xs={12} sm={4}>
-              <FormControl fullWidth size="small" required>
-                <InputLabel>Cycle Type</InputLabel>
-                <Select
-                  label="Cycle Type"
-                  value={form.cycleType}
-                  onChange={(e) => setField('cycleType', e.target.value)}
-                >
-                  {CYCLE_TYPE_OPTIONS.map((opt) => (
-                    <MenuItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-
-            <Grid item xs={12} sm={4}>
-              <FormControl fullWidth size="small" required>
-                <InputLabel>UPT Result</InputLabel>
-                <Select
-                  label="UPT Result"
-                  value={form.uptResult}
-                  onChange={(e) => setField('uptResult', e.target.value)}
-                >
-                  {UPT_RESULT_OPTIONS.map((opt) => (
-                    <MenuItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-
-            <Grid item xs={12} sm={4}>
-              <FormControl fullWidth size="small" required>
-                <InputLabel>Created By</InputLabel>
-                <Select
-                  label="Created By"
-                  value={form.createdByNurseId}
-                  onChange={(e) => setField('createdByNurseId', e.target.value)}
-                >
-                  {staffNurses.map((nurse) => (
-                    <MenuItem key={nurse.id} value={nurse.id}>
-                      {nurse.personName}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-
-            <Grid item xs={12}>
-              <Divider sx={{ my: 0.5 }} />
-              <Box
-                sx={{
-                  display: 'flex',
-                  gap: 1,
-                  justifyContent: 'flex-end',
-                  flexWrap: 'wrap',
-                  mt: 1.5,
-                }}
-              >
-                <Button
-                  variant="outlined"
-                  startIcon={<RestartAltIcon />}
-                  onClick={handleClearForm}
-                  disabled={saving}
-                >
-                  Clear
-                </Button>
-                <Button
-                  variant="contained"
-                  startIcon={isEditMode ? <SaveIcon /> : <AddIcon />}
-                  onClick={handleSave}
-                  disabled={saving}
-                >
-                  {saving
-                    ? 'Saving…'
-                    : isEditMode
-                      ? 'Update Result'
-                      : 'Save Result'}
-                </Button>
-              </Box>
-            </Grid>
-          </Grid>
-        </Box>
-      </TabPanel>
-
-      <TabPanel value={pageTab} index={1}>
-        <Box
-          className="bg-white shadow rounded"
           sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1.5 }}
         >
-          <Box
-            sx={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 1.25,
-              alignItems: 'center',
-            }}
-          >
-            <DatePicker
-              label="From"
-              value={fromDate}
-              onChange={setFromDate}
-              format="DD/MM/YYYY"
-              slotProps={{
-                textField: {
-                  size: 'small',
-                  sx: { width: { xs: '100%', sm: 150 } },
-                },
-              }}
-            />
-            <DatePicker
-              label="To"
-              value={toDate}
-              onChange={setToDate}
-              format="DD/MM/YYYY"
-              slotProps={{
-                textField: {
-                  size: 'small',
-                  sx: { width: { xs: '100%', sm: 150 } },
-                },
-              }}
-            />
-            <Autocomplete
-              size="small"
-              options={branches}
-              getOptionLabel={(option) =>
-                option?.branchCode || option?.name || ''
-              }
-              value={
-                branches.find((b) => String(b.id) === String(filterBranchId)) ||
-                null
-              }
-              onChange={(_e, value) => setFilterBranchId(value?.id ?? '')}
-              sx={{ width: { xs: '100%', sm: 140 } }}
-              renderInput={(params) => <TextField {...params} label="Branch" />}
-            />
-            <FormControl
-              size="small"
-              sx={{ minWidth: { xs: '100%', sm: 120 } }}
-            >
-              <InputLabel>Cycle</InputLabel>
-              <Select
-                label="Cycle"
-                value={filterCycleType}
-                onChange={(e) => setFilterCycleType(e.target.value)}
-              >
-                <MenuItem value="">All</MenuItem>
-                {CYCLE_TYPE_OPTIONS.map((opt) => (
-                  <MenuItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl
-              size="small"
-              sx={{ minWidth: { xs: '100%', sm: 120 } }}
-            >
-              <InputLabel>Result</InputLabel>
-              <Select
-                label="Result"
-                value={filterUptResult}
-                onChange={(e) => setFilterUptResult(e.target.value)}
-              >
-                <MenuItem value="">All</MenuItem>
-                {UPT_RESULT_OPTIONS.map((opt) => (
-                  <MenuItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl
-              size="small"
-              sx={{ minWidth: { xs: '100%', sm: 150 } }}
-            >
-              <InputLabel>Created By</InputLabel>
-              <Select
-                label="Created By"
-                value={filterNurseId}
-                onChange={(e) => setFilterNurseId(e.target.value)}
-              >
-                <MenuItem value="">All</MenuItem>
-                {staffNurses.map((nurse) => (
-                  <MenuItem key={nurse.id} value={nurse.id}>
-                    {nurse.personName}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <TextField
-              size="small"
-              placeholder="Search patient…"
-              value={listSearch}
-              onChange={(e) => setListSearch(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') applySearch()
-              }}
-              sx={{ width: { xs: '100%', sm: 180 } }}
-              InputProps={{
-                endAdornment: (
-                  <IconButton
-                    size="small"
-                    onClick={applySearch}
-                    edge="end"
-                    aria-label="Search"
-                  >
-                    <SearchIcon fontSize="small" />
-                  </IconButton>
-                ),
-              }}
-            />
-            <Button
-              variant="text"
-              size="small"
-              onClick={clearFilters}
-              sx={{ textTransform: 'none', whiteSpace: 'nowrap' }}
-            >
-              Reset
-            </Button>
-          </Box>
+          <FilterBar
+            fromDate={fromDate}
+            setFromDate={setFromDate}
+            toDate={toDate}
+            setToDate={setToDate}
+            branches={branches}
+            filterBranchId={filterBranchId}
+            setFilterBranchId={setFilterBranchId}
+            filterCycleType={filterCycleType}
+            setFilterCycleType={setFilterCycleType}
+            filterUptResult={filterUptResult}
+            setFilterUptResult={setFilterUptResult}
+            filterNurseId={filterNurseId}
+            setFilterNurseId={setFilterNurseId}
+            staffNurses={staffNurses}
+            listSearch={listSearch}
+            setListSearch={setListSearch}
+            onSearch={applySearch}
+            onReset={clearFilters}
+          />
 
           <Divider />
 
@@ -991,8 +968,6 @@ function UptResultsPage() {
                     onClick={(e) => setExportMenuAnchor(e.currentTarget)}
                     disabled={!listRows.length || isLoadingList}
                     aria-label="Export options"
-                    aria-haspopup="true"
-                    aria-expanded={Boolean(exportMenuAnchor)}
                   >
                     <MoreVertIcon fontSize="small" />
                   </IconButton>
@@ -1002,10 +977,7 @@ function UptResultsPage() {
                 variant="contained"
                 size="small"
                 startIcon={<AddIcon />}
-                onClick={() => {
-                  handleClearForm()
-                  setPageTab(0)
-                }}
+                onClick={openNewEntry}
               >
                 New Entry
               </Button>
@@ -1073,6 +1045,444 @@ function UptResultsPage() {
           </Box>
         </Box>
       </TabPanel>
+
+      <TabPanel value={pageTab} index={1}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Box className="bg-white shadow rounded" sx={{ p: 2 }}>
+            <FilterBar
+              fromDate={summaryFromDate}
+              setFromDate={setSummaryFromDate}
+              toDate={summaryToDate}
+              setToDate={setSummaryToDate}
+              branches={branches}
+              filterBranchId={summaryBranchId}
+              setFilterBranchId={setSummaryBranchId}
+              filterCycleType={summaryCycleType}
+              setFilterCycleType={setSummaryCycleType}
+              filterUptResult={summaryUptResult}
+              setFilterUptResult={setSummaryUptResult}
+              filterNurseId={summaryNurseId}
+              setFilterNurseId={setSummaryNurseId}
+              staffNurses={staffNurses}
+              onReset={clearSummaryFilters}
+            />
+          </Box>
+
+          {isLoadingSummary || isFetchingSummary ? (
+            <Box
+              className="bg-white shadow rounded"
+              sx={{
+                p: 6,
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: 2,
+              }}
+            >
+              <CircularProgress size={28} />
+              <Typography color="text.secondary">Loading summary…</Typography>
+            </Box>
+          ) : (
+            <>
+              <Grid container spacing={2}>
+                {[
+                  {
+                    label: 'Total Tests',
+                    value: summaryStats.total,
+                    color: '#06aee9',
+                  },
+                  {
+                    label: 'Positive',
+                    value: summaryStats.positive,
+                    color: '#2ecc71',
+                  },
+                  {
+                    label: 'Negative',
+                    value: summaryStats.negative,
+                    color: '#7f8c8d',
+                  },
+                  {
+                    label: 'Positivity Rate',
+                    value: `${summaryStats.positivityRate}%`,
+                    color: '#9b59b6',
+                  },
+                ].map((card) => (
+                  <Grid item xs={12} sm={6} md={3} key={card.label}>
+                    <Box
+                      className="bg-white shadow rounded"
+                      sx={{
+                        p: 2.5,
+                        borderLeft: `4px solid ${card.color}`,
+                      }}
+                    >
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        fontWeight={600}
+                      >
+                        {card.label}
+                      </Typography>
+                      <Typography
+                        variant="h4"
+                        fontWeight={700}
+                        sx={{ color: card.color, mt: 0.5 }}
+                      >
+                        {card.value}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                ))}
+              </Grid>
+
+              {!summaryStats.total ? (
+                <Box
+                  className="bg-white shadow rounded"
+                  sx={{
+                    p: 6,
+                    textAlign: 'center',
+                    color: 'text.secondary',
+                  }}
+                >
+                  No UPT data for the selected summary filters
+                </Box>
+              ) : (
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <ChartCard
+                      title="UPT Result Distribution"
+                      totalLabel={`Total: ${summaryStats.total}`}
+                    >
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={summaryStats.byResult}
+                            dataKey="value"
+                            nameKey="name"
+                            cx="50%"
+                            cy="50%"
+                            outerRadius={100}
+                            label={pieLabel}
+                          >
+                            {summaryStats.byResult.map((entry) => (
+                              <Cell
+                                key={entry.name}
+                                fill={
+                                  RESULT_COLORS[entry.name] || CHART_COLORS[0]
+                                }
+                              />
+                            ))}
+                          </Pie>
+                          <RechartsTooltip />
+                          <Legend />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </ChartCard>
+                  </Grid>
+
+                  <Grid item xs={12} md={6}>
+                    <ChartCard
+                      title="By Cycle Type"
+                      totalLabel={`Total: ${summaryStats.total}`}
+                    >
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={summaryStats.byCycle}
+                            dataKey="value"
+                            nameKey="name"
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={55}
+                            outerRadius={100}
+                            label={pieLabel}
+                          >
+                            {summaryStats.byCycle.map((entry, index) => (
+                              <Cell
+                                key={entry.name}
+                                fill={CHART_COLORS[index % CHART_COLORS.length]}
+                              />
+                            ))}
+                          </Pie>
+                          <RechartsTooltip />
+                          <Legend />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </ChartCard>
+                  </Grid>
+
+                  <Grid item xs={12} md={6}>
+                    <ChartCard
+                      title="By Branch"
+                      totalLabel={`Total: ${summaryStats.total}`}
+                    >
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={summaryStats.byBranch}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="name" />
+                          <YAxis allowDecimals={false} />
+                          <RechartsTooltip />
+                          <Bar
+                            dataKey="value"
+                            fill="#06aee9"
+                            radius={[4, 4, 0, 0]}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </ChartCard>
+                  </Grid>
+
+                  <Grid item xs={12} md={6}>
+                    <ChartCard
+                      title="By Created By"
+                      totalLabel={`Top ${summaryStats.byNurse.length}`}
+                    >
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={summaryStats.byNurse}
+                          layout="vertical"
+                          margin={{ left: 24 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis type="number" allowDecimals={false} />
+                          <YAxis
+                            type="category"
+                            dataKey="name"
+                            width={90}
+                            tick={{ fontSize: 12 }}
+                          />
+                          <RechartsTooltip />
+                          <Bar
+                            dataKey="value"
+                            fill="#9b59b6"
+                            radius={[0, 4, 4, 0]}
+                          />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </ChartCard>
+                  </Grid>
+
+                  <Grid item xs={12}>
+                    <ChartCard
+                      title="Daily Trend"
+                      totalLabel={`${formatDateDisplay(summaryFromDate)} – ${formatDateDisplay(summaryToDate)}`}
+                      height={360}
+                    >
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={summaryStats.trend}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="label" />
+                          <YAxis allowDecimals={false} />
+                          <RechartsTooltip />
+                          <Legend />
+                          <Line
+                            type="monotone"
+                            dataKey="Positive"
+                            stroke="#2ecc71"
+                            strokeWidth={2}
+                            dot={{ r: 3 }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="Negative"
+                            stroke="#95a5a6"
+                            strokeWidth={2}
+                            dot={{ r: 3 }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="Total"
+                            stroke="#06aee9"
+                            strokeWidth={2}
+                            strokeDasharray="4 4"
+                            dot={false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </ChartCard>
+                  </Grid>
+                </Grid>
+              )}
+            </>
+          )}
+        </Box>
+      </TabPanel>
+
+      {/* Entry / Edit modal */}
+      <Dialog
+        open={entryOpen}
+        onClose={saving ? undefined : closeEntry}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle
+          sx={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            pr: 1,
+          }}
+        >
+          <span>{isEditMode ? 'Edit UPT Result' : 'New UPT Result'}</span>
+          <IconButton
+            onClick={closeEntry}
+            disabled={saving}
+            aria-label="Close"
+            size="small"
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers>
+          <Grid container spacing={2}>
+            <Grid item xs={12} sm={6}>
+              <DatePicker
+                label="Date"
+                value={form.resultDate}
+                onChange={(v) => setField('resultDate', v)}
+                format="DD/MM/YYYY"
+                slotProps={{
+                  textField: { size: 'small', fullWidth: true, required: true },
+                }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <Autocomplete
+                options={branches}
+                getOptionLabel={(option) =>
+                  option?.branchCode || option?.name || ''
+                }
+                value={
+                  branches.find(
+                    (b) => String(b.id) === String(form.branchId),
+                  ) || null
+                }
+                onChange={(_e, value) => setField('branchId', value?.id ?? '')}
+                renderInput={(params) => (
+                  <TextField {...params} label="Branch" size="small" required />
+                )}
+                clearIcon={null}
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <Autocomplete
+                options={patientSuggestions}
+                loading={isSearchingPatients}
+                value={form.selectedPatient}
+                onChange={(_e, value) => handleSelectPatient(value)}
+                onInputChange={(_e, value, reason) => {
+                  if (reason === 'input') debouncedPatientSearch(value)
+                }}
+                getOptionLabel={getPatientLabel}
+                isOptionEqualToValue={(option, value) =>
+                  String(option?.id || option?.patientId) ===
+                  String(value?.id || value?.patientId)
+                }
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Patient Name"
+                    placeholder="Search by name, ID, or mobile"
+                    size="small"
+                    required
+                    InputProps={{
+                      ...params.InputProps,
+                      endAdornment: (
+                        <>
+                          {isSearchingPatients ? (
+                            <CircularProgress color="inherit" size={18} />
+                          ) : null}
+                          {params.InputProps.endAdornment}
+                        </>
+                      ),
+                    }}
+                  />
+                )}
+              />
+              {form.selectedPatient && (
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 1,
+                    alignItems: 'center',
+                    mt: 1,
+                  }}
+                >
+                  <Chip
+                    label={
+                      form.selectedPatient.patientId ||
+                      form.selectedPatient.PatientId ||
+                      '—'
+                    }
+                    size="small"
+                    color="primary"
+                    variant="outlined"
+                  />
+                  <Typography variant="body2" fontWeight={600}>
+                    {getPatientDisplayName(form.selectedPatient)}
+                  </Typography>
+                </Box>
+              )}
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <FormControl fullWidth size="small" required>
+                <InputLabel>Cycle Type</InputLabel>
+                <Select
+                  label="Cycle Type"
+                  value={form.cycleType}
+                  onChange={(e) => setField('cycleType', e.target.value)}
+                >
+                  {CYCLE_TYPE_OPTIONS.map((opt) => (
+                    <MenuItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <FormControl fullWidth size="small" required>
+                <InputLabel>UPT Result</InputLabel>
+                <Select
+                  label="UPT Result"
+                  value={form.uptResult}
+                  onChange={(e) => setField('uptResult', e.target.value)}
+                >
+                  {UPT_RESULT_OPTIONS.map((opt) => (
+                    <MenuItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <FormControl fullWidth size="small" required>
+                <InputLabel>Created By</InputLabel>
+                <Select
+                  label="Created By"
+                  value={form.createdByNurseId}
+                  onChange={(e) => setField('createdByNurseId', e.target.value)}
+                >
+                  {staffNurses.map((nurse) => (
+                    <MenuItem key={nurse.id} value={nurse.id}>
+                      {nurse.personName}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button onClick={closeEntry} disabled={saving}>
+            Cancel
+          </Button>
+          <Button variant="contained" onClick={handleSave} disabled={saving}>
+            {saving ? 'Saving…' : isEditMode ? 'Update Result' : 'Save Result'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={Boolean(viewRecord)}
