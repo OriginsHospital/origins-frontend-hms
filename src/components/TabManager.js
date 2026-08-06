@@ -33,6 +33,7 @@ const routeTitleMap = {
   '/scan/prescription': 'Scan - Prescription',
   '/scan/opu-sheet': 'Scan - OPU Sheet',
   '/scan/hystero-lap': 'Scan - Hystero/Lap',
+  '/scan/upt': 'Scan - UPT Results',
   '/scan/discharge-card': 'Scan - Discharge Card',
   '/reports': 'Reports',
   '/dailyreport': 'Daily Report',

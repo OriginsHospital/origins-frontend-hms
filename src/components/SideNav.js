@@ -626,6 +626,11 @@ function SideNav(props) {
             relatedModule: 'scanModule',
           },
           {
+            path: '/scan/upt',
+            name: 'UPT Results',
+            relatedModule: 'scanModule',
+          },
+          {
             path: '/scan/discharge-card',
             name: 'Discharge Card',
             relatedModule: 'scanModule',
