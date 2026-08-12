@@ -3279,7 +3279,7 @@ function PatientTrackerReports() {
         patient.dateOfBirth ||
         dayjs().format('YYYY-MM-DD')
 
-      // Calculate registration amount first (needed for cycle status)
+      // Package registration amount (used for registrationAmount column)
       // Use patient.id (database ID) as primary key, with fallback to patientId
       // Convert to string for consistent key matching (object keys are strings)
       const patientDbId = patient.id ? String(patient.id) : null
@@ -3310,11 +3310,12 @@ function PatientTrackerReports() {
             : 0
       }
 
-      // Prefer tracker cycle status, else registration amount heuristic
+      // Prefer tracker cycle status; else visit type from patient visit (not appointments)
       const cycleStatusValue =
         patient.cycleStatus ||
         patient.trackerCycleStatus ||
-        (calculatedRegistrationAmount > 0 ? 'Registered' : 'Follow up')
+        patient.visitType ||
+        '-'
 
       const formatClinicalDate = (value) => {
         if (
