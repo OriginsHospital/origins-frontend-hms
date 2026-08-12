@@ -2642,9 +2642,148 @@ function PatientTrackerReports() {
       {
         field: 'plan',
         headerName: 'Plan',
-        width: 120,
+        width: 260,
+        minWidth: 200,
+        flex: 0,
         headerAlign: 'center',
-        align: 'center',
+        align: 'left',
+        sortable: false,
+        renderCell: (params) => {
+          const history = Array.isArray(params.row?.planHistory)
+            ? params.row.planHistory
+            : []
+          const fallback = params.value
+
+          if (!history.length) {
+            return (
+              <Typography
+                variant="body2"
+                sx={{
+                  color:
+                    fallback && fallback !== '-'
+                      ? 'text.primary'
+                      : 'text.disabled',
+                }}
+              >
+                {fallback && fallback !== '' ? fallback : '-'}
+              </Typography>
+            )
+          }
+
+          const STATUS_STYLES = {
+            Active: {
+              bg: '#ECFDF5',
+              color: '#047857',
+              border: '#A7F3D0',
+            },
+            Success: {
+              bg: '#EFF6FF',
+              color: '#1D4ED8',
+              border: '#BFDBFE',
+            },
+            Failed: {
+              bg: '#FEF2F2',
+              color: '#B91C1C',
+              border: '#FECACA',
+            },
+            Cancelled: {
+              bg: '#FFF7ED',
+              color: '#C2410C',
+              border: '#FED7AA',
+            },
+            'Freeze All': {
+              bg: '#F5F3FF',
+              color: '#6D28D9',
+              border: '#DDD6FE',
+            },
+            Ended: {
+              bg: '#F8FAFC',
+              color: '#475569',
+              border: '#E2E8F0',
+            },
+            Previous: {
+              bg: '#F8FAFC',
+              color: '#64748B',
+              border: '#E2E8F0',
+            },
+          }
+
+          const visible = history.slice(0, 3)
+          const hiddenCount = history.length - visible.length
+
+          return (
+            <Box
+              sx={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 0.5,
+                alignItems: 'center',
+                py: 0.5,
+                width: '100%',
+              }}
+            >
+              {visible.map((item, idx) => {
+                const status = item.status || 'Previous'
+                const style = STATUS_STYLES[status] || STATUS_STYLES.Previous
+                const label =
+                  status === 'Active' ? item.name : `${item.name} · ${status}`
+                return (
+                  <Tooltip
+                    key={`${item.name}-${status}-${idx}`}
+                    title={
+                      item.date
+                        ? `${item.name} — ${status} (${dayjs(item.date).format('DD-MM-YYYY')})`
+                        : `${item.name} — ${status}`
+                    }
+                    arrow
+                  >
+                    <Chip
+                      label={label}
+                      size="small"
+                      sx={{
+                        height: 22,
+                        maxWidth: '100%',
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        letterSpacing: 0.01,
+                        bgcolor: style.bg,
+                        color: style.color,
+                        border: `1px solid ${style.border}`,
+                        '& .MuiChip-label': {
+                          px: 0.75,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        },
+                      }}
+                    />
+                  </Tooltip>
+                )
+              })}
+              {hiddenCount > 0 && (
+                <Tooltip
+                  title={history
+                    .slice(3)
+                    .map((h) => `${h.name} (${h.status})`)
+                    .join(', ')}
+                  arrow
+                >
+                  <Chip
+                    label={`+${hiddenCount}`}
+                    size="small"
+                    variant="outlined"
+                    sx={{
+                      height: 22,
+                      fontSize: '0.7rem',
+                      fontWeight: 600,
+                      color: '#64748B',
+                      borderColor: '#CBD5E1',
+                    }}
+                  />
+                </Tooltip>
+              )}
+            </Box>
+          )
+        },
       },
       {
         field: 'treatmentType',
@@ -3348,6 +3487,9 @@ function PatientTrackerReports() {
         referralSource: referralSource,
         referralName: patient.referralName || patient.referralPersonName || '-',
         plan: patient.plan || patient.Plan || '-',
+        planHistory: Array.isArray(patient.planHistory)
+          ? patient.planHistory
+          : [],
         treatmentType: patient.treatmentType || patient.TreatmentType || '-',
         cycleStatus: cycleStatusValue,
         stageOfCycle: patient.stageOfCycle || patient.StageOfCycle || '-',
@@ -3537,7 +3679,13 @@ function PatientTrackerReports() {
         baseRow.trackerRecordId = tracker.id
         if (tracker.cycleStatus) baseRow.cycleStatus = tracker.cycleStatus
         if (tracker.stageOfCycle) baseRow.stageOfCycle = tracker.stageOfCycle
-        if (tracker.plan) baseRow.plan = tracker.plan
+        // Keep automated planHistory; only fill plan text when history is empty
+        if (
+          tracker.plan &&
+          !(baseRow.planHistory && baseRow.planHistory.length)
+        ) {
+          baseRow.plan = tracker.plan
+        }
         if (tracker.treatmentType) baseRow.treatmentType = tracker.treatmentType
         if (tracker.referralName) baseRow.referralName = tracker.referralName
         if (tracker.icsiD1) baseRow.icsiD1 = tracker.icsiD1
@@ -3578,6 +3726,9 @@ function PatientTrackerReports() {
           row.referralName,
           row.branch,
           row.plan,
+          ...(Array.isArray(row.planHistory)
+            ? row.planHistory.flatMap((h) => [h.name, h.status])
+            : []),
           row.treatmentType,
           row.cycleStatus,
           row.stageOfCycle,
@@ -5037,6 +5188,7 @@ function PatientTrackerReports() {
                   loading={isLoadingAutomatedSummary}
                   disableRowSelectionOnClick
                   autoHeight={false}
+                  getRowHeight={() => 'auto'}
                   pageSizeOptions={[25, 50, 100]}
                   initialState={{
                     pagination: {
@@ -5049,6 +5201,8 @@ function PatientTrackerReports() {
                     },
                     '& .MuiDataGrid-cell': {
                       fontSize: '0.875rem',
+                      alignItems: 'center',
+                      py: 0.75,
                     },
                   }}
                 />
