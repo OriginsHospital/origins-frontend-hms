@@ -116,12 +116,23 @@ function ScanPrescriptionPage() {
   })
 
   const enhancePrescriptionPrintHtml = (html) => {
-    // Only boost prescription body tables/titles — never override header logo/address sizes
+    // Boost prescription body tables/titles; keep header layout but make logo/address clearer
     const printBoostStyles = `
       <style id="prescription-print-boost">
         body {
           font-family: Arial, Helvetica, sans-serif;
           color: #000;
+        }
+        img[alt="Hospital Logo"] {
+          width: 140px !important;
+          max-width: 140px !important;
+          height: auto !important;
+          image-rendering: -webkit-optimize-contrast;
+          image-rendering: high-quality;
+        }
+        .header-branch-address,
+        .header-branch-address * {
+          font-weight: 700 !important;
         }
         table {
           font-size: 15px !important;
@@ -155,10 +166,35 @@ function ScanPrescriptionPage() {
       </style>
     `
     if (typeof html !== 'string') return html
-    if (/<\/head>/i.test(html)) {
-      return html.replace(/<\/head>/i, `${printBoostStyles}</head>`)
+
+    // Bold every branch street-address line in the header (e.g. "1-7-1765, Srinivasnagar Colony, ... - 506001")
+    const withBoldAddress = html.replace(
+      /(<div\b[^>]*font-size:\s*(?:11px|7px)[^>]*>)([\s\S]*?)(<\/div>)/gi,
+      (full, openTag, inner, closeTag) => {
+        const text = String(inner)
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+        const looksLikeStreetAddress =
+          text.length > 20 &&
+          text.includes(',') &&
+          (/\d{6}/.test(text) ||
+            /Colony|Nagar|Telangana|Andhra|Road|Street/i.test(text))
+        if (!looksLikeStreetAddress) return full
+        const boldOpen = /font-weight\s*:/i.test(openTag)
+          ? openTag.replace(/font-weight\s*:\s*[^;"]+/i, 'font-weight: 700')
+          : openTag.replace(/style="/i, 'style="font-weight: 700; ')
+        if (/<(strong|b)\b/i.test(inner)) {
+          return `${boldOpen}${inner}${closeTag}`
+        }
+        return `${boldOpen}<strong>${inner.trim()}</strong>${closeTag}`
+      },
+    )
+
+    if (/<\/head>/i.test(withBoldAddress)) {
+      return withBoldAddress.replace(/<\/head>/i, `${printBoostStyles}</head>`)
     }
-    return `${printBoostStyles}${html}`
+    return `${printBoostStyles}${withBoldAddress}`
   }
 
   const openPrescriptionHtml = useCallback(
