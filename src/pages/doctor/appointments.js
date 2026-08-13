@@ -72,6 +72,7 @@ import RichText from '@/components/RichText'
 import EmbryologyHistory from '@/components/EmbryologyHistory'
 import PatientHistory from '@/components/PatientHistory'
 import VitalsInformation from '@/components/VitalsInformation'
+import AntenatalLmpEddForm from '@/components/AntenatalLmpEddForm'
 import InfoItem from '@/components/InfoItem'
 import Prescription from '@/components/Prescription'
 import TreatmentCycleHistoryView from '@/components/TreatmentCycleHistoryView'
@@ -1234,50 +1235,18 @@ export default function Appointments() {
     )
   }
 
-  function onAppointmentClick(
-    patientId,
-    branchId,
-    appointmentId,
-    type,
-    treatmentCycleId,
-    vitalInfo,
-    consultationId,
-    appointmentReason,
-    isSpouse,
-    isCompleted,
-    isReviewCall,
-    reviewCallInfo,
-  ) {
-    setSelectedPatient({
-      patientId,
-      branchId,
-      appointmentId,
-      type,
-      treatmentCycleId,
-      vitalInfo,
-      consultationId,
-      appointmentReason,
-      isSpouse,
-      isCompleted,
-      isReviewCall,
-      reviewCallInfo,
-    })
+  function onAppointmentClick(appointment) {
+    setSelectedPatient(appointment)
     router.push(
       {
         pathname: router.pathname + '/',
         query: {
           ...router.query,
-          patientId,
-          appointmentId,
-          type,
-          // treatmentCycleId,
-          // vitalInfo,
-          consultationId,
+          patientId: appointment.patientId,
+          appointmentId: appointment.appointmentId,
+          type: appointment.type,
+          consultationId: appointment.consultationId,
           date: dayjs(date).format('YYYY-MM-DD'),
-          // appointmentReason,
-          // isSpouse,
-          // isCompleted,
-          // isReviewCall,
         },
       },
       undefined,
@@ -1634,20 +1603,7 @@ export default function Appointments() {
                   }`}
                   key={eachAppointment.appointmentId}
                   onClick={() => {
-                    onAppointmentClick(
-                      eachAppointment.patientId,
-                      eachAppointment.branchId,
-                      eachAppointment.appointmentId,
-                      eachAppointment.type,
-                      eachAppointment.treatmentCycleId,
-                      eachAppointment.vitalInfo,
-                      eachAppointment.consultationId,
-                      eachAppointment.appointmentReason,
-                      eachAppointment.isSpouse,
-                      eachAppointment.isCompleted,
-                      eachAppointment.isReviewCall,
-                      eachAppointment.reviewCallInfo,
-                    )
+                    onAppointmentClick(eachAppointment)
                   }}
                 >
                   {eachAppointment?.photoPath &&
@@ -1716,19 +1672,7 @@ export default function Appointments() {
                   }`}
                   key={eachAppointment.appointmentId}
                   onClick={() => {
-                    onAppointmentClick(
-                      eachAppointment.patientId,
-                      eachAppointment.branchId,
-                      // eachAppointment.id,
-                      eachAppointment.appointmentId,
-                      eachAppointment.type,
-                      eachAppointment.treatmentCycleId,
-                      eachAppointment.vitalInfo,
-                      eachAppointment.consultationId,
-                      eachAppointment.appointmentReason,
-                      eachAppointment.isSpouse,
-                      eachAppointment.isCompleted,
-                    )
+                    onAppointmentClick(eachAppointment)
                   }}
                 >
                   {/* {eachAppointment?.photoPath &&
@@ -1858,9 +1802,29 @@ export default function Appointments() {
                   />
                 </div>
                 {checklistData && (
-                  // <VitalsInformation vitals={checklistData[0]?.latestVitals} />
                   <VitalsInformation vitals={selectedPatient?.vitalInfo} />
                 )}
+                <AntenatalLmpEddForm
+                  patientInfo={patientDetails?.patientInfo}
+                  selectedPatient={selectedPatient}
+                  accessToken={user.accessToken}
+                  onSaved={({ lmp, edd }) => {
+                    setSelectedPatient((prev) => ({
+                      ...prev,
+                      lmp,
+                      edd,
+                    }))
+                    queryClient.invalidateQueries({
+                      queryKey: ['patientInfoForDoctor'],
+                    })
+                    queryClient.invalidateQueries({
+                      queryKey: ['appointmentsForDoctor'],
+                    })
+                    queryClient.invalidateQueries({
+                      queryKey: ['patientAppointments'],
+                    })
+                  }}
+                />
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                   {selectedPatient?.appointmentReason && (
                     <Alert

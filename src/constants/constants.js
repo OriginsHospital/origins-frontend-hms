@@ -51,6 +51,7 @@ export const API_ROUTES = {
   EDIT_GUARDIAN_RECORD: '/patients/editguardian',
   GET_VISIT_BY_PATIENTID: '/visits/getVisits',
   CREATE_VISIT: '/visits/createVisit',
+  SAVE_VISIT_LMP_EDD: '/visits/saveVisitLmpEdd',
   GET_DOCTORS_LIST: '/slots/getDoctorsList',
   SAVE_BLOCKED_TIME_SLOTS: '/slots/saveBlockedTimeSlots',
   GET_BLOCKED_TIME_SLOTS: '/slots/getBlockedTimeSlots',
