@@ -42,6 +42,20 @@ const cycleStatusOptions = [
   { value: 'Cancelled', label: 'Cancelled' },
 ]
 
+const stageOfCycleOptions = [
+  { value: 'Registered', label: 'Registered' },
+  { value: 'Initial Appointment', label: 'Initial Appointment' },
+  { value: 'Follow up', label: 'Follow up' },
+  { value: 'Treatment', label: 'Treatment' },
+  { value: 'Cycle Started', label: 'Cycle Started' },
+  { value: 'OPU', label: 'OPU' },
+  { value: 'FET-D1', label: 'FET-D1' },
+  { value: 'FET', label: 'FET' },
+  { value: 'UPT', label: 'UPT' },
+  { value: 'UPT Positive', label: 'UPT Positive' },
+  { value: 'UPT Negative', label: 'UPT Negative' },
+]
+
 const uptResultOptions = [
   { value: 'Positive', label: 'Positive' },
   { value: 'Negative', label: 'Negative' },
@@ -524,13 +538,20 @@ export default function SummaryAutomatedEntryDrawer({
               </FormControl>
             </Grid>
             <Grid item xs={6}>
-              <TextField
-                fullWidth
-                size="small"
-                label="Stage of Cycle"
-                value={form.stageOfCycle}
-                onChange={(e) => setField('stageOfCycle', e.target.value)}
-              />
+              <FormControl fullWidth size="small">
+                <InputLabel>Stage of Cycle</InputLabel>
+                <Select
+                  label="Stage of Cycle"
+                  value={form.stageOfCycle}
+                  onChange={(e) => setField('stageOfCycle', e.target.value)}
+                >
+                  {stageOfCycleOptions.map((opt) => (
+                    <MenuItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
             </Grid>
 
             <Grid item xs={12}>

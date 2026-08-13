@@ -733,6 +733,76 @@ function PatientTrackerTabPanel({ children, value, index }) {
   )
 }
 
+const STAGE_OF_CYCLE_OPTIONS = [
+  { value: 'Registered', label: 'Registered' },
+  { value: 'Initial Appointment', label: 'Initial Appointment' },
+  { value: 'Follow up', label: 'Follow up' },
+  { value: 'Treatment', label: 'Treatment' },
+  { value: 'Cycle Started', label: 'Cycle Started' },
+  { value: 'OPU', label: 'OPU' },
+  { value: 'FET-D1', label: 'FET-D1' },
+  { value: 'FET', label: 'FET' },
+  { value: 'UPT', label: 'UPT' },
+  { value: 'UPT Positive', label: 'UPT Positive' },
+  { value: 'UPT Negative', label: 'UPT Negative' },
+]
+
+const STAGE_OF_CYCLE_STYLES = {
+  Registered: { bg: '#F8FAFC', color: '#475569', border: '#E2E8F0' },
+  'Initial Appointment': { bg: '#EFF6FF', color: '#1D4ED8', border: '#BFDBFE' },
+  'Follow up': { bg: '#F0F9FF', color: '#0369A1', border: '#BAE6FD' },
+  Treatment: { bg: '#FFF7ED', color: '#C2410C', border: '#FED7AA' },
+  'Cycle Started': { bg: '#F5F3FF', color: '#6D28D9', border: '#DDD6FE' },
+  OPU: { bg: '#FEF3C7', color: '#B45309', border: '#FDE68A' },
+  'FET-D1': { bg: '#ECFDF5', color: '#047857', border: '#A7F3D0' },
+  FET: { bg: '#ECFDF5', color: '#047857', border: '#A7F3D0' },
+  UPT: { bg: '#FDF2F8', color: '#BE185D', border: '#FBCFE8' },
+  'UPT Positive': { bg: '#ECFDF5', color: '#047857', border: '#A7F3D0' },
+  'UPT Negative': { bg: '#FEF2F2', color: '#B91C1C', border: '#FECACA' },
+}
+
+const STAGE_OF_CYCLE_LABELS = new Set(
+  STAGE_OF_CYCLE_OPTIONS.map((opt) => opt.value),
+)
+
+const DATE_LIKE_STAGE = /^\d{1,4}[-/.]\d{1,2}[-/.]\d{1,4}$/
+
+function normalizeStageOfCycle(value, appointmentStage) {
+  const raw = value == null ? '' : String(value).trim()
+  const fromAppointment =
+    appointmentStage == null ? '' : String(appointmentStage).trim()
+
+  if (STAGE_OF_CYCLE_LABELS.has(raw)) return raw
+  if (STAGE_OF_CYCLE_LABELS.has(fromAppointment)) return fromAppointment
+  // Legacy patient tracker stored the next follow-up date in this column
+  if (DATE_LIKE_STAGE.test(raw)) return 'Follow up'
+  if (!raw || raw === '-') return 'Registered'
+  return 'Registered'
+}
+
+function renderStageOfCycleCell(params) {
+  const stage = normalizeStageOfCycle(
+    params.value,
+    params.row?.appointmentStage,
+  )
+  const style = STAGE_OF_CYCLE_STYLES[stage] || STAGE_OF_CYCLE_STYLES.Registered
+  return (
+    <Chip
+      label={stage}
+      size="small"
+      variant="outlined"
+      sx={{
+        height: 24,
+        fontSize: '0.72rem',
+        fontWeight: 600,
+        backgroundColor: style.bg,
+        color: style.color,
+        borderColor: style.border,
+      }}
+    />
+  )
+}
+
 function PatientTrackerReports() {
   const userDetails = useSelector((store) => store.user)
   const dropdowns = useSelector((store) => store.dropdowns)
@@ -1205,10 +1275,12 @@ function PatientTrackerReports() {
       }
 
       // Treatment Details from treatment cycles
-      if (treatmentCyclesData && treatmentCyclesData.length > 0) {
-        // Get the most recent or active treatment cycle
-        const latestTreatmentCycle = treatmentCyclesData[0]
+      const latestTreatmentCycle =
+        treatmentCyclesData && treatmentCyclesData.length > 0
+          ? treatmentCyclesData[0]
+          : null
 
+      if (latestTreatmentCycle) {
         if (latestTreatmentCycle?.treatmentDetails?.treatementType) {
           const treatmentType =
             latestTreatmentCycle.treatmentDetails.treatementType
@@ -1313,11 +1385,6 @@ function PatientTrackerReports() {
           updatedFormData.branch = latestAppointment.branchId
         }
 
-        // Extract stage of cycle from appointment stage
-        if (latestAppointment.stage) {
-          updatedFormData.stageOfCycle = latestAppointment.stage
-        }
-
         // Try to get financial data from appointment line bills
         // Fetch line bills for the latest appointment to get package and payment information
         try {
@@ -1389,6 +1456,29 @@ function PatientTrackerReports() {
           console.error('Error fetching line bills:', err)
           // Continue without financial data if this fails
         }
+      }
+
+      const appointmentList = Array.isArray(appointmentsData)
+        ? appointmentsData
+        : []
+      const hasFollowUp = appointmentList.some((apt) =>
+        /follow/i.test(
+          String(apt.consultationType || apt.type || apt.stage || ''),
+        ),
+      )
+      const hasInitial = appointmentList.some((apt) =>
+        /nitial/i.test(
+          String(apt.consultationType || apt.type || apt.stage || ''),
+        ),
+      )
+      if (latestTreatmentCycle?.treatmentCycleId) {
+        updatedFormData.stageOfCycle = 'Treatment'
+      } else if (hasFollowUp) {
+        updatedFormData.stageOfCycle = 'Follow up'
+      } else if (hasInitial || appointmentList.length > 0) {
+        updatedFormData.stageOfCycle = 'Initial Appointment'
+      } else {
+        updatedFormData.stageOfCycle = 'Registered'
       }
 
       // Embryology Data - Extract from embryology history
@@ -2127,7 +2217,6 @@ function PatientTrackerReports() {
       'mobileNumber',
       'referralName',
       'plan',
-      'stageOfCycle',
       'packageName',
       'packageAmount',
       'registrationAmount',
@@ -2155,6 +2244,7 @@ function PatientTrackerReports() {
       'referralSource',
       'treatmentType',
       'cycleStatus',
+      'stageOfCycle',
       'uptResult',
     ]
     selectFieldNames.forEach((fieldName) => {
@@ -2205,6 +2295,8 @@ function PatientTrackerReports() {
     { value: 'Complete', label: 'Complete' },
     { value: 'Cancelled', label: 'Cancelled' },
   ]
+
+  const stageOfCycleOptions = STAGE_OF_CYCLE_OPTIONS
 
   // UPT Result options
   const uptResultOptions = [
@@ -2409,9 +2501,10 @@ function PatientTrackerReports() {
       {
         field: 'stageOfCycle',
         headerName: 'Stage of Cycle',
-        width: 150,
+        width: 170,
         headerAlign: 'center',
         align: 'center',
+        renderCell: renderStageOfCycleCell,
       },
       {
         field: 'packageName',
@@ -2802,9 +2895,10 @@ function PatientTrackerReports() {
       {
         field: 'stageOfCycle',
         headerName: 'Stage of Cycle',
-        width: 150,
+        width: 170,
         headerAlign: 'center',
         align: 'center',
+        renderCell: renderStageOfCycleCell,
       },
       {
         field: 'doctorsPackage',
@@ -3492,7 +3586,10 @@ function PatientTrackerReports() {
           : [],
         treatmentType: patient.treatmentType || patient.TreatmentType || '-',
         cycleStatus: cycleStatusValue,
-        stageOfCycle: patient.stageOfCycle || patient.StageOfCycle || '-',
+        stageOfCycle: normalizeStageOfCycle(
+          patient.stageOfCycle || patient.StageOfCycle,
+          patient.appointmentStage,
+        ),
         doctorsPackage: (() => {
           // Use patient.id (database ID) as primary key, with fallback to patientId
           const patientDbId = patient.id
@@ -3678,7 +3775,7 @@ function PatientTrackerReports() {
         baseRow.hasTrackerEntry = true
         baseRow.trackerRecordId = tracker.id
         if (tracker.cycleStatus) baseRow.cycleStatus = tracker.cycleStatus
-        if (tracker.stageOfCycle) baseRow.stageOfCycle = tracker.stageOfCycle
+        // Keep live Stage of Cycle (Registered → Initial Appointment → Follow up → treatment)
         // Keep automated planHistory; only fill plan text when history is empty
         if (
           tracker.plan &&
@@ -3688,11 +3785,13 @@ function PatientTrackerReports() {
         }
         if (tracker.treatmentType) baseRow.treatmentType = tracker.treatmentType
         if (tracker.referralName) baseRow.referralName = tracker.referralName
-        if (tracker.icsiD1) baseRow.icsiD1 = tracker.icsiD1
-        if (tracker.opu) baseRow.opu = tracker.opu
-        if (tracker.fetD1) baseRow.fetD1 = tracker.fetD1
-        if (tracker.fet) baseRow.fet = tracker.fet
-        if (tracker.uptResult) baseRow.uptResult = tracker.uptResult
+        // Do not overlay old tracker package amounts or clinical dates —
+        // Summary Automated uses the active visit package only
+        if (
+          tracker.uptResult &&
+          (!baseRow.uptResult || baseRow.uptResult === '-')
+        )
+          baseRow.uptResult = tracker.uptResult
         if (tracker.numberOfEmbryos != null)
           baseRow.numberOfEmbryos = tracker.numberOfEmbryos
         if (tracker.numberOfEmbryosUsed != null)
@@ -3703,12 +3802,6 @@ function PatientTrackerReports() {
           baseRow.lastRenewalDate = tracker.lastRenewalDate
         if (tracker.numberOfEmbryosDiscarded != null)
           baseRow.numberOfEmbryosDiscarded = tracker.numberOfEmbryosDiscarded
-        if (tracker.registrationAmount != null)
-          baseRow.registrationAmount = Number(tracker.registrationAmount)
-        if (tracker.paidAmount != null)
-          baseRow.paidAmount = Number(tracker.paidAmount)
-        if (tracker.pendingAmount != null)
-          baseRow.pendingAmount = Number(tracker.pendingAmount)
       }
 
       return baseRow
@@ -4392,14 +4485,14 @@ function PatientTrackerReports() {
                         />
                       </Grid>
                       <Grid item xs={6} sm={3} md={3}>
-                        <MemoizedTextField
+                        <MemoizedSelectField
                           fieldName="stageOfCycle"
                           label="Stage of Cycle"
                           value={formData.stageOfCycle}
-                          onBlur={fieldHandlers.stageOfCycle_blur}
+                          onChange={fieldHandlers.stageOfCycle}
                           disabled={false}
                           required={false}
-                          type="text"
+                          options={stageOfCycleOptions}
                           width="100%"
                           hasAccess={accessFlags.row2}
                         />
