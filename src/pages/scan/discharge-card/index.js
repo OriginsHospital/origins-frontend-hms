@@ -355,6 +355,9 @@ function ScanDischargeCardPage() {
         }}
         maxWidth="md"
         fullWidth
+        PaperProps={{
+          sx: { width: 'min(860px, 94vw)', maxHeight: '88vh' },
+        }}
       >
         <DialogTitle className="flex justify-between items-center">
           <span>{viewTitle || 'Discharge Card'}</span>
@@ -379,12 +382,12 @@ function ScanDischargeCardPage() {
             </IconButton>
           </div>
         </DialogTitle>
-        <DialogContent dividers className="max-h-[80vh] overflow-auto p-0">
+        <DialogContent dividers className="overflow-auto p-0 bg-[#e8eef2]">
           {viewHtml ? (
             <iframe
               title="Discharge card preview"
               srcDoc={viewHtml}
-              className="w-full min-h-[70vh] border-0"
+              className="dialog-preview-frame"
             />
           ) : null}
         </DialogContent>

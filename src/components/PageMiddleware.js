@@ -205,12 +205,24 @@ export default function PageMiddleware(props) {
   return (
     <TabManager>
       <FutureCycleModalGlobal />
-      <div className="flex flex-row ">
+      <div className="flex flex-row overflow-x-hidden">
         <SideNav />
-        <div className="pt-[60px] self-stretch h-screen overflow-hidden grow relative flex flex-col">
+        <div className="pt-[56px] self-stretch h-screen overflow-hidden grow relative flex flex-col bg-canvas">
           <TabBar />
-          <div className="flex-1 overflow-auto">
-            <div className="">{props.children}</div>
+          <div
+            className={`flex-1 min-h-0 bg-canvas ${
+              router.pathname === '/appointments'
+                ? 'overflow-hidden'
+                : 'overflow-auto'
+            }`}
+          >
+            <div
+              className={`app-page-shell${
+                router.pathname === '/appointments' ? ' is-locked' : ''
+              }`}
+            >
+              {props.children}
+            </div>
           </div>
         </div>
       </div>

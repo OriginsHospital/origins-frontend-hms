@@ -40,6 +40,8 @@ function Loader({
             `}
             style={{
               zIndex: theme.zIndex.modal + 1,
+              backgroundColor: 'rgba(238, 245, 248, 0.55)',
+              backdropFilter: 'blur(2px)',
             }}
           >
             <div className="relative">

@@ -6,18 +6,19 @@ import Marquee from 'react-fast-marquee'
 import { useSelector } from 'react-redux'
 
 function DisplayAlerts() {
-  const userDetails = useSelector(state => state.user)
+  const userDetails = useSelector((state) => state.user)
   const { data: alertsData, isLoading } = useQuery({
     queryKey: ['alerts', userDetails.accessToken],
     queryFn: async () => await getAllAlerts(userDetails.accessToken),
     enabled: !!userDetails.accessToken,
     refetchInterval: 1000 * 60,
   })
-  if (isLoading) return <div>Loading...</div>
+  if (isLoading)
+    return <div className="px-4 py-2 text-sm text-muted">Loading alerts…</div>
   return (
     <Marquee speed={50} pauseOnHover={true}>
-      <div className="flex items-center gap-4">
-        {alertsData?.data?.map(alert => (
+      <div className="flex items-center gap-4 py-1.5 text-sm text-ink">
+        {alertsData?.data?.map((alert) => (
           <div key={alert.id} className="flex items-center gap-4">
             <span>{alert.alertMessage}</span>
             <Divider

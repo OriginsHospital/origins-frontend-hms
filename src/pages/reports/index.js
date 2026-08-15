@@ -44,8 +44,15 @@ const subNav = [
     requiresRevenueAccess: false,
   },
   {
-    path: '/reports/grnvendor',
+    path: '/home/payments',
     title: 'Payments',
+    relatedModule: 'dashboard',
+    icon: TbFileAnalytics,
+    requiresRevenueAccess: false,
+  },
+  {
+    path: '/reports/grnvendor',
+    title: 'GRN Payments',
     relatedModule: 'grnVendorPaymentReport',
     icon: TbFileAnalytics,
     requiresRevenueAccess: false,

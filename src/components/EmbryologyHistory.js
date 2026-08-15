@@ -62,8 +62,8 @@ function EmbryologyHistory({ patientId }) {
 
   return (
     <div className="p-4">
-      <div className="flex justify-between items-center mb-4">
-        <Typography variant="h5" className="mb-4 text-gray-800 font-semibold">
+      <div className="mb-4 flex items-center justify-between border-b border-[#e3eef3] pb-3">
+        <Typography variant="h5" className="font-bold text-slate-800">
           Embryology
         </Typography>
         <IconButton onClick={() => dispatch(closeModal())}>

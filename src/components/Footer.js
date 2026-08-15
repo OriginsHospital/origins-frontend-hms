@@ -8,7 +8,7 @@ const Footer = () => {
   const dispatch = useDispatch()
   const [isVisible, setIsVisible] = useState(true)
 
-  const handleOpenModal = modalKey => {
+  const handleOpenModal = (modalKey) => {
     dispatch(openModal(modalKey))
   }
 
@@ -23,7 +23,7 @@ const Footer = () => {
   return (
     <Box
       component="footer"
-      className="bg-gray-800 text-white py-3 shadow-lg"
+      className="bg-ink text-white py-3 shadow-lg"
       sx={{
         position: 'fixed',
         bottom: 0,

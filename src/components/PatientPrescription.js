@@ -826,10 +826,15 @@ function PatientPrescription({
   return (
     <div>
       <Button
-        className=" capitalize"
-        variant="outlined"
+        variant="contained"
         onClick={onAddPrescriptionClick}
         startIcon={<FaPrescriptionBottleMedical />}
+        sx={{
+          minHeight: 44,
+          px: 2.25,
+          fontWeight: 700,
+          textTransform: 'none',
+        }}
       >
         Prescription
       </Button>
@@ -848,8 +853,8 @@ function PatientPrescription({
       >
         <div className="flex max-h-[min(92vh,960px)] min-h-0 flex-col overflow-hidden">
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-7 pt-4 sm:px-8">
-            <div className="relative flex items-center justify-between gap-4 border-b border-gray-100 pb-3">
-              <span className="text-xl font-semibold text-secondary">
+            <div className="relative flex items-center justify-between gap-4 border-b border-[#e3eef3] pb-3">
+              <span className="text-xl font-bold text-slate-800">
                 Patient Prescription
               </span>
               {patientName ? (

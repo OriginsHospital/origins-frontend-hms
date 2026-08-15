@@ -71,13 +71,15 @@ export default function Modal({
       PaperProps={{
         sx: {
           zIndex: 1300,
+          maxHeight: '88vh',
+          overflow: 'hidden',
+          borderRadius: '16px',
           ...paperSx,
         },
       }}
       BackdropProps={{
         sx: {
           zIndex: 1299,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
         },
         onClick: closeOnOutsideClick ? handleClose : undefined,
       }}

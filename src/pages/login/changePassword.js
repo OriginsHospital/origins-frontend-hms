@@ -59,8 +59,8 @@ function ChangePassword() {
     }
 
     fetch(changePasswordApiUrl, requestOptions)
-      .then(response => {
-        return response.json().then(result => {
+      .then((response) => {
+        return response.json().then((result) => {
           if (response.status === 200) {
             toast.success(
               result.message || 'Password changed successfully!',
@@ -77,7 +77,7 @@ function ChangePassword() {
           }
         })
       })
-      .catch(error => {
+      .catch((error) => {
         console.log('error', error)
         setSubmitting(false)
         toast.error('An error occurred! Please try again later.', toastconfig)
@@ -85,25 +85,23 @@ function ChangePassword() {
   }
 
   return (
-    <div className="flex min-h-full flex-col justify-center px-6 py-12 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-sm">
-        <h2 className="mt-10 text-center text-2xl font-bold leading-9 tracking-tight text-gray-900">
-          Change your password ?
+    <div className="min-h-screen flex items-center justify-center px-6 py-12">
+      <div className="auth-card">
+        <h2 className="text-center text-2xl font-bold tracking-tight text-ink mb-6">
+          Change your password
         </h2>
-      </div>
 
-      <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-sm">
         <Formik
           initialValues={initialValues}
           validationSchema={validationSchema}
           onSubmit={handleChangePassword}
         >
           {({ isSubmitting, isValid, dirty }) => (
-            <Form className="space-y-4" action="#" method="POST">
+            <Form className="space-y-4">
               <div>
                 <label
                   htmlFor="email"
-                  className="block text-sm font-medium leading-6 text-gray-900"
+                  className="block text-sm font-medium text-ink"
                 >
                   Email address
                 </label>
@@ -112,12 +110,12 @@ function ChangePassword() {
                     id="email"
                     name="email"
                     type="email"
-                    className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 px-2"
+                    className="auth-field"
                   />
                   <ErrorMessage
                     name="email"
                     component="div"
-                    className="text-red-500 p-2"
+                    className="text-red-500 p-2 text-sm"
                   />
                 </div>
               </div>
@@ -125,21 +123,21 @@ function ChangePassword() {
               <div>
                 <label
                   htmlFor="oldPassword"
-                  className="block text-sm font-medium leading-6 text-gray-900"
+                  className="block text-sm font-medium text-ink"
                 >
-                  Old Password
+                  Old password
                 </label>
                 <div className="mt-2">
                   <Field
                     id="oldPassword"
                     name="oldPassword"
                     type="password"
-                    className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 px-2"
+                    className="auth-field"
                   />
                   <ErrorMessage
                     name="oldPassword"
                     component="div"
-                    className="text-red-500 p-2"
+                    className="text-red-500 p-2 text-sm"
                   />
                 </div>
               </div>
@@ -147,21 +145,21 @@ function ChangePassword() {
               <div>
                 <label
                   htmlFor="newPassword"
-                  className="block text-sm font-medium leading-6 text-gray-900"
+                  className="block text-sm font-medium text-ink"
                 >
-                  New Password
+                  New password
                 </label>
                 <div className="mt-2">
                   <Field
                     id="newPassword"
                     name="newPassword"
                     type="password"
-                    className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 px-2"
+                    className="auth-field"
                   />
                   <ErrorMessage
                     name="newPassword"
                     component="div"
-                    className="text-red-500 p-2"
+                    className="text-red-500 p-2 text-sm"
                   />
                 </div>
               </div>
@@ -169,44 +167,43 @@ function ChangePassword() {
               <div>
                 <label
                   htmlFor="confirmPassword"
-                  className="block text-sm font-medium leading-6 text-gray-900"
+                  className="block text-sm font-medium text-ink"
                 >
-                  Confirm Password
+                  Confirm password
                 </label>
                 <div className="mt-2">
                   <Field
                     id="confirmPassword"
                     name="confirmPassword"
                     type="password"
-                    className="block w-full rounded-md border-0 py-1.5 text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 px-2"
+                    className="auth-field"
                   />
                   <ErrorMessage
                     name="confirmPassword"
                     component="div"
-                    className="text-red-500 p-2"
+                    className="text-red-500 p-2 text-sm"
                   />
                 </div>
               </div>
               <div>
                 <button
                   type="submit"
-                  variant="primary"
                   disabled={isSubmitting || !isValid || !dirty}
-                  className="flex w-full justify-center rounded-md bg-secondary px-3 py-1.5 text-sm font-semibold leading-6 text-white shadow-sm hover:bg-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="auth-submit disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isSubmitting ? 'Please wait...' : 'Get Your Password'}
+                  {isSubmitting ? 'Please wait...' : 'Change password'}
                 </button>
               </div>
             </Form>
           )}
         </Formik>
 
-        <p className="mt-5 text-center text-sm text-gray-500">
+        <p className="mt-5 text-center text-sm text-muted">
           <Link
             href="/login"
-            className="font-semibold leading-6 text-secondary hover:text-secondary"
+            className="font-semibold text-secondary hover:text-[#0284b8]"
           >
-            click here to Login
+            Back to login
           </Link>
         </p>
       </div>

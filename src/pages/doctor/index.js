@@ -7,7 +7,16 @@ import 'react-toastify/dist/ReactToastify.css'
 import TabList from '@mui/lab/TabList'
 import TabPanel from '@mui/lab/TabPanel'
 import { TabContext } from '@mui/lab'
-import { Card, CardContent, CardHeader, Tab, Typography } from '@mui/material'
+import {
+  Autocomplete,
+  Card,
+  CardContent,
+  CardHeader,
+  Chip,
+  Tab,
+  TextField,
+  Typography,
+} from '@mui/material'
 import { Box } from '@mui/material'
 import { DatePicker } from '@mui/x-date-pickers/DatePicker'
 import Button from '@mui/material/Button'
@@ -15,6 +24,7 @@ import Select from '@mui/material/Select'
 import MenuItem from '@mui/material/MenuItem'
 import InputLabel from '@mui/material/InputLabel'
 import FormControl from '@mui/material/FormControl'
+import Checkbox from '@mui/material/Checkbox'
 import Switch from '@mui/material/Switch'
 import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
@@ -32,6 +42,7 @@ import {
   updateDoctorActiveStatus,
 } from '@/constants/apis'
 import { getTimeDivisions } from '@/utils/getTimeDivisions'
+import { getSelectableBranches } from '@/utils/branchMapping'
 import { hideLoader, showLoader } from '@/redux/loaderSlice'
 import { openSideDrawer } from '@/redux/sideDrawerSlice'
 import { SideDrawer } from '@/components/SideDrawer'
@@ -251,10 +262,16 @@ function BlockCalender({ doctorsData }) {
           onChange={handleDateChange}
         />
         <Button
-          className="h-[50px] flex gap-3 text-success-content bg-success"
+          className="flex gap-3 text-success-content bg-success"
           variant="contained"
-          // disabled
           onClick={handleSaveClick}
+          sx={{
+            minHeight: 48,
+            px: 3.5,
+            fontWeight: 700,
+            textTransform: 'none',
+            fontSize: '0.95rem',
+          }}
         >
           <CheckCircleOutlineRoundedIcon className="text-success-content" />
           SAVE
@@ -334,14 +351,21 @@ function BlockCalender({ doctorsData }) {
         </FormControl>
 
         <Button
-          className="w-[100px] h-[50px] text-secondary border-2 flex gap-2"
-          variant="outlined"
-          // disabled={!validate()}
+          variant="contained"
+          startIcon={<FaPlus />}
           onClick={handleAddClick}
+          sx={{
+            minHeight: 48,
+            minWidth: 120,
+            px: 3,
+            fontWeight: 700,
+            textTransform: 'none',
+            fontSize: '0.95rem',
+            boxShadow: 'none',
+            '&:hover': { boxShadow: 'none' },
+          }}
         >
-          <FaPlus />
-          {/* <CheckCircleOutlineRoundedIcon color="success" /> */}
-          <span className="">Add</span>
+          Add
         </Button>
       </div>
       <div className="w-full grid grid-cols-1 md:grid-cols-4 gap-8">
@@ -394,8 +418,112 @@ function BlockCalender({ doctorsData }) {
   )
 }
 
-function ShiftTimings({ doctorsData, isDoctorStatusEditor }) {
+function parseBranchIds(raw) {
+  if (raw == null || raw === '') return []
+  if (Array.isArray(raw)) {
+    return [
+      ...new Set(
+        raw
+          .map((item) =>
+            item && typeof item === 'object' ? Number(item.id) : Number(item),
+          )
+          .filter((id) => Number.isInteger(id) && id > 0),
+      ),
+    ]
+  }
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim()
+    if (!trimmed || trimmed === 'null') return []
+    if (trimmed.startsWith('[')) {
+      try {
+        return parseBranchIds(JSON.parse(trimmed))
+      } catch {
+        return []
+      }
+    }
+    return [
+      ...new Set(
+        trimmed
+          .split(',')
+          .map((part) => Number(part.trim()))
+          .filter((id) => Number.isInteger(id) && id > 0),
+      ),
+    ]
+  }
+  const singleId = Number(raw)
+  return Number.isInteger(singleId) && singleId > 0 ? [singleId] : []
+}
+
+function parseDoctorBranches(rawBranches) {
+  if (!rawBranches) return []
+  if (Array.isArray(rawBranches)) return rawBranches.filter(Boolean)
+  if (typeof rawBranches === 'string') {
+    try {
+      const parsed = JSON.parse(rawBranches)
+      return Array.isArray(parsed) ? parsed.filter(Boolean) : []
+    } catch {
+      return []
+    }
+  }
+  return []
+}
+
+function normalizeBranch(branch) {
+  if (!branch || branch.id == null) return null
+  const id = Number(branch.id)
+  if (!Number.isInteger(id) || id <= 0) return null
+  return {
+    id,
+    name: branch.name || branch.branchCode || `Branch ${id}`,
+    branchCode: branch.branchCode || branch.name || '',
+  }
+}
+
+function mergeBranchCatalog(lists = []) {
+  const map = new Map()
+  lists.flat().forEach((branch) => {
+    const normalized = normalizeBranch(branch)
+    if (!normalized) return
+    const existing = map.get(normalized.id)
+    if (!existing) {
+      map.set(normalized.id, normalized)
+      return
+    }
+    map.set(normalized.id, {
+      id: normalized.id,
+      name:
+        normalized.name && !/^[A-Z]{2,6}$/.test(normalized.name)
+          ? normalized.name
+          : existing.name || normalized.name,
+      branchCode: existing.branchCode || normalized.branchCode,
+    })
+  })
+  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name))
+}
+
+function resolveAssignedBranches(shift, catalog) {
+  const fromObjects = parseDoctorBranches(shift?.branches).map(normalizeBranch)
+  const fromIds = parseBranchIds(shift?.branchIds)
+  const byId = new Map(catalog.map((branch) => [Number(branch.id), branch]))
+  fromObjects.filter(Boolean).forEach((branch) => {
+    if (!byId.has(branch.id)) byId.set(branch.id, branch)
+  })
+  const ids = fromIds.length
+    ? fromIds
+    : fromObjects.filter(Boolean).map((branch) => branch.id)
+  return ids.map((id) => byId.get(Number(id))).filter(Boolean)
+}
+
+function sameBranchIds(a = [], b = []) {
+  if (a.length !== b.length) return false
+  const left = [...a].map(Number).sort((x, y) => x - y)
+  const right = [...b].map(Number).sort((x, y) => x - y)
+  return left.every((id, index) => id === right[index])
+}
+
+function ShiftTimings({ doctorsData, isDoctorStatusEditor, isAdmin }) {
   const user = useSelector((store) => store.user)
+  const dropdowns = useSelector((store) => store.dropdowns)
   const dispatch = useDispatch()
   const [formDetails, setFormDetails] = useState({
     doctorId: '',
@@ -410,6 +538,8 @@ function ShiftTimings({ doctorsData, isDoctorStatusEditor }) {
     index: '',
     from: '',
     to: '',
+    branchIds: [],
+    selectedBranches: [],
   })
   const [ids, setIds] = useState({})
   const QueryClient = useQueryClient()
@@ -476,8 +606,25 @@ function ShiftTimings({ doctorsData, isDoctorStatusEditor }) {
       },
     })
 
+  const branchCatalog = useMemo(
+    () =>
+      mergeBranchCatalog([
+        user?.branchDetails || [],
+        dropdowns?.branches || [],
+        getSelectableBranches(user, dropdowns?.branches),
+        shiftTimingsData.flatMap((shift) => shift.branches || []),
+      ]),
+    [user, dropdowns?.branches, shiftTimingsData],
+  )
+
   function onDialogClose() {
-    setEditShift({ index: '', from: '', to: '' })
+    setEditShift({
+      index: '',
+      from: '',
+      to: '',
+      branchIds: [],
+      selectedBranches: [],
+    })
     setOpen(false)
   }
 
@@ -512,6 +659,8 @@ function ShiftTimings({ doctorsData, isDoctorStatusEditor }) {
             id: id,
             ...formDetails,
             isActive: 1,
+            branches: [],
+            branchIds: [],
             saved: false,
           },
           ...shiftTimingsData,
@@ -526,39 +675,60 @@ function ShiftTimings({ doctorsData, isDoctorStatusEditor }) {
   }
 
   function handleEditClick(index) {
+    const shift = shiftTimingsData[index]
+    const selectedBranches = resolveAssignedBranches(shift, branchCatalog)
     setEditShift({
       index: index,
-      from: shiftTimingsData[index].from,
-      to: shiftTimingsData[index].to,
+      from: shift.from,
+      to: shift.to,
+      branchIds: selectedBranches.map((branch) => branch.id),
+      selectedBranches,
     })
     setOpen(true)
   }
 
   function updateShiftTimings() {
-    const ar = shiftTimingsData
-    if (
-      ar[editShift.index].from != editShift.from ||
-      ar[editShift.index].to != editShift.to
-    ) {
+    const selectedBranches = editShift.selectedBranches || []
+    const selectedIds = selectedBranches.map((branch) => Number(branch.id))
+    if (isAdmin && selectedIds.length === 0) {
+      toast.error('Select at least one branch for appointments', toastconfig)
+      return
+    }
+
+    const ar = [...shiftTimingsData]
+    const current = ar[editShift.index]
+    const timesChanged =
+      current.from != editShift.from || current.to != editShift.to
+    const branchesChanged = isAdmin
+      ? !sameBranchIds(current.branchIds, selectedIds)
+      : false
+
+    if (timesChanged || branchesChanged) {
       ar[editShift.index] = {
-        ...ar[editShift.index],
+        ...current,
         from: editShift.from,
         to: editShift.to,
+        branchIds: isAdmin ? selectedIds : current.branchIds || [],
+        branches: isAdmin ? selectedBranches : current.branches || [],
         saved: false,
       }
-      setShiftTimingsData([...ar])
+      setShiftTimingsData(ar)
     }
     onDialogClose()
   }
 
   function handleSaveClick() {
     const shiftsArray = shiftTimingsData.map((eachShift) => {
-      return {
+      const item = {
         doctorId: eachShift.doctorId,
         doctorName: eachShift.doctorName,
         shiftFrom: eachShift.from,
         shiftTo: eachShift.to,
       }
+      if (isAdmin && !eachShift.saved && Array.isArray(eachShift.branchIds)) {
+        item.branchIds = eachShift.branchIds
+      }
+      return item
     })
     mutate({
       shiftList: shiftsArray,
@@ -588,6 +758,14 @@ function ShiftTimings({ doctorsData, isDoctorStatusEditor }) {
       const modifiedData = savedShiftTimingsData.map((each) => {
         const id = each.doctorId
         idsObj[id] = true
+        const branches = parseDoctorBranches(each.branches)
+          .map(normalizeBranch)
+          .filter(Boolean)
+        const branchIds = parseBranchIds(
+          each.branchIds != null && String(each.branchIds).length
+            ? each.branchIds
+            : branches,
+        )
         return {
           id: id,
           doctorId: each.doctorId,
@@ -595,6 +773,8 @@ function ShiftTimings({ doctorsData, isDoctorStatusEditor }) {
           from: each.shiftFrom,
           to: each.shiftTo,
           isActive: Number(each.isActive) === 1 ? 1 : 0,
+          branches,
+          branchIds,
           saved: true,
         }
       })
@@ -618,41 +798,37 @@ function ShiftTimings({ doctorsData, isDoctorStatusEditor }) {
 
   return (
     <div className="flex flex-col gap-6 p-4">
-      {/* Header Section with conditional save button */}
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold text-gray-800">
-          Doctor Shift Management
-        </h2>
-
-        {/* Animated save button that appears only when there are unsaved changes */}
-        <div className="h-10">
-          {hasUnsavedChanges && (
-            <Button
-              variant="contained"
-              color="success"
-              startIcon={<CheckCircleOutlineRoundedIcon />}
-              onClick={handleSaveClick}
-              className="px-6 animate-fade-in"
-              // Add animation classes
-              sx={{
-                animation: 'fadeIn 0.3s ease-in-out',
-                '@keyframes fadeIn': {
-                  '0%': {
-                    opacity: 0,
-                    transform: 'translateY(-10px)',
-                  },
-                  '100%': {
-                    opacity: 1,
-                    transform: 'translateY(0)',
-                  },
+      {hasUnsavedChanges && (
+        <div className="flex justify-end">
+          <Button
+            variant="contained"
+            color="success"
+            startIcon={<CheckCircleOutlineRoundedIcon />}
+            onClick={handleSaveClick}
+            className="animate-fade-in"
+            sx={{
+              minHeight: 48,
+              px: 3.5,
+              fontWeight: 700,
+              textTransform: 'none',
+              fontSize: '0.95rem',
+              animation: 'fadeIn 0.3s ease-in-out',
+              '@keyframes fadeIn': {
+                '0%': {
+                  opacity: 0,
+                  transform: 'translateY(-10px)',
                 },
-              }}
-            >
-              Save Changes
-            </Button>
-          )}
+                '100%': {
+                  opacity: 1,
+                  transform: 'translateY(0)',
+                },
+              },
+            }}
+          >
+            Save Changes
+          </Button>
         </div>
-      </div>
+      )}
 
       {/* Status banner for unsaved changes */}
       {hasUnsavedChanges && (
@@ -673,10 +849,10 @@ function ShiftTimings({ doctorsData, isDoctorStatusEditor }) {
           <FormControl sx={{ minWidth: 300 }}>
             <InputLabel>Select Doctor</InputLabel>
             <Select
-              // size="small"
               value={formDetails.doctorId}
               onChange={handleDoctorChange}
               label="Select Doctor"
+              sx={{ minHeight: 48 }}
             >
               {doctorsData?.map((doctor) => (
                 <MenuItem key={doctor.doctorId} value={doctor.doctorId}>
@@ -690,10 +866,10 @@ function ShiftTimings({ doctorsData, isDoctorStatusEditor }) {
             <FormControl sx={{ width: 150 }}>
               <InputLabel>Shift Start</InputLabel>
               <Select
-                // size="small"
                 value={formDetails.from}
                 onChange={handleFromChange}
                 label="Shift Start"
+                sx={{ minHeight: 48 }}
               >
                 {timeDivisionsData.map((time) => (
                   <MenuItem key={time.id} value={time.time}>
@@ -706,10 +882,10 @@ function ShiftTimings({ doctorsData, isDoctorStatusEditor }) {
             <FormControl sx={{ width: 150 }}>
               <InputLabel>Shift End</InputLabel>
               <Select
-                // size="small"
                 value={formDetails.to}
                 onChange={handleToChange}
                 label="Shift End"
+                sx={{ minHeight: 48 }}
               >
                 {timeDivisionsData.map((time) => (
                   <MenuItem key={time.id} value={time.time}>
@@ -721,10 +897,19 @@ function ShiftTimings({ doctorsData, isDoctorStatusEditor }) {
           </div>
 
           <Button
-            variant="outlined"
+            variant="contained"
             startIcon={<FaPlus />}
             onClick={handleAddClick}
-            className="min-w-[120px]"
+            sx={{
+              minHeight: 48,
+              minWidth: 140,
+              px: 3,
+              fontWeight: 700,
+              textTransform: 'none',
+              fontSize: '0.95rem',
+              boxShadow: 'none',
+              '&:hover': { boxShadow: 'none' },
+            }}
           >
             Add Shift
           </Button>
@@ -753,14 +938,25 @@ function ShiftTimings({ doctorsData, isDoctorStatusEditor }) {
                     {shift.doctorName}
                   </Typography>
                   <div className="flex items-center gap-2">
-                    <Typography
-                      variant="caption"
-                      className={`font-medium ${
-                        shift.isActive ? 'text-success' : 'text-error'
-                      }`}
-                    >
-                      {shift.isActive ? 'Active' : 'Inactive'}
-                    </Typography>
+                    <Chip
+                      size="small"
+                      label={shift.isActive ? 'Active' : 'Inactive'}
+                      sx={
+                        shift.isActive
+                          ? {
+                              bgcolor: '#22c55e',
+                              color: '#ffffff',
+                              fontWeight: 700,
+                              fontSize: '0.75rem',
+                            }
+                          : {
+                              bgcolor: '#ef4444',
+                              color: '#ffffff',
+                              fontWeight: 700,
+                              fontSize: '0.75rem',
+                            }
+                      }
+                    />
                     {!shift.saved && (
                       <div className="flex items-center gap-1">
                         <span className="w-2 h-2 rounded-full bg-warning-content animate-pulse"></span>
@@ -787,12 +983,12 @@ function ShiftTimings({ doctorsData, isDoctorStatusEditor }) {
                     />
                   )}
                   <IconButton
-                    size="small"
                     color="primary"
                     onClick={() => handleEditClick(index)}
                     className="hover:bg-primary/10"
+                    sx={{ width: 40, height: 40 }}
                   >
-                    <EditIcon fontSize="small" />
+                    <EditIcon />
                   </IconButton>
                 </div>
               }
@@ -804,13 +1000,28 @@ function ShiftTimings({ doctorsData, isDoctorStatusEditor }) {
                   {shift.from} - {shift.to}
                 </Typography>
               </div>
+              {!!resolveAssignedBranches(shift, branchCatalog).length && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {resolveAssignedBranches(shift, branchCatalog).map(
+                    (branch) => (
+                      <Chip
+                        key={branch.id}
+                        size="small"
+                        variant="outlined"
+                        label={branch.name}
+                        sx={{ fontWeight: 600, height: 22 }}
+                      />
+                    ),
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         ))}
       </div>
 
       {/* Edit Dialog */}
-      <Dialog open={open} onClose={onDialogClose} maxWidth="xs" fullWidth>
+      <Dialog open={open} onClose={onDialogClose} maxWidth="sm" fullWidth>
         <DialogTitle className="pb-2">Update Shift Timings</DialogTitle>
         <DialogContent className="flex flex-col gap-4 pt-4">
           <FormControl fullWidth>
@@ -848,15 +1059,90 @@ function ShiftTimings({ doctorsData, isDoctorStatusEditor }) {
               ))}
             </Select>
           </FormControl>
+
+          {isAdmin && (
+            <Autocomplete
+              multiple
+              disableCloseOnSelect
+              options={mergeBranchCatalog([
+                branchCatalog,
+                editShift.selectedBranches || [],
+              ])}
+              getOptionLabel={(option) =>
+                option.name || option.branchCode || ''
+              }
+              isOptionEqualToValue={(option, value) =>
+                Number(option.id) === Number(value.id)
+              }
+              value={editShift.selectedBranches || []}
+              onChange={(_, selected) =>
+                setEditShift({
+                  ...editShift,
+                  selectedBranches: selected
+                    .map(normalizeBranch)
+                    .filter(Boolean),
+                  branchIds: selected.map((branch) => Number(branch.id)),
+                })
+              }
+              renderOption={(props, option, { selected }) => {
+                const { key, ...optionProps } = props
+                return (
+                  <li key={key} {...optionProps}>
+                    <Checkbox checked={selected} sx={{ mr: 1 }} />
+                    {option.name}
+                  </li>
+                )
+              }}
+              renderTags={(value, getTagProps) =>
+                value.map((option, index) => {
+                  const { key, ...tagProps } = getTagProps({ index })
+                  return (
+                    <Chip
+                      {...tagProps}
+                      key={option.id || key}
+                      size="small"
+                      label={option.name}
+                      sx={{ fontWeight: 700 }}
+                    />
+                  )
+                })
+              }
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Branches that can book appointments"
+                  placeholder={
+                    editShift.selectedBranches?.length ? '' : 'Select branches'
+                  }
+                  helperText="Already assigned branches are shown. Add or remove branches, then click Update."
+                />
+              )}
+            />
+          )}
         </DialogContent>
         <DialogActions className="p-4 pt-2">
-          <Button onClick={onDialogClose} color="inherit">
+          <Button
+            onClick={onDialogClose}
+            color="inherit"
+            sx={{
+              minHeight: 44,
+              px: 2.5,
+              fontWeight: 600,
+              textTransform: 'none',
+            }}
+          >
             Cancel
           </Button>
           <Button
             onClick={updateShiftTimings}
             variant="contained"
             color="primary"
+            sx={{
+              minHeight: 44,
+              px: 3,
+              fontWeight: 700,
+              textTransform: 'none',
+            }}
           >
             Update
           </Button>
@@ -875,6 +1161,10 @@ function Doctor() {
     .trim()
     .toLowerCase()
   const isDoctorStatusEditor = userEmail === 'nikhilsuvva@gmail.com'
+  const isAdmin =
+    Number(user?.roleDetails?.id) === 1 ||
+    (user?.roleDetails?.name || '').trim().toLowerCase() === 'admin' ||
+    isDoctorStatusEditor
 
   const { data: doctorsData, isLoading } = useQuery({
     queryKey: ['doctorsList'],
@@ -920,6 +1210,7 @@ function Doctor() {
           <ShiftTimings
             doctorsData={doctorsData}
             isDoctorStatusEditor={isDoctorStatusEditor}
+            isAdmin={isAdmin}
           />
         </TabPanel>
         <TabPanel value="blockCalender">

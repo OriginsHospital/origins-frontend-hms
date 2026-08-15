@@ -30,7 +30,7 @@ function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const dispatch = useDispatch()
-  const user = useSelector(state => state.user)
+  const user = useSelector((state) => state.user)
   const router = useRouter()
 
   const initialValues = {
@@ -67,10 +67,10 @@ function Login() {
     }
 
     fetch(loginApiUrl, requestOptions)
-      .then(response => {
+      .then((response) => {
         return response.json()
       })
-      .then(async result => {
+      .then(async (result) => {
         console.log('res:', result)
         if (result.status === 400 || result.status === 404) {
           if (result.message === 'Session Already Exists, Please Logout') {
@@ -134,7 +134,7 @@ function Login() {
           }
         }
       })
-      .catch(error => {
+      .catch((error) => {
         console.error('Error:', error)
         toast.error(
           'An error occurred while logging in. Please try again later.',
@@ -145,17 +145,12 @@ function Login() {
   }
 
   return (
-    <div className="h-screen grid grid-cols-1 lg:grid-cols-2">
-      {/* Right Section - Form */}
-      <div className="col-span-1 w-full flex flex-col justify-center px-8 lg:px-16 py-12">
-        <div className="max-w-md w-full mx-auto">
-          <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">
-              Welcome Back
-            </h2>
-            <p className="text-gray-600">
-              Please enter your credentials to login
-            </p>
+    <div className="auth-split">
+      <div className="w-full flex flex-col justify-center px-6 sm:px-10 lg:px-16 py-12">
+        <div className="auth-card mx-auto">
+          <div className="text-center mb-7">
+            <h2 className="text-3xl font-bold text-ink mb-2">Welcome back</h2>
+            <p className="text-muted">Sign in to Ortus</p>
           </div>
 
           <Formik
@@ -166,14 +161,12 @@ function Login() {
             {({ isSubmitting }) => (
               <Form className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium text-gray-700">
-                    Email
-                  </label>
+                  <label className="text-sm font-medium text-ink">Email</label>
                   <Field
                     id="email"
                     name="email"
                     type="email"
-                    className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-150"
+                    className="auth-field"
                     placeholder="your@email.com"
                   />
                   <ErrorMessage
@@ -184,14 +177,14 @@ function Login() {
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium text-gray-700">
+                  <label className="text-sm font-medium text-ink">
                     Password
                   </label>
                   <Field
                     id="password"
                     name="password"
                     type="password"
-                    className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-150"
+                    className="auth-field"
                     placeholder="Enter your password"
                   />
                   <ErrorMessage
@@ -202,7 +195,7 @@ function Login() {
                   <div className="flex justify-end mt-2">
                     <Link
                       href="/login/forgotpassword"
-                      className="text-sm font-medium text-secondary hover:text-secondary/80 transition duration-150"
+                      className="text-sm font-medium text-secondary hover:text-[#0284b8] transition duration-150"
                     >
                       Forgot password?
                     </Link>
@@ -212,10 +205,10 @@ function Login() {
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-secondary hover:bg-secondary/80 focus:outline-none focus:ring-2 focus:ring-offset-2 transition duration-150 mt-6"
+                  className="auth-submit mt-4"
                 >
                   {isSubmitting ? (
-                    <span className="flex items-center">
+                    <span className="flex items-center justify-center">
                       <svg
                         className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
                         xmlns="http://www.w3.org/2000/svg"
@@ -246,40 +239,33 @@ function Login() {
             )}
           </Formik>
 
-          <div className="mt-8 space-y-2">
+          <div className="mt-7 space-y-2">
             <div className="flex justify-center mt-1">
               <Link
                 href="/login/changePassword"
-                className="text-sm font-medium text-secondary hover:text-secondary/80 transition duration-150"
+                className="text-sm font-medium text-secondary hover:text-[#0284b8] transition duration-150"
               >
                 Change password?
               </Link>
             </div>
-            <p className="text-center text-sm text-gray-600 mt-2">
+            <p className="text-center text-sm text-muted mt-2">
               {`Don't have an account? `}
               <Link
                 href="/register"
-                className="font-medium text-secondary hover:text-secondary/80 transition duration-150"
+                className="font-medium text-secondary hover:text-[#0284b8] transition duration-150"
               >
                 Register here
               </Link>
             </p>
-            {/* 
-            <div className="flex justify-center">
-              <Link
-                href="https://api.originshms.com/test"
-                className="text-sm font-medium text-secondary hover:text-secondary/80 transition duration-150"
-                target="_blank"
-              >
-                Get Application Access
-              </Link>
-            </div> */}
           </div>
         </div>
       </div>
-      {/* Left Section - Image */}
-      <div className="col-span-1 hidden lg:flex bg-cover bg-center justify-center items-center p-12 bg-gradient-to-br from-primary via-white to-secondary">
-        <Image src={originslogo} alt="origins logo" className="relative" />
+      <div className="auth-hero hidden lg:flex bg-cover bg-center justify-center items-center p-12">
+        <Image
+          src={originslogo}
+          alt="Origins logo"
+          className="relative w-[62%] max-w-md h-auto object-contain"
+        />
       </div>
     </div>
   )

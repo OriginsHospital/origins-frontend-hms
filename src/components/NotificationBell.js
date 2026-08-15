@@ -127,7 +127,7 @@ export default function NotificationBell() {
   return (
     <div className="relative">
       <NotificationsOutlined
-        className="cursor-pointer"
+        className="cursor-pointer text-[#0284b8]"
         onClick={handleNotificationOpen}
         ref={notificationAnchorEl}
       />
@@ -148,9 +148,9 @@ export default function NotificationBell() {
         slotProps={{
           paper: {
             sx: {
-              width: '320px',
+              width: '360px',
               marginTop: '10px',
-              maxHeight: '400px',
+              maxHeight: 'min(70vh, 480px)',
               overflow: 'auto',
             },
           },

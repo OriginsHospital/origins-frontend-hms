@@ -1,10 +1,34 @@
 import React, { useMemo } from 'react'
-import { Pie } from 'react-chartjs-2'
+import { Doughnut } from 'react-chartjs-2'
 import { Chart as ChartJS, ArcElement, Title, Tooltip, Legend } from 'chart.js'
 import { CircularProgress } from '@mui/material'
-import { roundCurrency } from '@/utils/currencyFormat'
+import { formatRupeeRounded, roundCurrency } from '@/utils/currencyFormat'
+import { computePercentage } from '@/utils/revenueCategories'
 
 ChartJS.register(ArcElement, Title, Tooltip, Legend)
+
+const doughnutCenterPlugin = {
+  id: 'salesChartCenter',
+  afterDraw(chart) {
+    const { ctx, chartArea } = chart
+    const total = chart.config?.options?.plugins?.centerText?.total
+    if (!chartArea || total == null) return
+
+    const x = (chartArea.left + chartArea.right) / 2
+    const y = (chartArea.top + chartArea.bottom) / 2
+
+    ctx.save()
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+    ctx.fillStyle = '#5a7384'
+    ctx.font = '600 11px DM Sans, Segoe UI, sans-serif'
+    ctx.fillText('Total', x, y - 12)
+    ctx.fillStyle = '#123047'
+    ctx.font = '700 15px DM Sans, Segoe UI, sans-serif'
+    ctx.fillText(formatRupeeRounded(total), x, y + 8)
+    ctx.restore()
+  },
+}
 
 const SalesChart = ({ dataset, isLoading, hasData }) => {
   const totalAmount = useMemo(() => {
@@ -25,17 +49,38 @@ const SalesChart = ({ dataset, isLoading, hasData }) => {
           data: amounts,
           backgroundColor: colors,
           borderColor: '#ffffff',
-          borderWidth: 2,
+          borderWidth: 3,
+          hoverOffset: 6,
         },
       ],
     }
   }, [dataset])
 
   const chartOptions = useMemo(
-    () =>
-      createPieOptions({
-        totalAmount,
-      }),
+    () => ({
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '62%',
+      animation: {
+        duration: 500,
+        easing: 'easeInOutQuad',
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (context) => {
+              const amount = roundCurrency(context.raw)
+              return ` ${formatRupeeRounded(amount)} (${computePercentage(
+                amount,
+                totalAmount,
+              )})`
+            },
+          },
+        },
+        centerText: { total: totalAmount },
+      },
+    }),
     [totalAmount],
   )
 
@@ -45,128 +90,66 @@ const SalesChart = ({ dataset, isLoading, hasData }) => {
     const amounts = pieData.datasets?.[0]?.data || []
     const colors = pieData.datasets?.[0]?.backgroundColor || []
 
-    return labels
-      .map((label, index) => {
-        const amount = roundCurrency(amounts[index])
-        return {
-          label,
-          amount,
-          color: colors[index],
-          percentage: computePercentage(amount, totalAmount),
-        }
-      })
-      .sort((a, b) => a.label.localeCompare(b.label))
+    return labels.map((label, index) => {
+      const amount = roundCurrency(amounts[index])
+      return {
+        label,
+        amount,
+        color: colors[index],
+        percentage: computePercentage(amount, totalAmount),
+      }
+    })
   }, [pieData, totalAmount])
 
-  const legendColumns = useMemo(() => {
-    if (!legendItems.length) return []
-    const columnCount = 3
-    const itemsPerColumn = Math.ceil(legendItems.length / columnCount)
-
-    return Array.from({ length: columnCount }, (_, index) =>
-      legendItems.slice(index * itemsPerColumn, (index + 1) * itemsPerColumn),
-    ).filter((column) => column.length > 0)
-  }, [legendItems])
-
   return (
-    <div className="flex flex-col justify-center items-center gap-4 h-full w-full">
-      <div className="relative bg-white rounded-lg shadow-sm p-4 w-full h-[360px] transition-opacity duration-300">
+    <div className="h-full w-full">
+      <div className="relative flex h-full min-h-[420px] flex-col rounded-2xl border border-[#cfe4ee] bg-white p-4 shadow-[0_2px_10px_rgba(18,48,71,0.06)]">
+        <div className="mb-3">
+          <h3 className="text-[15px] font-bold text-[#123047]">Service mix</h3>
+          <p className="text-xs text-[#5a7384]">Share of filtered sales</p>
+        </div>
         {isLoading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white/60 z-10">
+          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-white/70">
             <CircularProgress size={28} thickness={5} />
           </div>
         )}
         {hasData ? (
-          <Pie data={pieData} options={chartOptions} />
+          <>
+            <div className="h-[220px] w-full">
+              <Doughnut
+                data={pieData}
+                options={chartOptions}
+                plugins={[doughnutCenterPlugin]}
+              />
+            </div>
+            <div className="mt-3 flex flex-1 flex-col gap-1.5 overflow-auto pr-1">
+              {legendItems.map((item) => (
+                <div
+                  key={item.label}
+                  className="grid grid-cols-[10px_minmax(0,1fr)_auto] items-center gap-2 rounded-lg bg-[#f7fbfd] px-2 py-1.5"
+                >
+                  <span
+                    className="h-2.5 w-2.5 shrink-0 rounded-[3px]"
+                    style={{ backgroundColor: item.color }}
+                  />
+                  <span className="truncate text-xs font-semibold text-[#123047]">
+                    {item.label}
+                  </span>
+                  <span className="whitespace-nowrap text-right text-[11px] text-[#5a7384]">
+                    {formatRupeeRounded(item.amount)} · {item.percentage}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </>
         ) : (
-          <div className="flex items-center justify-center h-full text-gray-500">
+          <div className="flex flex-1 items-center justify-center text-sm text-[#5a7384]">
             No data available for the selected filters
           </div>
         )}
       </div>
-      <hr className="w-full border-t border-gray-200" />
-      {legendColumns.length > 0 && (
-        <div className="w-full mt-2 flex justify-center">
-          <div className="chart-legend">
-            {legendColumns.map((column, columnIndex) => (
-              <div
-                key={`legend-column-${columnIndex}`}
-                className="chart-legend__column"
-              >
-                {column.map((item) => (
-                  <div key={item.label} className="chart-legend__item">
-                    <span
-                      className="chart-legend__indicator"
-                      style={{ backgroundColor: item.color }}
-                    />
-                    <div className="chart-legend__content">
-                      <span className="chart-legend__label">{item.label}</span>
-                      <span className="chart-legend__value">
-                        ₹
-                        {item.amount.toLocaleString('en-IN', {
-                          maximumFractionDigits: 0,
-                        })}{' '}
-                        ({item.percentage})
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   )
-}
-
-const createPieOptions = ({ totalAmount }) => ({
-  responsive: true,
-  maintainAspectRatio: false,
-  animation: {
-    duration: 500,
-    easing: 'easeInOutQuad',
-  },
-  animations: {
-    numbers: {
-      type: 'number',
-      easing: 'easeOutQuad',
-      duration: 500,
-    },
-    animateRotate: {
-      duration: 500,
-    },
-    animateScale: {
-      duration: 500,
-    },
-  },
-  plugins: {
-    title: {
-      display: false,
-      font: {
-        size: 16,
-        weight: 'bold',
-      },
-    },
-    legend: {
-      display: false,
-    },
-    tooltip: {
-      callbacks: {
-        label: (context) => {
-          const amount = roundCurrency(context.raw)
-          return `₹${amount.toLocaleString('en-IN', {
-            maximumFractionDigits: 0,
-          })} (${computePercentage(amount, totalAmount)})`
-        },
-      },
-    },
-  },
-})
-
-const computePercentage = (value, total) => {
-  if (!total) return '0%'
-  return `${((Number(value || 0) / total) * 100).toFixed(1)}%`
 }
 
 export default SalesChart

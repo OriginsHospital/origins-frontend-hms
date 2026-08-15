@@ -2007,7 +2007,7 @@ function Prescription({
   }
 
   return (
-    <div className="pr-3 flex flex-wrap justify-end gap-3">
+    <div className="flex flex-wrap items-center justify-end gap-3 px-4 pb-3">
       <PatientPrescription
         allBillTypeValues={allBillTypeValues}
         type={type}
@@ -2417,8 +2417,13 @@ function Prescription({
               </Button>
             )}
             <Button
-              variant="outlined"
-              className="capitalize"
+              variant="contained"
+              sx={{
+                minHeight: 44,
+                px: 2.25,
+                fontWeight: 700,
+                textTransform: 'none',
+              }}
               onClick={(e) => dispatch(openModal('reviewCall'))}
               name="Review Call"
               disabled={!!selectedPatient?.isReviewCall}
@@ -2433,7 +2438,14 @@ function Prescription({
       {!!patientInfo?.treatmentExists && (
         <Button
           variant="outlined"
-          className="capitalize"
+          sx={{
+            minHeight: 44,
+            px: 2.25,
+            fontWeight: 700,
+            textTransform: 'none',
+            borderWidth: 2,
+            '&:hover': { borderWidth: 2 },
+          }}
           onClick={() => dispatch(openModal('reviewTreatmentCall'))}
           name="Review Call"
           disabled={!!selectedPatient?.reviewCallInfo?.reviewAppointmentDate}

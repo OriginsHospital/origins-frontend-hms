@@ -1,5 +1,6 @@
 import Breadcrumb from '@/components/Breadcrumb'
 import SalesDashboard from '@/components/SalesDashboard'
+import RevenueAnalytics from '@/components/RevenueAnalytics'
 import { withPermission } from '@/components/withPermission'
 import { getBranches, SalesReportDashboard } from '@/constants/apis'
 import { ACCESS_TYPES } from '@/constants/constants'
@@ -7,12 +8,13 @@ import {
   Card,
   CardContent,
   FormControl,
-  Grid,
   InputLabel,
   MenuItem,
   Select,
   Typography,
   Button,
+  ToggleButton,
+  ToggleButtonGroup,
 } from '@mui/material'
 import { DatePicker } from '@mui/x-date-pickers'
 import { useQuery } from '@tanstack/react-query'
@@ -213,6 +215,7 @@ function SalesNew() {
   const [paymentMode, setPaymentMode] = useState('ALL')
   const [service, setService] = useState('ALL')
   const [activeView, setActiveView] = useState('sales') // 'sales' or 'refunds'
+  const [pageView, setPageView] = useState('transactions')
   const [filteredData, setFilteredData] = useState(null)
 
   // Applied filters (used to trigger API)
@@ -700,259 +703,314 @@ function SalesNew() {
   }
 
   return (
-    <div>
-      <div className="m-5">
+    <div className="px-5 pb-6">
+      <div className="mb-4 mt-2">
         <Breadcrumb />
       </div>
-      <div className="flex flex-wrap gap-5 p-5 ">
-        {/* Summary Cards in a row */}
-        <div className="flex gap-4">
-          <div
-            onClick={() => setActiveView('sales')}
-            style={{ cursor: 'pointer' }}
-          >
-            <SummaryCard
-              title="Total Sales"
-              value={formatRupeeRounded(
-                filteredData?.salesDashboard?.totalSales ??
-                  salesDashboardData?.salesDashboard?.totalSales ??
-                  0,
-              )}
-              isActive={activeView === 'sales'}
-              minWidth="125px"
-            />
-          </div>
-          <div
-            onClick={() => setActiveView('refunds')}
-            style={{ cursor: 'pointer' }}
-          >
-            <SummaryCard
-              title={'Total Refunds'}
-              value={formatRupeeRounded(
-                filteredData?.salesDashboard?.totalReturns ??
-                  salesDashboardData?.salesDashboard?.totalReturns ??
-                  0,
-              )}
-              isActive={activeView === 'refunds'}
-              minWidth="125px"
-            />
-          </div>
-        </div>
-        {/* NIKKI PAYMENT MODE FILTER 28/10/25 */}
-        <Grid item xs={12} sm={3}>
-          <FormControl
-            variant="outlined"
-            className="bg-white"
-            sx={{
-              width: '125px',
-              '& .MuiInputBase-root': {
-                height: '56px', // Same height as Branch
-              },
-            }}
-          >
-            <InputLabel>Payment Mode</InputLabel>
-            <Select
-              label="Payment Mode"
-              name="paymentMode"
-              value={paymentMode}
-              onChange={(e) => setPaymentMode(e.target.value)}
-              className="flex h-full"
-            >
-              <MenuItem value="ALL">All</MenuItem>
-              <MenuItem value="CASH">Cash</MenuItem>
-              <MenuItem value="UPI">Upi</MenuItem>
-            </Select>
-          </FormControl>
-        </Grid>
-        {/* END NIKKI PAYMENT MODE FILTER */}
-        {/* SERVICE FILTER */}
-        <Grid item xs={12} sm={3}>
-          <FormControl
-            variant="outlined"
-            className="bg-white"
-            sx={{
-              width: '125px',
-              '& .MuiInputBase-root': {
-                height: '56px', // Same height as other filters
-              },
-            }}
-          >
-            <InputLabel>Service</InputLabel>
-            <Select
-              label="Service"
-              name="service"
-              value={service}
-              onChange={(e) => setService(e.target.value)}
-              className="flex h-full"
-            >
-              <MenuItem value="ALL">All</MenuItem>
-              <MenuItem value="Pharmacy">Pharmacy</MenuItem>
-              <MenuItem value="Front Desk">Front Desk</MenuItem>
-            </Select>
-          </FormControl>
-        </Grid>
-        {/* END SERVICE FILTER */}
-        <DatePicker
-          label="From Date"
-          // disabled={isEdit == 'noneditable'}
-          sx={{ width: '150px' }}
-          value={fromDate ? dayjs(fromDate) : null}
-          name="fromDate"
-          format="DD/MM/YYYY"
-          onChange={(newValue) => setFromDate(newValue)}
-        />
-        <DatePicker
-          label="To Date"
-          // disabled={isEdit == 'noneditable'}
-          format="DD/MM/YYYY"
-          className="bg-white rounded-lg"
-          sx={{ width: '150px' }}
-          value={toDate ? dayjs(toDate) : null}
-          name="fromDate"
-          onChange={(newValue) => setToDate(newValue)}
-        />
-        <Grid item xs={12} sm={3}>
-          <FormControl
-            variant="outlined"
-            className="bg-white"
-            sx={{
-              width: '125px',
-              '& .MuiInputBase-root': {
-                height: '56px', // Standard MUI form control height
-              },
-            }}
-          >
-            <InputLabel>Branch</InputLabel>
-            <Select
-              label="Branch"
-              name="branchId"
-              value={branchId}
-              onChange={(e) => setBranchId(e.target.value)}
-              className="flex h-full"
-              placeholder="branch"
-            >
-              <MenuItem value="ALL">ALL</MenuItem>
-              <MenuItem value={ROH_BRANCH_ID}>ROH</MenuItem>
-              {getRevenueReportBranches(
-                dropdowns?.branches,
-                branchCatalog,
-              )?.map((branch) => (
-                <MenuItem key={branch.id} value={branch.id}>
-                  {branch.branchCode || branch.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </Grid>
-        <div className="flex items-center gap-3 h-[56px]">
-          <Button
-            variant="contained"
-            onClick={handleApplyFilters}
-            disabled={!branchId}
-            sx={{
-              height: '40px',
-              textTransform: 'none',
-              borderRadius: '8px',
-              fontSize: '0.875rem',
-              padding: '8px 22px',
-              display: 'flex',
-              alignItems: 'center',
-              minWidth: '80px',
-              '&:hover': {
-                boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
-              },
-            }}
-          >
-            Apply
-          </Button>
-          <Button
-            variant="outlined"
-            onClick={handleResetFilters}
-            sx={{
-              height: '40px',
-              textTransform: 'none',
-              borderRadius: '8px',
-              fontSize: '0.875rem',
-              padding: '8px 22px',
-              display: 'flex',
-              alignItems: 'center',
-              minWidth: '80px',
-              '&:hover': {
-                backgroundColor: 'rgba(0,0,0,0.04)',
-              },
-            }}
-          >
-            Reset
-          </Button>
-        </div>
-      </div>
-      {isLoading && (
-        <div className="px-5 text-sm text-gray-500">
-          Loading revenue data...
-        </div>
-      )}
-      {isError && (
-        <div className="px-5 text-sm text-red-500">
-          Failed to load revenue data
-          {error?.message ? `: ${error.message}` : ''}
-        </div>
-      )}
-      <SalesDashboard
-        data={filteredData || salesDashboardData}
-        branchId="ALL"
-        showBranchColumn
-        branchCatalog={branchCatalog}
-        dropdownBranches={dropdowns?.branches || []}
-        reportName="Revenue_New_Report"
-        reportType="revenue"
-        branchName={
-          branchId === 'ALL'
-            ? 'ALL'
-            : branchId === ROH_BRANCH_ID
-              ? 'ROH'
-              : dropdowns?.branches?.find(
-                  (branch) => branch.id === appliedBranchId,
-                )?.name
-        }
-        filters={{
-          fromDate: appliedFromDate
-            ? dayjs(appliedFromDate).format('YYYY-MM-DD')
-            : '',
-          toDate: appliedToDate
-            ? dayjs(appliedToDate).format('YYYY-MM-DD')
-            : '',
-          branchId:
-            branchId === 'ALL' || branchId === ROH_BRANCH_ID
-              ? branchId
-              : appliedBranchId,
+
+      <Card
+        elevation={0}
+        sx={{
+          mb: 2,
+          border: '1px solid #cfe4ee',
+          borderRadius: '16px',
+          boxShadow: '0 2px 10px rgba(18, 48, 71, 0.06)',
         }}
-        activeView={activeView}
-        showRevenueRowActions={hasRevenueNewRowActionsAccess(
-          userDetails?.email,
-        )}
-        accessToken={userDetails?.accessToken}
-        onRevenueMutationSuccess={() => refetch()}
-      />
+      >
+        <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-end gap-3">
+              <SummaryCard
+                title="Total Sales"
+                value={formatRupeeRounded(
+                  filteredData?.salesDashboard?.totalSales ??
+                    salesDashboardData?.salesDashboard?.totalSales ??
+                    0,
+                )}
+                isActive={activeView === 'sales'}
+                onClick={() => setActiveView('sales')}
+                accent="#0284b8"
+              />
+              <SummaryCard
+                title="Total Refunds"
+                value={formatRupeeRounded(
+                  filteredData?.salesDashboard?.totalReturns ??
+                    salesDashboardData?.salesDashboard?.totalReturns ??
+                    0,
+                )}
+                isActive={activeView === 'refunds'}
+                onClick={() => setActiveView('refunds')}
+                accent="#dc3b3b"
+              />
+
+              <FormControl variant="outlined" sx={filterControlSx}>
+                <InputLabel>Payment Mode</InputLabel>
+                <Select
+                  label="Payment Mode"
+                  name="paymentMode"
+                  value={paymentMode}
+                  onChange={(e) => setPaymentMode(e.target.value)}
+                >
+                  <MenuItem value="ALL">All</MenuItem>
+                  <MenuItem value="CASH">Cash</MenuItem>
+                  <MenuItem value="UPI">Upi</MenuItem>
+                </Select>
+              </FormControl>
+
+              <FormControl variant="outlined" sx={filterControlSx}>
+                <InputLabel>Service</InputLabel>
+                <Select
+                  label="Service"
+                  name="service"
+                  value={service}
+                  onChange={(e) => setService(e.target.value)}
+                >
+                  <MenuItem value="ALL">All</MenuItem>
+                  <MenuItem value="Pharmacy">Pharmacy</MenuItem>
+                  <MenuItem value="Front Desk">Front Desk</MenuItem>
+                </Select>
+              </FormControl>
+
+              <FormControl variant="outlined" sx={filterControlSx}>
+                <InputLabel>Branch</InputLabel>
+                <Select
+                  label="Branch"
+                  name="branchId"
+                  value={branchId}
+                  onChange={(e) => setBranchId(e.target.value)}
+                >
+                  <MenuItem value="ALL">ALL</MenuItem>
+                  <MenuItem value={ROH_BRANCH_ID}>ROH</MenuItem>
+                  {getRevenueReportBranches(
+                    dropdowns?.branches,
+                    branchCatalog,
+                  )?.map((branch) => (
+                    <MenuItem key={branch.id} value={branch.id}>
+                      {branch.branchCode || branch.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <DatePicker
+                label="From Date"
+                format="DD/MM/YYYY"
+                value={fromDate ? dayjs(fromDate) : null}
+                name="fromDate"
+                onChange={(newValue) => setFromDate(newValue)}
+                slotProps={{ textField: { sx: datePickerSx } }}
+              />
+              <DatePicker
+                label="To Date"
+                format="DD/MM/YYYY"
+                value={toDate ? dayjs(toDate) : null}
+                name="toDate"
+                onChange={(newValue) => setToDate(newValue)}
+                slotProps={{ textField: { sx: datePickerSx } }}
+              />
+
+              <div className="flex h-12 items-center gap-2">
+                <Button
+                  variant="contained"
+                  onClick={handleApplyFilters}
+                  disabled={!branchId}
+                  sx={{
+                    height: 44,
+                    minWidth: 88,
+                    textTransform: 'none',
+                    borderRadius: '10px',
+                    fontWeight: 700,
+                    px: 2.5,
+                    backgroundColor: '#06aee9',
+                    boxShadow: 'none',
+                    '&:hover': {
+                      backgroundColor: '#0284b8',
+                      boxShadow: '0 2px 8px rgba(2, 132, 184, 0.24)',
+                    },
+                  }}
+                >
+                  Apply
+                </Button>
+                <Button
+                  variant="outlined"
+                  onClick={handleResetFilters}
+                  sx={{
+                    height: 44,
+                    minWidth: 88,
+                    textTransform: 'none',
+                    borderRadius: '10px',
+                    fontWeight: 700,
+                    px: 2.5,
+                    borderColor: '#06aee9',
+                    color: '#0284b8',
+                    '&:hover': {
+                      borderColor: '#0284b8',
+                      backgroundColor: '#e7f7fc',
+                    },
+                  }}
+                >
+                  Reset
+                </Button>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <ToggleButtonGroup
+                exclusive
+                size="small"
+                value={pageView}
+                onChange={(_, value) => value && setPageView(value)}
+                sx={{
+                  '& .MuiToggleButton-root': {
+                    textTransform: 'none',
+                    px: 2,
+                    height: 36,
+                    fontWeight: 700,
+                    borderColor: '#cfe4ee',
+                    color: '#5a7384',
+                    '&.Mui-selected': {
+                      backgroundColor: '#e7f7fc',
+                      color: '#0284b8',
+                      borderColor: '#06aee9',
+                    },
+                  },
+                }}
+              >
+                <ToggleButton value="transactions">Transactions</ToggleButton>
+                <ToggleButton value="analytics">Analytics</ToggleButton>
+              </ToggleButtonGroup>
+              {isLoading ? (
+                <Typography sx={{ fontSize: 13, color: '#5a7384' }}>
+                  Loading revenue data...
+                </Typography>
+              ) : null}
+              {isError ? (
+                <Typography sx={{ fontSize: 13, color: '#dc3b3b' }}>
+                  Failed to load revenue data
+                  {error?.message ? `: ${error.message}` : ''}
+                </Typography>
+              ) : null}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {pageView === 'analytics' ? (
+        <RevenueAnalytics
+          salesData={
+            filteredData?.salesData || salesDashboardData?.salesData || []
+          }
+          returnData={
+            filteredData?.returnData || salesDashboardData?.returnData || []
+          }
+          isLoading={isLoading}
+          branchCatalog={branchCatalog}
+          dropdownBranches={dropdowns?.branches || []}
+        />
+      ) : (
+        <SalesDashboard
+          data={filteredData || salesDashboardData}
+          branchId="ALL"
+          showBranchColumn
+          branchCatalog={branchCatalog}
+          dropdownBranches={dropdowns?.branches || []}
+          reportName="Revenue_New_Report"
+          reportType="revenue"
+          branchName={
+            branchId === 'ALL'
+              ? 'ALL'
+              : branchId === ROH_BRANCH_ID
+                ? 'ROH'
+                : dropdowns?.branches?.find(
+                    (branch) => branch.id === appliedBranchId,
+                  )?.name
+          }
+          filters={{
+            fromDate: appliedFromDate
+              ? dayjs(appliedFromDate).format('YYYY-MM-DD')
+              : '',
+            toDate: appliedToDate
+              ? dayjs(appliedToDate).format('YYYY-MM-DD')
+              : '',
+            branchId:
+              branchId === 'ALL' || branchId === ROH_BRANCH_ID
+                ? branchId
+                : appliedBranchId,
+          }}
+          activeView={activeView}
+          showRevenueRowActions={hasRevenueNewRowActionsAccess(
+            userDetails?.email,
+          )}
+          accessToken={userDetails?.accessToken}
+          onRevenueMutationSuccess={() => refetch()}
+        />
+      )}
     </div>
   )
 }
-// Move SummaryCard component above the main component
-const SummaryCard = ({ title, value, isActive, minWidth = '125px' }) => (
+
+const FILTER_HEIGHT = 48
+
+const filterControlSx = {
+  minWidth: 150,
+  backgroundColor: '#fff',
+  '& .MuiInputBase-root': {
+    height: FILTER_HEIGHT,
+    borderRadius: '10px',
+  },
+  '& .MuiOutlinedInput-notchedOutline': {
+    borderColor: '#cfe4ee',
+  },
+}
+
+const datePickerSx = {
+  width: 168,
+  backgroundColor: '#fff',
+  '& .MuiInputBase-root': {
+    height: FILTER_HEIGHT,
+    borderRadius: '10px',
+  },
+  '& .MuiOutlinedInput-notchedOutline': {
+    borderColor: '#cfe4ee',
+  },
+}
+
+const SummaryCard = ({ title, value, isActive, onClick, accent }) => (
   <Card
-    className="row-span-1"
-    style={{
-      minWidth: minWidth,
-      height: '56px',
-      backgroundColor: isActive ? '#b0e9fa' : 'white',
-      // border: isActive ? '1px solid #0ea5e9' : '1px solid #e5e7eb',
+    onClick={onClick}
+    elevation={0}
+    sx={{
+      minWidth: 168,
+      height: FILTER_HEIGHT,
+      cursor: 'pointer',
+      borderRadius: '10px',
+      border: isActive ? `1.5px solid ${accent}` : '1px solid #cfe4ee',
+      backgroundColor: isActive ? '#e7f7fc' : '#ffffff',
+      boxShadow: 'none',
+      transition: 'border-color 0.15s ease, background-color 0.15s ease',
+      '&:hover': {
+        borderColor: accent,
+        backgroundColor: '#f4fbfe',
+      },
     }}
   >
-    <CardContent className="p-2 flex flex-col justify-between h-full">
-      <span className="text-xs font-medium text-secondary">{title}</span>
-      <span className="text-lg font-bold ">{value}</span>
+    <CardContent
+      sx={{
+        p: '8px 12px !important',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+      }}
+    >
+      <span className="text-[11px] font-semibold leading-none text-[#5a7384]">
+        {title}
+      </span>
+      <span className="mt-1 text-[17px] font-extrabold leading-none text-[#123047]">
+        {value}
+      </span>
     </CardContent>
   </Card>
 )
 
-// Export the main component
 export default SalesNew

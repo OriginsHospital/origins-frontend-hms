@@ -24,19 +24,22 @@ export default function VisitDetail({
   selectedVisit,
   handleChangeVisit,
   setSelectedVisit,
+  fullWidth = false,
 }) {
-  const userDetails = useSelector(store => store.user)
+  const userDetails = useSelector((store) => store.user)
   const QueryClient = useQueryClient()
   const dispatch = useDispatch()
-  const dropdowns = useSelector(store => store.dropdowns)
+  const dropdowns = useSelector((store) => store.dropdowns)
   // const modal = useSelector((store) => store.modal)
 
   function getPackageNameById(id) {
-    const chosenPackage = dropdowns.packagesChosen.filter(pkg => pkg.id === id)
+    const chosenPackage = dropdowns.packagesChosen.filter(
+      (pkg) => pkg.id === id,
+    )
     return chosenPackage ? chosenPackage[0].name : null
   }
   function getVisitById(id) {
-    const visit = dropdowns.visitTypes.filter(vst => vst.id === id)
+    const visit = dropdowns.visitTypes.filter((vst) => vst.id === id)
     // console.log('getVisitById', id, visit);
     return visit ? visit[0].name : null
   }
@@ -50,7 +53,7 @@ export default function VisitDetail({
       visitDate: '',
     })
   }, [formData])
-  const handleFormChange = event => {
+  const handleFormChange = (event) => {
     setVisitForm({ ...visitForm, [event.target.name]: event.target.value })
   }
   const handleClose = () => {
@@ -65,7 +68,7 @@ export default function VisitDetail({
     dispatch(closeModal())
   }
   const validateMutate = useMutation({
-    mutationFn: async payload => {
+    mutationFn: async (payload) => {
       const res = await createVisit(userDetails.accessToken, payload)
       console.log('under mutation fn', res)
       if (res.status === 400) {
@@ -95,8 +98,8 @@ export default function VisitDetail({
   }
 
   return (
-    <div className="flex justify-end mb-5">
-      <FormControl>
+    <div className={fullWidth ? 'w-full mb-1' : 'flex justify-end mb-5'}>
+      <FormControl fullWidth={fullWidth} className={fullWidth ? 'w-full' : ''}>
         <InputLabel id="visit-label">
           {selectedVisit ? '' : 'New Visit'}
         </InputLabel>
@@ -105,13 +108,13 @@ export default function VisitDetail({
             visits?.data?.length === 0
               ? 'No Visits Available'
               : selectedVisit
-              ? selectedVisit.id
-              : ''
+                ? selectedVisit.id
+                : ''
           }
           labelId="visit-label"
           label={selectedVisit ? '' : 'New Visit'}
           name="visit"
-          className={`bg-white rounded-lg min-w-48 h-12 outline-none border-none`}
+          className={`bg-white rounded-lg ${fullWidth ? 'w-full' : 'min-w-48'} h-12 outline-none border-none`}
           onChange={handleChangeVisit}
         >
           {visits?.data?.length === 0 ? (

@@ -593,11 +593,16 @@ function SpousePrescription({
   return (
     <div>
       <Button
-        className=" capitalize"
         variant="outlined"
-        // outlined,contained,text,
         onClick={onAddPrescriptionClick}
-        // startIcon={<FaPrescriptionBottleMedical />}
+        sx={{
+          minHeight: 44,
+          px: 2.25,
+          fontWeight: 700,
+          textTransform: 'none',
+          borderWidth: 2,
+          '&:hover': { borderWidth: 2 },
+        }}
       >
         Spouse Prescription
       </Button>
@@ -606,8 +611,8 @@ function SpousePrescription({
         closeOnOutsideClick={true}
         maxWidth="md"
       >
-        <div className="flex justify-between">
-          <span className="text-xl font-semibold text-secondary flex items-center py-5 gap-4">
+        <div className="flex items-center justify-between gap-3 border-b border-[#e3eef3] px-1 pb-3">
+          <span className="text-xl font-bold text-slate-800">
             Spouse Prescription
           </span>
           <IconButton onClick={() => dispatch(closeModal())}>

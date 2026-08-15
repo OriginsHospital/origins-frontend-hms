@@ -1,7 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react'
 
 import { Board } from '@/components/Board'
-import FlyoutLink from '@/components/FlyoutLink'
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query'
 import { useDispatch, useSelector } from 'react-redux'
 import {
@@ -25,11 +24,18 @@ import {
   FormControl,
   FormControlLabel,
   FormLabel,
+  IconButton,
+  InputAdornment,
   Radio,
   RadioGroup,
   TextField,
+  Tooltip,
 } from '@mui/material'
 import DownloadIcon from '@mui/icons-material/Download'
+import ChevronLeft from '@mui/icons-material/ChevronLeft'
+import ChevronRight from '@mui/icons-material/ChevronRight'
+import TodayIcon from '@mui/icons-material/Today'
+import SearchIcon from '@mui/icons-material/Search'
 import { exportReport } from '@/utils/reportExport'
 import { toastconfig } from '@/utils/toastconfig'
 import { getSelectableBranches } from '@/utils/branchMapping'
@@ -49,6 +55,14 @@ const STAGE_LABELS = {
   Seen: 'Seen / Billing',
   Done: 'Completed',
 }
+
+const STAGE_STRIP = [
+  { key: 'Booked', label: 'Booked', color: '#06aee9' },
+  { key: 'Scan', label: 'Check-In', color: '#0d9488' },
+  { key: 'Doctor', label: 'Doctor', color: '#0369a1' },
+  { key: 'Seen', label: 'Billing', color: '#d97706' },
+  { key: 'Done', label: 'Done', color: '#0f9d6e' },
+]
 
 const APPOINTMENT_EXPORT_COLUMNS = [
   { field: 'appointmentDate', headerName: 'Appointment Date' },
@@ -85,6 +99,9 @@ const Appointments = () => {
   const [exportBranchId, setExportBranchId] = useState(ALL_BRANCHES_VALUE)
   const [exportFormat, setExportFormat] = useState('xlsx')
   const [isExporting, setIsExporting] = useState(false)
+  const [typeFilter, setTypeFilter] = useState('all')
+  const [globalSearch, setGlobalSearch] = useState('')
+  const [focusStage, setFocusStage] = useState(null)
 
   const branchOptions = useMemo(
     () => [ALL_BRANCHES_OPTION, ...(branches || [])],
@@ -122,9 +139,68 @@ const Appointments = () => {
     },
   })
 
+  const appointmentRows = allAppointmentsData?.data || []
+  const isToday = date ? dayjs(date).isSame(dayjs(), 'day') : true
+  const typeOptions = useMemo(() => {
+    const types = Array.from(
+      new Set(appointmentRows.map((row) => row?.type).filter(Boolean)),
+    )
+    return types
+  }, [appointmentRows])
+
+  const stageCounts = useMemo(() => {
+    return appointmentRows.reduce(
+      (acc, row) => {
+        acc.total += 1
+        if (row?.stage) acc[row.stage] = (acc[row.stage] || 0) + 1
+        return acc
+      },
+      { total: 0 },
+    )
+  }, [appointmentRows])
+
+  const visibleAppointments = useMemo(() => {
+    const query = globalSearch.trim().toLowerCase()
+    const filtered = appointmentRows.filter((row) => {
+      const typeOk = typeFilter === 'all' || row?.type === typeFilter
+      const searchOk =
+        !query ||
+        row?.patientName?.toLowerCase().includes(query) ||
+        row?.doctorName?.toLowerCase().includes(query) ||
+        row?.appointmentReason?.toLowerCase().includes(query) ||
+        String(row?.patientId || '')
+          .toLowerCase()
+          .includes(query)
+      return typeOk && searchOk
+    })
+    return { ...(allAppointmentsData || {}), data: filtered }
+  }, [allAppointmentsData, appointmentRows, typeFilter, globalSearch])
+
+  function pushDateQuery(nextDate) {
+    router.push({
+      query: {
+        date: dayjs(nextDate).format('YYYY-MM-DD'),
+        ...(branchId ? { branchId } : {}),
+      },
+    })
+  }
+
   function handleDateChange(value) {
+    if (!value) return
     setDate(value)
-    router.push({ query: { date: dayjs(value).format('YYYY-MM-DD') } })
+    pushDateQuery(value)
+  }
+
+  const shiftDate = (days) => {
+    const next = dayjs(date || new Date()).add(days, 'day')
+    setDate(next)
+    pushDateQuery(next)
+  }
+
+  const goToToday = () => {
+    const today = dayjs()
+    setDate(today)
+    pushDateQuery(today)
   }
   const handleBranchChange = (_, value) => {
     setBranchId(value?.id || null)
@@ -255,38 +331,152 @@ const Appointments = () => {
   })
 
   return (
-    <div className="">
-      <div className="flex justify-end p-3 gap-4 items-center">
-        <div>
-          <Autocomplete
-            className="w-[120px]"
-            options={branches || []}
-            getOptionLabel={(option) => option?.branchCode || option?.name}
-            value={branches?.find((branch) => branch.id === branchId) || null}
-            onChange={handleBranchChange}
-            renderInput={(params) => <TextField {...params} fullWidth />}
-            clearIcon={null}
-          />
+    <div className="appt-page">
+      <div className="appt-page-top">
+        <div className="appt-page-heading">
+          <h1>Appointments</h1>
+          <p>
+            {date ? dayjs(date).format('dddd, DD MMM YYYY') : 'Select a date'}
+            {branchId
+              ? ` · ${
+                  branches?.find((branch) => branch.id === branchId)
+                    ?.branchCode ||
+                  branches?.find((branch) => branch.id === branchId)?.name ||
+                  ''
+                }`
+              : ''}
+            {` · ${stageCounts.total} patient${stageCounts.total === 1 ? '' : 's'}`}
+            {visibleAppointments?.data?.length !== stageCounts.total
+              ? ` · showing ${visibleAppointments?.data?.length || 0}`
+              : ''}
+          </p>
         </div>
-        <DatePicker
-          className="bg-white"
-          value={date}
-          format="DD/MM/YYYY"
-          onChange={handleDateChange}
+        <div className="appt-stage-strip">
+          {STAGE_STRIP.map((stage) => {
+            const count = stageCounts[stage.key] || 0
+            const isActive = focusStage === stage.key
+            return (
+              <button
+                key={stage.key}
+                type="button"
+                className={`appt-stage-chip${isActive ? ' is-active' : ''}`}
+                style={
+                  isActive
+                    ? { background: stage.color }
+                    : { color: stage.color }
+                }
+                onClick={() =>
+                  setFocusStage((current) =>
+                    current === stage.key ? null : stage.key,
+                  )
+                }
+                title={
+                  isActive
+                    ? 'Show all stages'
+                    : `Highlight ${stage.label} column`
+                }
+              >
+                <span
+                  className="appt-stage-dot"
+                  style={{ background: isActive ? '#fff' : stage.color }}
+                />
+                {stage.label}
+                <strong>{count}</strong>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="appt-toolbar">
+        <Autocomplete
+          className="w-[150px]"
+          options={branches || []}
+          getOptionLabel={(option) => option?.branchCode || option?.name || ''}
+          value={branches?.find((branch) => branch.id === branchId) || null}
+          onChange={handleBranchChange}
+          renderInput={(params) => (
+            <TextField {...params} label="Branch" size="small" />
+          )}
+          clearIcon={null}
         />
+        <div className="appt-date-nav">
+          <Tooltip title="Previous day">
+            <IconButton size="small" onClick={() => shiftDate(-1)}>
+              <ChevronLeft />
+            </IconButton>
+          </Tooltip>
+          <DatePicker
+            value={date}
+            format="DD/MM/YYYY"
+            onChange={handleDateChange}
+            slotProps={{
+              textField: { size: 'small', sx: { width: 148, bgcolor: '#fff' } },
+            }}
+          />
+          <Tooltip title="Next day">
+            <IconButton size="small" onClick={() => shiftDate(1)}>
+              <ChevronRight />
+            </IconButton>
+          </Tooltip>
+          <Button
+            size="small"
+            variant={isToday ? 'contained' : 'outlined'}
+            startIcon={<TodayIcon />}
+            onClick={goToToday}
+            sx={{ textTransform: 'none', minWidth: 88 }}
+          >
+            Today
+          </Button>
+        </div>
+        <TextField
+          size="small"
+          placeholder="Search patient, doctor, ID..."
+          value={globalSearch}
+          onChange={(event) => setGlobalSearch(event.target.value)}
+          sx={{ minWidth: 240, flex: '1 1 220px' }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" />
+              </InputAdornment>
+            ),
+          }}
+        />
+        <div className="appt-filter-chips">
+          <button
+            type="button"
+            className={`appt-filter-chip${typeFilter === 'all' ? ' is-active' : ''}`}
+            onClick={() => setTypeFilter('all')}
+          >
+            All types
+          </button>
+          {typeOptions.map((type) => (
+            <button
+              key={type}
+              type="button"
+              className={`appt-filter-chip${typeFilter === type ? ' is-active' : ''}`}
+              onClick={() => setTypeFilter(type)}
+            >
+              {type}
+            </button>
+          ))}
+        </div>
         <Button
-          variant="outlined"
+          variant="contained"
           startIcon={<DownloadIcon />}
           onClick={openExportDialog}
-          sx={{ textTransform: 'none', bgcolor: 'white' }}
+          sx={{ textTransform: 'none' }}
         >
           Export
         </Button>
       </div>
-      <div className="bg-white rounded-lg m-2 border shadow h-[75vh]">
+
+      <div className="appt-board-shell">
         <Board
-          allAppointmentsData={allAppointmentsData}
+          allAppointmentsData={visibleAppointments}
           updateStage={updateStage}
+          focusStage={focusStage}
         />
       </div>
 

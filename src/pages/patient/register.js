@@ -28,6 +28,7 @@ import {
   DocumentScannerOutlined,
   ExpandMore,
   SearchOutlined,
+  ArrowBack,
 } from '@mui/icons-material'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import GuardianFrom from '@/components/GuardianFrom'
@@ -797,27 +798,50 @@ export default function Register() {
 
   return (
     <div className="pb-14 ">
-      <div className="px-3 py-10 flex items-center justify-center gap-5">
-        <TextField
-          placeholder="Search by Patient ID / Mobile / Aadhaar"
-          className="w-[300px] bg-white"
-          type="search"
-          value={searchValue}
-          onChange={handleSearchChange}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              handleSearch(searchValue)
-            }
-          }}
-        />
-        <Button
-          onClick={() => handleSearch(searchValue)}
-          variant="contained"
-          sx={{ color: 'white' }}
-          startIcon={<SearchOutlined />}
-        >
-          Search
-        </Button>
+      <div className="px-4 py-4 grid grid-cols-[1fr_auto_1fr] items-center gap-4">
+        <div className="flex justify-start">
+          <Button
+            variant="outlined"
+            startIcon={<ArrowBack />}
+            onClick={() => {
+              if (router.query.from === 'list') {
+                router.push('/patient')
+                return
+              }
+              if (typeof window !== 'undefined' && window.history.length > 1) {
+                router.back()
+                return
+              }
+              router.push('/patient')
+            }}
+            sx={{ textTransform: 'none' }}
+          >
+            Back
+          </Button>
+        </div>
+        <div className="flex items-center justify-center gap-5">
+          <TextField
+            placeholder="Search by Patient ID / Mobile / Aadhaar"
+            className="w-[300px] bg-white"
+            type="search"
+            value={searchValue}
+            onChange={handleSearchChange}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                handleSearch(searchValue)
+              }
+            }}
+          />
+          <Button
+            onClick={() => handleSearch(searchValue)}
+            variant="contained"
+            sx={{ color: 'white' }}
+            startIcon={<SearchOutlined />}
+          >
+            Search
+          </Button>
+        </div>
+        <div />
       </div>
       <hr />
       <TabContext value={tab}>

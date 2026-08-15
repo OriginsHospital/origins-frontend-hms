@@ -73,7 +73,6 @@ import EmbryologyHistory from '@/components/EmbryologyHistory'
 import PatientHistory from '@/components/PatientHistory'
 import VitalsInformation from '@/components/VitalsInformation'
 import AntenatalLmpEddForm from '@/components/AntenatalLmpEddForm'
-import InfoItem from '@/components/InfoItem'
 import Prescription from '@/components/Prescription'
 import TreatmentCycleHistoryView from '@/components/TreatmentCycleHistoryView'
 import { isIuiTreatment } from '@/utils/treatmentTypeUtils'
@@ -83,6 +82,25 @@ import { canScheduleFutureCycle } from '@/utils/patientTreatmentUtils'
 import OpdSummaryDisplay from '@/components/OpdSummaryDisplay'
 import { toast } from 'react-toastify'
 import s from 'aws-s3'
+import styles from './appointments.module.css'
+
+const actionButtonSx = {
+  minHeight: 44,
+  px: 2.25,
+  fontWeight: 700,
+  textTransform: 'none',
+  borderWidth: 2,
+  '&:hover': { borderWidth: 2 },
+}
+
+const accordionSx = {
+  border: '1px solid #b7e8e4',
+  borderRadius: '12px !important',
+  boxShadow: 'none',
+  overflow: 'hidden',
+  '&:before': { display: 'none' },
+  mb: 1.25,
+}
 
 const JoditEditor = dynamic(() => import('jodit-react'), {
   ssr: false,
@@ -228,84 +246,111 @@ export function PatientDetails({
     }
   }
 
+  const initials = `${(lastName || '').charAt(0)}${(firstName || '').charAt(0)}`
+    .toUpperCase()
+    .trim()
+  const ageYears = dateOfBirth
+    ? `${dayjs().diff(dayjs(dateOfBirth), 'year')} years`
+    : 'N/A'
+
   return (
-    <div className="bg-white rounded-lg shadow-md p-6">
-      <div className="flex items-center mb-6 gap-4 justify-start align-middle">
+    <div className={styles.profileCard}>
+      <div className={styles.profileBanner}>
         {photoPath && photoPath != 'null' ? (
           <div onClick={() => dispatch(openModal('profileFullScreen'))}>
             <Image
               src={photoPath}
               alt={'Patient Photo'}
-              className="border-2 border-gray-300 mr-10 rounded-full w-[80px] h-[80px] object-cover cursor-pointer"
-              width={80}
-              height={80}
+              className={styles.avatar}
+              width={72}
+              height={72}
             />
           </div>
         ) : (
           <Avatar
-            className="rounded-full mr-4 cursor-pointer"
-            width={160}
-            height={160}
+            className={styles.avatar}
+            sx={{
+              width: 72,
+              height: 72,
+              bgcolor: '#d7f6f4',
+              color: '#0a7370',
+              fontWeight: 800,
+              fontSize: 22,
+            }}
             onClick={() => dispatch(openModal('profileFullScreen'))}
-          ></Avatar>
+          >
+            {initials || 'P'}
+          </Avatar>
         )}
-        <div>
-          <h2 className="text-2xl font-bold text-gray-800">{`${lastName} ${firstName}`}</h2>
-          {/* <p className="text-sm text-gray-600">{`Phone: ${mobileNo ||
-            'N/A'}`}</p> */}
-          <span className="text-sm text-gray-600 flex gap-2 items-center">
-            <Phone />
-            {mobileNo || 'N/A'}
-          </span>
+        <div className={styles.profileIdentity}>
+          <h2 className={styles.profileName}>{`${lastName} ${firstName}`}</h2>
+          <div className={styles.profileMeta}>
+            <span className={styles.phoneChip}>
+              <Phone sx={{ fontSize: 16 }} />
+              {mobileNo || 'N/A'}
+            </span>
+            {selectedPatient?.type && (
+              <span className={styles.typeChip}>{selectedPatient.type}</span>
+            )}
+            {selectedPatient?.timeStart && (
+              <span className={styles.typeChip}>
+                {selectedPatient.timeStart}
+              </span>
+            )}
+          </div>
         </div>
         {searchTab === 'date' && (
           <div>
-            {/* <Tooltip
-              title={
-                selectedPatient?.isCompleted === 1
-                  ? 'Already Marked as Seen'
-                  : 'Mark as Seen'
-              }
-            > */}
-            {/* <AssignmentTurnedInIcon
-                fontSize="large"
-                color={selectedPatient?.isCompleted === 1 ? 'success' : 'error'}
-                onClick={handleMarkAsSeen}
-                className="cursor-pointer"
-              /> */}
             {selectedPatient?.isCompleted === 1 ? (
-              <span className="text-green-500 bg-green-100 rounded-full px-2 py-1.5">
-                Seen
-              </span>
+              <Chip
+                label="Seen"
+                sx={{
+                  height: 34,
+                  fontWeight: 800,
+                  bgcolor: '#e8f8f2',
+                  color: '#0b7a56',
+                }}
+              />
             ) : (
-              <IconButton onClick={handleMarkAsSeen}>
-                <AssignmentTurnedInIcon fontSize="large" color="error" />
-              </IconButton>
+              <Tooltip title="Mark as seen">
+                <Button
+                  onClick={handleMarkAsSeen}
+                  startIcon={<AssignmentTurnedInIcon />}
+                  sx={{
+                    minHeight: 36,
+                    px: 1.75,
+                    fontWeight: 800,
+                    textTransform: 'none',
+                    bgcolor: '#fff',
+                    color: '#0a7370',
+                    boxShadow: 'none',
+                    '&:hover': { bgcolor: '#e6faf8', boxShadow: 'none' },
+                  }}
+                >
+                  Mark seen
+                </Button>
+              </Tooltip>
             )}
-            {/* </Tooltip> */}
           </div>
         )}
       </div>
 
-      <div className="grid  grid-cols-1 md:grid-cols-3 gap-4">
-        <InfoItem
-          label="Age"
-          value={dayjs().diff(dayjs(dateOfBirth), 'year') + ' years' || 'N/A'}
-        />
-        {/* <InfoItem
-          label="Date of Birth"
-          value={dateOfBirth ? dayjs(dateOfBirth).format('DD-MM-YYYY') : 'N/A'}
-        /> */}
-        {/* <InfoItem label="Gender" value={gender || 'N/A'} /> */}
-        <InfoItem label="Marital Status" value={maritalStatus || 'N/A'} />
-        {/* <InfoItem label="Aadhaar No" value={aadhaarNo || 'N/A'} /> */}
-        <InfoItem label="City" value={cityName || 'N/A'} />
-        <InfoItem label="Referral Type" value={referralType || 'N/A'} />
-        <InfoItem label="Blood Group" value={bloodGroup || 'N/A'} />
-        <InfoItem
-          label="Spouse Blood Group"
-          value={spouseBloodGroup || 'N/A'}
-        />
+      <div className={styles.demoGrid}>
+        {[
+          ['Age', ageYears],
+          ['Marital Status', maritalStatus || 'N/A'],
+          ['City', cityName || 'N/A'],
+          ['Referral Type', referralType || 'N/A'],
+          ['Blood Group', bloodGroup || 'N/A'],
+          ['Spouse Blood Group', spouseBloodGroup || 'N/A'],
+        ].map(([label, value]) => (
+          <div className={styles.statTile} key={label}>
+            <span className={styles.statLabel}>{label}</span>
+            <span className={styles.statValue} title={value}>
+              {value}
+            </span>
+          </div>
+        ))}
       </div>
       <Modal
         uniqueKey={'profileFullScreen'}
@@ -482,7 +527,7 @@ function ConsultationsAndTreatments({
         <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-4">
           {appointmentHistory?.map((eachAppointment, i) => (
             <div
-              className="p-2 flex justify-between gap-2 border rounded shadow"
+              className={styles.historyCard}
               key={
                 eachAppointment.appointmentId +
                 clickedConsultationOrTreatmentType
@@ -514,10 +559,8 @@ function ConsultationsAndTreatments({
               uniqueKey="appointmentLineBillsAndNotes"
               closeOnOutsideClick={true}
             >
-              <div className="flex justify-between">
-                <span className="text-xl font-semibold text-secondary flex items-center py-5 gap-4">
-                  Prescription
-                </span>
+              <div className={styles.modalHeader}>
+                <span className={styles.modalTitle}>Prescription</span>
                 <IconButton onClick={() => dispatch(closeModal())}>
                   <Close />
                 </IconButton>
@@ -677,13 +720,13 @@ function ConsultationsAndTreatments({
   }, [lineBillsAndNotesData])
 
   return (
-    <div className="flex flex-col  p-2">
+    <div className="flex flex-col gap-3 p-3">
       <OpdSummaryDisplay patientId={patientInfo?.id} />
       {/* Check List Accordion */}
-      <Accordion defaultExpanded>
+      <Accordion defaultExpanded sx={accordionSx}>
         <AccordionSummary expandIcon={<ExpandMore />}>
-          <div className="flex justify-start gap-5 items-center">
-            <span className="font-semibold text-secondary">Check List</span>
+          <div className="flex items-center gap-3">
+            <span className="font-semibold text-slate-800">Check List</span>
             {checklistData && checklistData?.length > 0 && (
               <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full">
                 {checklistData[0]?.labTestsList?.length || 0} tests
@@ -702,7 +745,7 @@ function ConsultationsAndTreatments({
                 checklistData[0]?.labTestsList?.map((test, index) => (
                   <Box
                     key={index}
-                    className="flex flex-col gap-2 p-2 items-start border rounded-lg justify-between"
+                    className="flex flex-col justify-between gap-2 rounded-xl border border-[#b7e8e4] bg-[#f0fbfa] p-3"
                   >
                     <div className="flex justify-between w-full">
                       <span className="text-xs text-gray-500">
@@ -736,10 +779,10 @@ function ConsultationsAndTreatments({
       </Accordion>
 
       {/* Consultations Accordion */}
-      <Accordion>
+      <Accordion sx={accordionSx}>
         <AccordionSummary expandIcon={<ExpandMore />}>
-          <div className="flex justify-start gap-5 items-center">
-            <span className="font-semibold text-secondary">Consultations</span>
+          <div className="flex items-center gap-3">
+            <span className="font-semibold text-slate-800">Consultations</span>
             {consultations && consultations?.length > 0 && (
               <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
                 {consultations.length} consultations
@@ -753,6 +796,7 @@ function ConsultationsAndTreatments({
               {consultations.map((eachConsultation, i) => (
                 <Accordion
                   key={'consultation' + eachConsultation.consultationId}
+                  sx={accordionSx}
                   expanded={
                     clickedConsultationOrTreatment.type == 'Consultation' &&
                     eachConsultation.consultationId ==
@@ -801,10 +845,10 @@ function ConsultationsAndTreatments({
       </Accordion>
 
       {/* Treatments Accordion */}
-      <Accordion>
+      <Accordion sx={accordionSx}>
         <AccordionSummary expandIcon={<ExpandMore />}>
-          <div className="flex justify-start gap-5 items-center">
-            <span className="font-semibold text-secondary">Treatments</span>
+          <div className="flex items-center gap-3">
+            <span className="font-semibold text-slate-800">Treatments</span>
             {treatments && treatments?.length > 0 && (
               <span className="bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full">
                 {treatments.length} treatments
@@ -823,6 +867,7 @@ function ConsultationsAndTreatments({
                 return (
                   <Accordion
                     key={'treatmentCycle' + eachTreatment.treatmentCycleId}
+                    sx={accordionSx}
                     expanded={
                       clickedConsultationOrTreatment.type == 'Treatment' &&
                       eachTreatment.treatmentCycleId ==
@@ -1499,10 +1544,13 @@ export default function Appointments() {
   })
 
   return (
-    <div className="w-full  p-2 flex gap-5">
-      <div className="flex flex-col">
+    <div className={styles.page}>
+      <div className={styles.sidebar}>
         <TabContext value={searchTab}>
-          <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+          <Box
+            className={styles.sidebarCard}
+            sx={{ borderBottom: 0, px: 1, pt: 0.5 }}
+          >
             <TabList
               onChange={(e, newValue) => {
                 setSearchTab(newValue)
@@ -1510,7 +1558,6 @@ export default function Appointments() {
                   {
                     pathname: router.pathname,
                     query: {
-                      // ...router.query,
                       searchBy: newValue,
                     },
                   },
@@ -1518,6 +1565,7 @@ export default function Appointments() {
                   { shallow: true },
                 )
               }}
+              variant="fullWidth"
             >
               <Tab label="Search by Date" value="date" />
               <Tab label="Search by Patient" value="patient" />
@@ -1525,16 +1573,17 @@ export default function Appointments() {
           </Box>
 
           <TabPanel value="date" className="p-0">
-            <DateCalendar
-              className="bg-white"
-              value={date}
-              format="DD/MM/YYYY"
-              onChange={handleDateChange}
-            />
+            <div className={`${styles.sidebarCard} ${styles.calendarWrap}`}>
+              <DateCalendar
+                value={date}
+                format="DD/MM/YYYY"
+                onChange={handleDateChange}
+              />
+            </div>
           </TabPanel>
 
           <TabPanel value="patient" className="p-0">
-            <div className="bg-white p-4">
+            <div className={`${styles.sidebarCard} p-4`}>
               <Autocomplete
                 fullWidth
                 options={patientsList || []}
@@ -1591,15 +1640,16 @@ export default function Appointments() {
           </TabPanel>
         </TabContext>
 
-        <div className="min-w-80  p-2 flex flex-col gap-3 shadow rounded bg-white overflow-y-auto">
+        <div className={`${styles.sidebarCard} ${styles.listPanel}`}>
           {searchTab === 'date'
             ? // Show date-based appointments
               appointmentsData?.map((eachAppointment, i) => (
                 <button
-                  className={`p-2 w-full flex justify-between items-center gap-2 rounded-lg text-left outline-none ${
+                  className={`${styles.apptItem} ${
                     selectedPatient?.appointmentId ==
-                      eachAppointment.appointmentId &&
-                    '  border-2 border-secondary shadow-md shadow-secondary/20  '
+                    eachAppointment.appointmentId
+                      ? styles.apptItemSelected
+                      : ''
                   }`}
                   key={eachAppointment.appointmentId}
                   onClick={() => {
@@ -1610,125 +1660,111 @@ export default function Appointments() {
                   eachAppointment?.photoPath != 'null' ? (
                     <img
                       src={eachAppointment?.photoPath}
-                      className="rounded-full object-cover w-10 h-10"
+                      className="h-11 w-11 rounded-full object-cover"
+                      alt=""
                     />
                   ) : (
-                    <Avatar></Avatar>
+                    <Avatar sx={{ width: 44, height: 44 }} />
                   )}
-                  <span
-                    title={eachAppointment.patientName}
-                    className={`max-w-28 text-nowrap text-ellipsis overflow-hidden font-medium ${
-                      selectedPatient?.appointmentId ==
-                        eachAppointment.appointmentId && ' text-secondary '
+                  <div className={styles.apptMeta}>
+                    <span
+                      title={eachAppointment.patientName}
+                      className={styles.apptName}
+                    >
+                      {eachAppointment.firstName}
+                    </span>
+                    <span className={styles.apptType}>
+                      {eachAppointment.type}
+                    </span>
+                  </div>
+                  {(eachAppointment.appointmentReason === 'Gynec' ||
+                    eachAppointment.appointmentReason === 'Antenatal' ||
+                    eachAppointment.appointmentReason === 'ANC/ZYN') && (
+                    <Button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleCloseVisit(eachAppointment.appointmentId)
+                      }}
+                      disabled={eachAppointment.status === 'CLOSED'}
+                      size="small"
+                      variant={
+                        eachAppointment.status === 'CLOSED'
+                          ? 'outlined'
+                          : 'contained'
+                      }
+                      color="error"
+                      sx={{
+                        minHeight: 34,
+                        px: 1.5,
+                        fontWeight: 700,
+                        textTransform: 'none',
+                        fontSize: '0.72rem',
+                      }}
+                    >
+                      {eachAppointment.status === 'CLOSED' ? 'Closed' : 'Close'}
+                    </Button>
+                  )}
+                  <div
+                    className={`${styles.timeBadge} ${
+                      eachAppointment.isCompleted ? styles.timeBadgeDone : ''
                     }`}
                   >
-                    {eachAppointment.firstName}
-                  </span>
-                  <div className="flex gap-3 items-center">
-                    <span className="text-xs">{eachAppointment.type}</span>
-                    {(eachAppointment.appointmentReason === 'Gynec' ||
-                      eachAppointment.appointmentReason === 'Antenatal' ||
-                      eachAppointment.appointmentReason === 'ANC/ZYN') && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleCloseVisit(eachAppointment.appointmentId)
-                        }}
-                        disabled={eachAppointment.status === 'CLOSED'}
-                        className={`px-2 py-1 rounded text-xs ${
-                          eachAppointment.status === 'CLOSED'
-                            ? 'bg-gray-100 text-gray-500 cursor-not-allowed'
-                            : 'bg-secondary text-white hover:bg-secondary/80'
-                        }`}
-                      >
-                        {eachAppointment.status === 'CLOSED'
-                          ? 'Visit Closed'
-                          : 'Close Visit'}
-                      </button>
+                    {eachAppointment.isCompleted ? (
+                      <CheckCircle fontSize="small" />
+                    ) : (
+                      <span>{eachAppointment.timeStart}</span>
                     )}
-                    <div
-                      className={`size-12 flex justify-center items-center rounded-full text-secondary font-semibold ${
-                        eachAppointment.isCompleted
-                          ? 'bg-green-100'
-                          : 'bg-primary'
-                      }`}
-                    >
-                      {eachAppointment.isCompleted ? (
-                        <CheckCircle className="text-green-500" />
-                      ) : (
-                        <span>{eachAppointment.timeStart}</span>
-                      )}
-                    </div>
                   </div>
                 </button>
               ))
             : // Show patient-based appointments
               patientAppointments?.map((eachAppointment, i) => (
                 <button
-                  className={`p-2 w-full flex  items-center gap-2 rounded-lg text-left outline-none ${
+                  className={`${styles.apptItem} ${
                     selectedPatient?.appointmentId ===
-                      eachAppointment.appointmentId &&
-                    'border-2 border-secondary shadow'
+                    eachAppointment.appointmentId
+                      ? styles.apptItemSelected
+                      : ''
                   }`}
                   key={eachAppointment.appointmentId}
                   onClick={() => {
                     onAppointmentClick(eachAppointment)
                   }}
                 >
-                  {/* {eachAppointment?.photoPath &&
-                  eachAppointment?.photoPath != 'null' ? (
-                  <img
-                    src={eachAppointment?.photoPath}
-                    width={50}
-                    height={20}
-                    className="rounded-full"
-                  />
-                ) : (
-                  <Avatar></Avatar>
-                )} */}
-                  {/* <span
-                  title={eachAppointment.patientName}
-                  className={`max-w-28 text-nowrap text-ellipsis overflow-hidden font-medium ${selectedPatient?.patientId ==
-                    eachAppointment.patientId && ' text-secondary '}`}
-                >
-                  {eachAppointment.patientName}
-                </span> */}
-                  <div className="flex gap-3 items-center divide-x">
-                    <span className="text-xs pr-3">
+                  <div className={styles.apptMeta}>
+                    <span className={styles.apptName}>
                       {dayjs(eachAppointment.appointmentDate).format(
                         'DD-MM-YYYY',
                       )}
                     </span>
-                    <span className="text-xs px-3">
-                      {eachAppointment.timeStart}
-                    </span>
-                    <span className="text-normal pl-3">
+                    <span className={styles.apptType}>
                       {eachAppointment.type}
                     </span>
+                  </div>
+                  <div className={styles.timeBadge}>
+                    {eachAppointment.timeStart}
                   </div>
                 </button>
               ))}
 
           {((searchTab === 'date' && appointmentsData?.length === 0) ||
             (searchTab === 'patient' && patientAppointments?.length === 0)) && (
-            <div className="grow flex justify-center items-center">
-              <span className="opacity-50">
-                {searchTab === 'date'
-                  ? 'No Appointments for the day'
-                  : 'No Appointments found for this patient'}
-              </span>
+            <div className={styles.emptyState}>
+              {searchTab === 'date'
+                ? 'No appointments for this day'
+                : 'No appointments found for this patient'}
             </div>
           )}
         </div>
       </div>
-      <div className="grow h-full shadow rounded bg-white overflow-y-auto">
+      <div className={styles.main}>
         {isPatientDetailsLoading ? (
           <div className="h-full flex justify-center items-center">
             <PatientDetailsSkeleton />
           </div>
         ) : patientDetails ? (
           <>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 p-3">
+            <div className="grid grid-cols-1 gap-5 p-4 lg:grid-cols-2">
               <div className="flex flex-col gap-5">
                 <PatientDetails
                   patientInfo={patientDetails?.patientInfo}
@@ -1740,10 +1776,10 @@ export default function Appointments() {
               </div>
               <div className="flex flex-col gap-5">
                 {/* <span className="text-lg font-semibold">Vitals Information</span> */}
-                <div className="flex flex-wrap justify-between gap-3">
+                <div className={styles.toolbar}>
                   <Button
                     variant="outlined"
-                    className="text-secondary capitalize"
+                    sx={actionButtonSx}
                     onClick={() => dispatch(openModal('EmbryologyHistory'))}
                   >
                     Embryology
@@ -1754,7 +1790,7 @@ export default function Appointments() {
                     <Button
                       type="button"
                       variant="outlined"
-                      className="text-secondary capitalize"
+                      sx={actionButtonSx}
                       onClick={(e) => {
                         e.preventDefault()
                         e.stopPropagation()
@@ -1767,18 +1803,21 @@ export default function Appointments() {
                       Future Cycle
                     </Button>
                   )}
-                  <div className="flex">
+                  <div className={styles.opdSplit}>
                     <Button
                       variant="outlined"
-                      size="small"
-                      className="text-secondary capitalize"
+                      sx={{
+                        ...actionButtonSx,
+                        borderTopRightRadius: 0,
+                        borderBottomRightRadius: 0,
+                      }}
                       onClick={() => dispatch(openModal('OPDSheet'))}
                     >
                       OPD sheet
                     </Button>
                     <Tooltip title="Download OPD sheet">
                       <span
-                        className="flex text-white bg-red-600 p-2 cursor-pointer rounded justify-center content-center flex-wrap border border-error border-l-0"
+                        className="flex h-11 w-11 cursor-pointer items-center justify-center bg-red-600 text-white"
                         onClick={() => downloadOpdSheet()}
                       >
                         <Download />
@@ -1885,10 +1924,10 @@ export default function Appointments() {
                   )}
                 </div>
                 {selectedPatient?.type === 'Treatment' && (
-                  <div className="flex gap-3">
+                  <div className={styles.actionsRow}>
                     <Button
                       variant="outlined"
-                      className="text-secondary col-span-3  capitalize"
+                      sx={actionButtonSx}
                       onClick={() => dispatch(openModal('PickupSheet'))}
                     >
                       View OPU sheet
@@ -1896,7 +1935,7 @@ export default function Appointments() {
                     {!isCurrentTreatmentIui && (
                       <Button
                         variant="outlined"
-                        className="text-secondary capitalize col-span-3 "
+                        sx={actionButtonSx}
                         onClick={() =>
                           dispatch(openModal('DischargeSummarySheet'))
                         }
@@ -1905,18 +1944,17 @@ export default function Appointments() {
                       </Button>
                     )}
                     <Button
-                      variant="outlined"
-                      className="text-secondary capitalize col-span-3 "
+                      variant="contained"
+                      sx={actionButtonSx}
                       onClick={() => dispatch(openModal('DischargeCard'))}
                     >
                       Discharge Card
                     </Button>
                     {patientDetails?.patientInfo?.activeVisitId && (
                       <Button
-                        variant="outlined"
+                        variant="contained"
                         color="error"
-                        size="small"
-                        className="capitalize"
+                        sx={actionButtonSx}
                         onClick={() =>
                           dispatch(openModal('endTreatment-Visit'))
                         }
@@ -1929,20 +1967,19 @@ export default function Appointments() {
                   </div>
                 )}
                 {selectedPatient?.type === 'Consultation' && (
-                  <div className="flex gap-3">
+                  <div className={styles.actionsRow}>
                     <Button
-                      variant="outlined"
-                      className="text-secondary capitalize"
+                      variant="contained"
+                      sx={actionButtonSx}
                       onClick={() => dispatch(openModal('DischargeCard'))}
                     >
                       Discharge Card
                     </Button>
                     {patientDetails?.patientInfo?.activeVisitId && (
                       <Button
-                        variant="outlined"
+                        variant="contained"
                         color="error"
-                        size="small"
-                        className="capitalize"
+                        sx={actionButtonSx}
                         onClick={() =>
                           handleCloseVisit(selectedPatient?.appointmentId)
                         }
@@ -1961,7 +1998,6 @@ export default function Appointments() {
                   uniqueKey="OPDSheet"
                   maxWidth="xl"
                   closeOnOutsideClick={true}
-                  // title={`OPD Sheet`}
                 >
                   <OPDSheet
                     patientInfo={patientDetails.patientInfo}
@@ -2046,8 +2082,8 @@ export default function Appointments() {
             />
           </>
         ) : (
-          <div className="h-full flex justify-center items-center">
-            <span className="opacity-50">{'No Details to show'}</span>
+          <div className={styles.emptyState} style={{ minHeight: 280 }}>
+            No details to show. Select a patient from the list.
           </div>
         )}
       </div>

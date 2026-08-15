@@ -52,15 +52,15 @@ export default function Header() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="fixed top-0 pr-[13%] w-full h-[60px] flex justify-end items-center p-5 border-b-2 bg-white  z-10">
-        <div className="flex items-center gap-4">
+    <div className="flex flex-col">
+      <div className="app-header fixed top-0 right-0 z-10 flex justify-end items-center px-5">
+        <div className="flex items-center gap-3">
           <NotificationBell />
-          <span className="flex flex-col items-end pr-3">
-            <span className=" text-slate-700 font-semibold">
+          <span className="flex flex-col items-end pr-2">
+            <span className="text-ink font-semibold text-sm leading-tight">
               {userDetails?.fullName || userDetails?.userName || ''}
             </span>
-            <span className="text-secondary text-xs">
+            <span className="text-secondary text-xs font-medium">
               {userDetails?.roleDetails?.name}
             </span>
           </span>
@@ -69,9 +69,9 @@ export default function Header() {
         <div className="items-center gap-3 block">
           <div ref={anchorEl}>
             <CgProfile
-              size={30}
-              color="#06aee9"
-              className="cursor-pointer "
+              size={32}
+              color="#0284b8"
+              className="cursor-pointer rounded-full hover:opacity-80 transition-opacity"
               onClick={handleOpen}
             />
           </div>
@@ -126,8 +126,7 @@ export default function Header() {
         </div>
       </div>
 
-      <div className="flex items-center gap-4 bg-primary shadow-md w-full ">
-        {/* create a marquee component to display alerts */}
+      <div className="flex items-center min-h-9 bg-primary/80 border-b border-[#cfe4ee] w-full text-ink">
         <DisplayAlerts />
       </div>
     </div>

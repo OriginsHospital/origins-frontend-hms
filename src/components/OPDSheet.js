@@ -89,8 +89,8 @@ function OPDSheet({ patientInfo, vitalInfo }) {
 
   return (
     <div className="p-4 max-h-[80vh]">
-      <div className="flex justify-between gap-3 sticky top-0 bg-white">
-        <Typography variant="h6" gutterBottom>
+      <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-[#e3eef3] bg-white pb-3">
+        <Typography variant="h6" className="font-bold text-slate-800">
           OPD Sheet
         </Typography>
         <IconButton onClick={() => dispatch(closeModal())}>

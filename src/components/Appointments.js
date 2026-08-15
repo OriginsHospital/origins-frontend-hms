@@ -95,6 +95,7 @@ export default function Appointments({
   Treatments,
   Consultations,
   selectedVisit,
+  variant = 'grid',
 }) {
   const QueryClient = useQueryClient()
   const dispatch = useDispatch()
@@ -304,9 +305,20 @@ export default function Appointments({
     })
   }
 
+  const isPanel = variant === 'panel'
+
   return (
-    <div className="bg-white px-5 py-3 rounded shadow">
-      <Card variant="outlined" className="m-3 border mt-5">
+    <div
+      className={
+        isPanel
+          ? 'bg-white rounded-xl border border-[#cfe4ee]'
+          : 'bg-white px-5 py-3 rounded shadow'
+      }
+    >
+      <Card
+        variant="outlined"
+        className={isPanel ? 'border-0 shadow-none' : 'm-3 border mt-5'}
+      >
         <div className="p-4 border-b">
           <h3 className="text-lg font-semibold text-secondary">
             {bookingContextLabel}
@@ -314,24 +326,40 @@ export default function Appointments({
         </div>
 
         <div className="p-4">
-          <div className="grid md:grid-cols-4 lg:grid-cols-5 gap-4">
+          <div
+            className={
+              isPanel
+                ? 'flex flex-col gap-3'
+                : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4'
+            }
+          >
             {appointments.map((eachAppointment) => (
               <div
-                className="p-2 flex flex-col rounded-lg shadow shadow-secondary"
+                className={
+                  isPanel
+                    ? 'p-3.5 rounded-xl border border-[#d7eef7] bg-[#f7fbfd]'
+                    : 'p-3 flex flex-col rounded-lg shadow shadow-secondary min-w-0'
+                }
                 key={`${eachAppointment.appointmentSource}-${eachAppointment.appointmentId}`}
               >
                 {eachAppointment.consultationType && (
-                  <span className="text-xs text-gray-500 mb-1">
+                  <span className="text-xs font-semibold text-[#0284b8] mb-1">
                     {eachAppointment.consultationType}
                   </span>
                 )}
                 <span
                   title={eachAppointment.doctorName}
-                  className="max-w-48 text-nowrap text-ellipsis overflow-hidden font-semibold"
+                  className="font-bold text-[#123047] break-words"
                 >
                   {eachAppointment.doctorName}
                 </span>
-                <div className="flex justify-between font-thin">
+                <div
+                  className={
+                    isPanel
+                      ? 'mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[#5a7384]'
+                      : 'mt-1 flex justify-between gap-2 font-medium text-sm text-[#5a7384]'
+                  }
+                >
                   <span>{eachAppointment.timeStart}</span>
                   <span>
                     {dayjs(eachAppointment.appointmentDate).format(
@@ -339,13 +367,23 @@ export default function Appointments({
                     )}
                   </span>
                 </div>
+                {eachAppointment.appointmentReason ? (
+                  <span className="mt-1 text-sm text-[#123047] break-words">
+                    {eachAppointment.appointmentReason}
+                  </span>
+                ) : null}
               </div>
             ))}
             {canBookNew && (
               <Button
-                className="flex gap-2 items-center capitalize text-sm"
+                className={
+                  isPanel
+                    ? 'flex gap-2 items-center capitalize text-sm min-h-[52px]'
+                    : 'flex gap-2 items-center capitalize text-sm'
+                }
                 onClick={openBookingDrawer}
                 variant="outlined"
+                fullWidth={isPanel}
               >
                 <FaPlusCircle size={20} />
                 <span>New Appointment</span>

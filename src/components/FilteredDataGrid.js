@@ -14,6 +14,7 @@ const FilteredDataGrid = ({
   filters = {},
   onRowsChange,
   hideExport = false,
+  sx,
   ...props
 }) => {
   const [filteredRows, setFilteredRows] = useState(rows)
@@ -55,6 +56,27 @@ const FilteredDataGrid = ({
           columns,
           hideExport,
         },
+      }}
+      sx={{
+        '& .MuiDataGrid-cell': {
+          color: '#123047',
+          fontWeight: 600,
+          overflow: 'hidden',
+        },
+        '& .MuiDataGrid-cellContent': {
+          color: '#123047',
+          fontWeight: 600,
+          textOverflow: 'clip',
+          overflow: 'hidden',
+        },
+        '& .MuiDataGrid-columnHeaderTitle': {
+          color: '#123047',
+          fontWeight: 800,
+        },
+        '& .MuiDataGrid-columnSeparator': {
+          display: 'none',
+        },
+        ...sx,
       }}
       {...props}
     />

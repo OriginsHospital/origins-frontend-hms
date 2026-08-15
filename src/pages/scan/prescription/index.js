@@ -379,6 +379,9 @@ function ScanPrescriptionPage() {
         onClose={() => setViewHtml(null)}
         maxWidth="md"
         fullWidth
+        PaperProps={{
+          sx: { width: 'min(860px, 94vw)', maxHeight: '88vh' },
+        }}
       >
         <DialogTitle className="flex justify-between items-center">
           <span>Prescription</span>
@@ -386,9 +389,9 @@ function ScanPrescriptionPage() {
             <Close />
           </IconButton>
         </DialogTitle>
-        <DialogContent dividers className="max-h-[80vh] overflow-auto">
+        <DialogContent dividers className="overflow-auto bg-[#e8eef2]">
           {viewHtml ? (
-            <div className="border rounded-lg p-2 bg-white">
+            <div className="border border-[#cfe4ee] rounded-xl p-2 bg-white aspect-[210/297] min-h-[62vh]">
               <JoditEditor
                 value={viewHtml}
                 config={{

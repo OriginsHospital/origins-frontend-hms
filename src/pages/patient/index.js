@@ -10,9 +10,14 @@ import {
 import CustomToolbar from '@/components/CustomToolbar'
 import { Avatar, Button, CircularProgress, TextField } from '@mui/material'
 import { useRouter } from 'next/router'
-import { SearchOutlined } from '@mui/icons-material'
+import {
+  PersonAddAlt,
+  SearchOutlined,
+  EventAvailable,
+} from '@mui/icons-material'
 import { useEffect, useMemo, useState } from 'react'
 import PatientHistory from '@/components/PatientHistory'
+import BookAppointmentDrawer from '@/components/BookAppointmentDrawer'
 import { ACCESS_TYPES } from '@/constants/constants'
 import { withPermission } from '@/components/withPermission'
 import dayjs from 'dayjs'
@@ -57,6 +62,7 @@ const ViewButton = ({ row, router }) => {
     <Button
       variant="outlined"
       color="primary"
+      size="small"
       className="capitalize"
       onClick={() => {
         router.push(
@@ -77,6 +83,54 @@ const ViewButton = ({ row, router }) => {
 const PermissionedViewButton = withPermission(ViewButton, false, 'patient', [
   ACCESS_TYPES.READ,
 ])
+
+const RegisterPatientButton = ({ router }) => {
+  return (
+    <Button
+      variant="contained"
+      startIcon={<PersonAddAlt />}
+      onClick={() =>
+        router.push({
+          pathname: '/patient/register',
+          query: { from: 'list' },
+        })
+      }
+      sx={{ textTransform: 'none', color: 'white', minWidth: 128 }}
+    >
+      Register
+    </Button>
+  )
+}
+
+const PermissionedRegisterButton = withPermission(
+  RegisterPatientButton,
+  false,
+  'appointmentCreation',
+  [ACCESS_TYPES.WRITE, ACCESS_TYPES.READ],
+)
+
+const BookAppointmentButton = ({ row, onBook }) => {
+  return (
+    <Button
+      variant="contained"
+      color="primary"
+      size="small"
+      className="capitalize"
+      startIcon={<EventAvailable sx={{ fontSize: 16 }} />}
+      onClick={() => onBook(row)}
+      sx={{ color: 'white', minWidth: 84 }}
+    >
+      Book
+    </Button>
+  )
+}
+
+const PermissionedBookButton = withPermission(
+  BookAppointmentButton,
+  false,
+  'appointment',
+  [ACCESS_TYPES.WRITE, ACCESS_TYPES.READ],
+)
 
 // Component to show patient name with red dot indicator for pending payment
 const PatientNameWithIndicator = ({ patient, userToken }) => {
@@ -185,7 +239,7 @@ const PatientNameWithIndicator = ({ patient, userToken }) => {
         alt={patient.Name}
         sx={{ width: 40, height: 40 }}
       />
-      <span className="flex items-center gap-1">
+      <span className="flex items-center gap-1 font-semibold text-[#123047]">
         {patient.Name}
         {/* Red dot indicator for pending payment - inline after name */}
         {!isLoadingPackage && hasPaymentDue && (
@@ -216,6 +270,7 @@ function PatientRegistration() {
   const [searchValue, setSearchValue] = useState('')
   const [buttonSearchValue, setButtonSearchValue] = useState('')
   const [selectedPatient, setSelectedPatient] = useState(null)
+  const [bookingPatient, setBookingPatient] = useState(null)
 
   const handleSearch = () => {
     setButtonSearchValue(searchValue.trim())
@@ -390,18 +445,30 @@ function PatientRegistration() {
       {
         field: 'action',
         headerName: 'Action',
-        width: 100,
+        width: 200,
+        sortable: false,
+        filterable: false,
+        disableColumnMenu: true,
         renderCell: ({ row }) => {
-          return <PermissionedViewButton row={row} router={router} />
+          return (
+            <div className="flex items-center gap-1.5">
+              <PermissionedViewButton row={row} router={router} />
+              <PermissionedBookButton row={row} onBook={setBookingPatient} />
+            </div>
+          )
         },
       },
       {
         field: 'patientHistory',
         headerName: 'Patient History',
-        width: 150,
+        width: 180,
+        sortable: false,
+        filterable: false,
+        disableColumnMenu: true,
         renderCell: ({ row }) => (
           <Button
             variant="outlined"
+            size="small"
             className="capitalize"
             onClick={() =>
               handleOpenPatientHistory({
@@ -410,6 +477,12 @@ function PatientRegistration() {
                 activeVisitId: row.activeVisitId,
               })
             }
+            sx={{
+              textTransform: 'none',
+              whiteSpace: 'nowrap',
+              minWidth: 0,
+              px: 1.5,
+            }}
           >
             Patient History
           </Button>
@@ -501,27 +574,33 @@ function PatientRegistration() {
         {/* {
           allPatients.isLoading && <div>Loading...</div>
         } */}
-        <div className="px-3 py-2 flex items-center justify-center gap-5">
-          <TextField
-            placeholder="Search by Patient ID / Mobile / Name / Aadhaar"
-            className="w-[350px] md:w-[450px] lg:w-[500px] bg-white"
-            type="search"
-            value={searchValue}
-            onChange={(e) => setSearchValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                handleSearch()
-              }
-            }}
-          />
-          <Button
-            onClick={handleSearch}
-            variant="contained"
-            sx={{ color: 'white' }}
-            startIcon={<SearchOutlined />}
-          >
-            Search
-          </Button>
+        <div className="w-full px-4 py-2 grid grid-cols-[1fr_auto_1fr] items-center gap-4">
+          <div />
+          <div className="flex items-center justify-center gap-5">
+            <TextField
+              placeholder="Search by Patient ID / Mobile / Name / Aadhaar"
+              className="w-[350px] md:w-[450px] lg:w-[500px] bg-white"
+              type="search"
+              value={searchValue}
+              onChange={(e) => setSearchValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleSearch()
+                }
+              }}
+            />
+            <Button
+              onClick={handleSearch}
+              variant="contained"
+              sx={{ color: 'white' }}
+              startIcon={<SearchOutlined />}
+            >
+              Search
+            </Button>
+          </div>
+          <div className="flex justify-end">
+            <PermissionedRegisterButton router={router} />
+          </div>
         </div>
 
         {allPatients.isError && <div>{allPatients.error.message}</div>}
@@ -549,6 +628,7 @@ function PatientRegistration() {
               filterData={patientFilterData}
               getUniqueValues={getUniqueValues}
               disableRowSelectionOnClick
+              disableColumnMenu
               // slotProps={{
               //   loadingOverlay: {
               //     variant: 'skeleton',
@@ -597,6 +677,10 @@ function PatientRegistration() {
           }}
         />
       )}
+      <BookAppointmentDrawer
+        patient={bookingPatient}
+        onClose={() => setBookingPatient(null)}
+      />
     </div>
   )
 }

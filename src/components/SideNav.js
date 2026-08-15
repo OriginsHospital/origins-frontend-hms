@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
-import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ToastContainer, toast } from 'react-toastify'
 import { Bounce } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
@@ -7,59 +7,66 @@ import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { useSelector, useDispatch } from 'react-redux'
 import AssessmentOutlinedIcon from '@mui/icons-material/AssessmentOutlined'
-import Popover from '@mui/material/Popover'
 import PregnantWomanOutlinedIcon from '@mui/icons-material/PregnantWomanOutlined'
 import LogoutOutlinedIcon from '@mui/icons-material/LogoutOutlined'
 import LocalHospitalOutlinedIcon from '@mui/icons-material/LocalHospitalOutlined'
 import LocalPharmacyOutlinedIcon from '@mui/icons-material/LocalPharmacyOutlined'
 import VaccinesOutlinedIcon from '@mui/icons-material/VaccinesOutlined'
 import PersonOutlineOutlinedIcon from '@mui/icons-material/PersonOutlineOutlined'
-import { logout, getTickets, getTasks } from '@/constants/apis'
+import { logout } from '@/constants/apis'
 import { resetUser } from '@/redux/userSlice'
 import { withPermission } from './withPermission'
 import { ACCESS_TYPES } from '@/constants/constants'
-import { HomeOutlined, ScannerOutlined } from '@mui/icons-material'
+import {
+  HomeOutlined,
+  ScannerOutlined,
+  ChevronLeft,
+  Menu,
+} from '@mui/icons-material'
 
 import { FaUserDoctor } from 'react-icons/fa6'
-import { GiMedicines } from 'react-icons/gi'
+import { GiMedicines, GiMicroscope } from 'react-icons/gi'
 import {
-  TbBuildingCommunity,
-  TbChecklist,
-  TbCheckupList,
-  TbFileAnalytics,
+  TbBuildingHospital,
+  TbCalendarStats,
+  TbClipboardList,
+  TbDna,
+  TbInbox,
+  TbReportAnalytics,
+  TbScan,
+  TbStethoscope,
 } from 'react-icons/tb'
-import { LuCalendarDays } from 'react-icons/lu'
+import { LuCalendarDays, LuLayoutDashboard, LuBedDouble } from 'react-icons/lu'
 import { FiUser, FiUsers } from 'react-icons/fi'
-import { LuLayoutDashboard, LuBedDouble } from 'react-icons/lu'
 import { HiUsers } from 'react-icons/hi2'
-import { TbTicket, TbInbox } from 'react-icons/tb'
 
 import Image from 'next/image'
 import originslogo from '../../public/origins-new-logo.png'
-import { GrSchedule } from 'react-icons/gr'
 // Helper function to check if user has access to New Patient Tracker
 const hasNewPatientTrackerAccess = (userEmail) => {
   if (!userEmail) return false
   return userEmail.toLowerCase() === 'nikhilsuvva77@gmail.com'
 }
 
+function isRouteActive(pathname, routePath) {
+  if (!routePath) return false
+  if (routePath === '/home') return pathname === '/home'
+  return pathname === routePath || pathname.startsWith(`${routePath}/`)
+}
+
 function NavItem({
-  expanded,
   clickedNavItem,
   setClickedNavItem,
   path,
   name,
-  icon,
   Iconn,
   subRoutes,
   badgeCount,
 }) {
   const router = useRouter()
-  const buttonRef = useRef('')
   const user = useSelector((store) => store.user)
   const userEmail = user?.email || user?.userDetails?.email || ''
 
-  // Filter subRoutes to hide New Patient Tracker and Patient Management if user doesn't have access
   const filteredSubRoutes =
     subRoutes?.filter((route) => {
       if (route.path === '/reports/newPatientTracker') {
@@ -71,118 +78,67 @@ function NavItem({
       return true
     }) || []
 
-  const [anchorEl, setAnchorEl] = useState(null)
-  function handleClick() {
-    setClickedNavItem(name)
-    // Set anchorEl when button is clicked
-    if (buttonRef.current) {
-      setAnchorEl(buttonRef.current)
+  const menuRoutes = useMemo(() => {
+    const list = [...filteredSubRoutes]
+    if (path && !list.some((route) => route.path === path)) {
+      list.unshift({
+        path,
+        name,
+        relatedModule: filteredSubRoutes[0]?.relatedModule,
+      })
     }
+    return list
+  }, [filteredSubRoutes, path, name])
+
+  const hasSubOptions = menuRoutes.length > 0 && filteredSubRoutes.length > 0
+  const isChildActive = menuRoutes.some((route) =>
+    isRouteActive(router.pathname, route.path),
+  )
+  const isOpen = hasSubOptions && clickedNavItem === name
+  const isActive = isRouteActive(router.pathname, path) || isChildActive
+
+  function toggleOpen() {
+    setClickedNavItem((current) => (current === name ? '' : name))
   }
 
-  function handleClose() {
-    setClickedNavItem('')
-    setAnchorEl(null)
-  }
-
-  useEffect(() => {
-    // Set anchorEl when component mounts and buttonRef is available
-    if (buttonRef.current) {
-      setAnchorEl(buttonRef.current)
-    }
-  }, [])
-
-  return (
-    <>
-      {filteredSubRoutes?.length > 0 ? (
-        <>
-          <div className="relative flex items-center">
-            {path ? (
-              <Link
-                href={path}
-                className={`p-2 flex justify-center text-nowrap relative flex-1 before:absolute before:bottom-0 before:left-0 before:h-0 hover:before:h-full before:w-full before:transition-all before:duration-300 before:bg-primary/50 before:-z-10
-                ${router.pathname === path ? 'shadow bg-primary/50' : ''}`}
-              >
-                <div className="w-full flex justify-start items-center gap-2">
-                  <Iconn className="text-2xl text-secondary group-hover:text-white transition-colors relative z-10 duration-300" />
-                  <span
-                    className={`font-sans text-sm font-semibold text-secondary`}
-                  >
-                    {name}
-                  </span>
-                  {badgeCount !== undefined && badgeCount > 0 && (
-                    <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center min-w-[20px]">
-                      {badgeCount > 99 ? '99+' : badgeCount}
-                    </span>
-                  )}
-                </div>
-              </Link>
-            ) : (
-              <div
-                className={`p-2 flex justify-center text-nowrap relative flex-1 before:absolute before:bottom-0 before:left-0 before:h-0 hover:before:h-full before:w-full before:transition-all before:duration-300 before:bg-primary/50 before:-z-10
-                ${router.pathname === path ? 'shadow bg-primary/50' : ''}`}
-              >
-                <div className="w-full flex justify-start items-center gap-2">
-                  <Iconn className="text-2xl text-secondary group-hover:text-white transition-colors relative z-10 duration-300" />
-                  <span
-                    className={`font-sans text-sm font-semibold text-secondary`}
-                  >
-                    {name}
-                  </span>
-                  {badgeCount !== undefined && badgeCount > 0 && (
-                    <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center min-w-[20px]">
-                      {badgeCount > 99 ? '99+' : badgeCount}
-                    </span>
-                  )}
-                </div>
-              </div>
+  if (hasSubOptions) {
+    return (
+      <div className={`sidenav-group ${isOpen ? 'is-open' : ''}`}>
+        <button
+          type="button"
+          className={`sidenav-item ${isActive ? 'is-active' : ''}`}
+          onClick={toggleOpen}
+          aria-expanded={isOpen}
+        >
+          <div className="w-full flex justify-start items-center gap-2">
+            <span className="sidenav-icon-tile">
+              <Iconn className="sidenav-item-icon" />
+            </span>
+            <span className="sidenav-item-label">{name}</span>
+            {badgeCount !== undefined && badgeCount > 0 && (
+              <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center min-w-[20px]">
+                {badgeCount > 99 ? '99+' : badgeCount}
+              </span>
             )}
-            <button
-              ref={buttonRef}
-              id={name}
-              className="p-1 flex items-center justify-center hover:bg-primary/30 rounded transition-colors"
-              onClick={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                handleClick()
-              }}
+            <svg
+              className={`sidenav-caret ${isOpen ? 'is-open' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
             >
-              <svg
-                className={`w-4 h-4 text-secondary transition-transform ${
-                  Boolean(anchorEl) && name == clickedNavItem ? 'rotate-90' : ''
-                }`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 5l7 7-7 7"
-                />
-              </svg>
-            </button>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5l7 7-7 7"
+              />
+            </svg>
           </div>
-          <Popover
-            open={Boolean(anchorEl) && name == clickedNavItem}
-            onClose={handleClose}
-            anchorEl={anchorEl}
-            elevation={4}
-            anchorOrigin={{
-              vertical: 'top',
-              horizontal: 'right',
-            }}
-            transformOrigin={{
-              vertical: 'top',
-              horizontal: 'left',
-            }}
-          >
-            {filteredSubRoutes.map((eachSubRouteObj, i) => {
-              // const userModule = user?.moduleList?.find(
-              //   eachModuleObj => eachModuleObj.enum == eachSubRouteObj.relatedModule,
-              // )
-              // console.log('module list', user.moduleList, userModule)
+        </button>
+        {isOpen ? (
+          <div className="sidenav-submenu">
+            {menuRoutes.map((eachSubRouteObj, i) => {
               const NavOption = withPermission(
                 SubNavItem,
                 false,
@@ -191,51 +147,37 @@ function NavItem({
               )
               return (
                 <NavOption
-                  key={i + eachSubRouteObj.relatedModule}
+                  key={
+                    i + (eachSubRouteObj.relatedModule || eachSubRouteObj.path)
+                  }
                   eachSubRouteObj={eachSubRouteObj}
                   i={i}
-                  // <NavItem
-                  // key={eachSubRouteObj.name + i}
-                  // expanded={expanded}
-                  // clickedNavItem={clickedNavItem}
-                  // setClickedNavItem={setClickedNavItem}
-                  // icon={eachSubRouteObj.icon}
-                  // Iconn={eachSubRouteObj.Iconn}
-                  // name={eachSubRouteObj.name}
-                  // path={eachSubRouteObj.path}
-                  // subRoutes={eachSubRouteObj.subRoutes}
                 />
               )
             })}
-          </Popover>
-        </>
-      ) : (
-        <Link
-          href={path}
-          className={`p-2 flex justify-center text-nowrap relative before:absolute before:bottom-0 before:left-0 before:h-0 hover:before:h-full before:w-full before:transition-all before:duration-300 before:bg-primary/50 before:-z-10
-          ${router.pathname.startsWith(path) ? 'shadow bg-primary/50' : ''}`}
-        >
-          <div
-            // className={`${expanded ? 'w-full' : 'w-full'} transition-[width] duration-[0.5s]`}
-            className="w-full flex justify-start items-center gap-2"
-          >
-            {/* <div className="w-6 h-6 flex justify-center items-center">
-              {icon}
-
-            </div> */}
-            <Iconn className="text-2xl text-secondary group-hover:text-white transition-colors relative z-10 duration-300" />
-            <span className={`font-sans text-sm font-semibold text-secondary`}>
-              {name}
-            </span>
-            {badgeCount !== undefined && badgeCount > 0 && (
-              <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                {badgeCount > 99 ? '99+' : badgeCount}
-              </span>
-            )}
           </div>
-        </Link>
-      )}
-    </>
+        ) : null}
+      </div>
+    )
+  }
+
+  return (
+    <Link
+      href={path}
+      className={`sidenav-item ${isRouteActive(router.pathname, path) ? 'is-active' : ''}`}
+    >
+      <div className="w-full flex justify-start items-center gap-2">
+        <span className="sidenav-icon-tile">
+          <Iconn className="sidenav-item-icon" />
+        </span>
+        <span className="sidenav-item-label">{name}</span>
+        {badgeCount !== undefined && badgeCount > 0 && (
+          <span className="ml-auto bg-red-500 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+            {badgeCount > 99 ? '99+' : badgeCount}
+          </span>
+        )}
+      </div>
+    </Link>
   )
 }
 
@@ -333,21 +275,23 @@ function LogoutNavButton({
   )
 }
 const SubNavItem = ({ eachSubRouteObj, i }) => {
+  const router = useRouter()
+  const isActive = isRouteActive(router.pathname, eachSubRouteObj.path)
+
   return (
     <Link
       key={eachSubRouteObj.name + i}
-      className={`py-2 pl-2.5 pr-4  flex gap-2 text-nowrap  hover:shadow`}
+      className={`sidenav-subitem ${isActive ? 'is-active' : ''}`}
       href={eachSubRouteObj.path}
     >
-      <span className="text-secondary font-semibold ">
-        {eachSubRouteObj.name}
-      </span>
+      {eachSubRouteObj.name}
     </Link>
   )
 }
 function SideNav(props) {
   const user = useSelector((store) => store.user)
   const [expanded, setExpanded] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
   const [clickedNavItem, setClickedNavItem] = useState('')
   const router = useRouter()
 
@@ -357,104 +301,44 @@ function SideNav(props) {
   const hasInboxAccess = userEmail.toLowerCase() === 'nikhilsuvva77@gmail.com'
   // const iconsColor = '#06aee9'
 
-  // Fetch ticket count (assigned to user)
-  const { data: ticketsData } = useQuery({
-    queryKey: ['ticketsCount', user?.accessToken],
-    queryFn: async () => {
-      if (!user?.accessToken) return { total: 0 }
-      try {
-        const response = await getTickets(user.accessToken, {
-          page: 1,
-          limit: 1,
-        })
-        return response?.data?.pagination || { total: 0 }
-      } catch (error) {
-        console.warn('Failed to fetch tickets count:', error)
-        return { total: 0 }
-      }
-    },
-    enabled: !!user?.accessToken,
-    refetchInterval: 30000, // Refetch every 30 seconds
-    retry: false,
-  })
-
-  // Fetch task count (assigned to user)
-  const { data: tasksData } = useQuery({
-    queryKey: ['tasksCount', user?.accessToken],
-    queryFn: async () => {
-      if (!user?.accessToken) return { total: 0 }
-      try {
-        const response = await getTasks(user.accessToken, {
-          page: 1,
-          limit: 1,
-        })
-        return response?.data?.pagination || { total: 0 }
-      } catch (error) {
-        console.warn('Failed to fetch tasks count:', error)
-        return { total: 0 }
-      }
-    },
-    enabled: !!user?.accessToken,
-    refetchInterval: 30000, // Refetch every 30 seconds
-    retry: false,
-  })
-
-  const ticketsCount = ticketsData?.total || 0
-  const tasksCount = tasksData?.total || 0
-  const totalCount = ticketsCount + tasksCount
   const routes = useMemo(() => {
     const allRoutes = [
       {
         path: '/home',
         name: 'Dashboard',
         relatedModule: 'dashboard',
-        // icon: <HomeOutlined className="text-secondary" />,
+        description: 'Home overview and daily workspace',
         Iconn: LuLayoutDashboard,
-        subRoutes: [
-          {
-            path: '/home/payments',
-            name: 'Payments',
-            relatedModule: 'dashboard',
-          },
-        ],
       },
       {
         path: '/teams',
         name: 'Teams',
         relatedModule: 'teams',
+        description: 'Team members and collaboration',
         Iconn: HiUsers,
       },
       {
         path: '/inbox',
         name: 'Inbox',
         relatedModule: 'inbox',
+        description: 'Messages and notifications',
         Iconn: TbInbox,
       },
       {
         path: '/appointments',
         name: 'Appointments',
         relatedModule: 'appointment',
-        // icon: <HomeOutlined className="text-secondary" />,
-        Iconn: GrSchedule,
-      },
-      {
-        path: '/ticketing',
-        name: 'Ticketing',
-        relatedModule: 'ticketing',
-        Iconn: TbTicket,
+        description: 'Calendar bookings and visit slots',
+        Iconn: LuCalendarDays,
       },
       {
         path: '/patient',
         name: 'Patient',
         relatedModule: 'patients',
+        description: 'Patient records, donors, and cycles',
         icon: <PregnantWomanOutlinedIcon className="text-secondary" />,
         Iconn: FiUser,
         subRoutes: [
-          {
-            path: '/patient/register',
-            name: 'Register Patient',
-            relatedModule: 'appointmentCreation',
-          },
           {
             path: '/patient',
             name: 'Patients',
@@ -496,6 +380,7 @@ function SideNav(props) {
         path: '/doctor',
         name: 'Doctor',
         relatedModule: 'manageDoctors',
+        description: 'Doctors and consultation appointments',
         icon: <LocalHospitalOutlinedIcon className="text-secondary" />,
         Iconn: FaUserDoctor,
         subRoutes: [
@@ -519,6 +404,7 @@ function SideNav(props) {
         path: '/pharmacy/medicinestages',
         name: 'Pharmacy',
         relatedModule: 'pharmacy',
+        description: 'Medicines, GRN, stock, and refunds',
         Iconn: GiMedicines,
         icon: <LocalPharmacyOutlinedIcon className="text-secondary" />,
         subRoutes: [
@@ -559,8 +445,9 @@ function SideNav(props) {
       {
         path: '/laboratory',
         name: 'Lab',
-        Iconn: TbCheckupList,
+        Iconn: GiMicroscope,
         relatedModule: 'labModule',
+        description: 'Lab tests, labs list, and outsourcing',
         icon: <VaccinesOutlinedIcon className="text-secondary" />,
         subRoutes: [
           {
@@ -584,7 +471,8 @@ function SideNav(props) {
         path: '/embryology',
         name: 'Embryology',
         relatedModule: 'embryology',
-        Iconn: TbCheckupList,
+        description: 'Embryo lab and UPT workflows',
+        Iconn: TbDna,
         subRoutes: [
           {
             path: '/embryology',
@@ -601,8 +489,9 @@ function SideNav(props) {
       {
         path: '/scan',
         name: 'Scan',
-        Iconn: TbChecklist,
+        Iconn: TbScan,
         relatedModule: null,
+        description: 'Ultrasound, OPU, UPT, and scan sheets',
         icon: <ScannerOutlined className="text-secondary" />,
         subRoutes: [
           {
@@ -641,8 +530,9 @@ function SideNav(props) {
       {
         path: '/clinical',
         name: 'Clinical',
-        Iconn: TbChecklist,
+        Iconn: TbStethoscope,
         relatedModule: 'otScheduler',
+        description: 'OT scheduler and injection sheets',
         icon: <ScannerOutlined className="text-secondary" />,
         subRoutes: [
           {
@@ -671,8 +561,8 @@ function SideNav(props) {
         path: '/indent',
         name: 'IP Indent',
         relatedModule: 'indent',
-        Iconn: TbFileAnalytics,
-        icon: <TbFileAnalytics className="text-secondary" />,
+        description: 'Inpatient indent and ward requests',
+        Iconn: TbClipboardList,
         subRoutes: [],
       },
       {
@@ -680,6 +570,7 @@ function SideNav(props) {
         name: 'Admin',
         Iconn: FiUsers,
         relatedModule: 'manageUsers',
+        description: 'Users, master data, and layouts',
         icon: <PersonOutlineOutlinedIcon className="text-secondary" />,
         subRoutes: [
           {
@@ -710,14 +601,16 @@ function SideNav(props) {
         path: '/reports',
         name: 'Reports',
         relatedModule: 'reportsModule',
-        Iconn: TbFileAnalytics,
+        description: 'Revenue, expenses, and operational reports',
+        Iconn: TbReportAnalytics,
         subRoutes: [],
       },
       {
         path: '/dailyreport',
         name: 'Daily Report',
         relatedModule: 'reportsModule',
-        Iconn: LuCalendarDays,
+        description: 'Day-end clinic summary',
+        Iconn: TbCalendarStats,
         subRoutes: [],
       },
       // {
@@ -731,7 +624,8 @@ function SideNav(props) {
         path: '/ipmodule',
         name: 'IP Module',
         relatedModule: 'ipmodule',
-        Iconn: TbBuildingCommunity,
+        description: 'Inpatient list and bed booking',
+        Iconn: TbBuildingHospital,
         subRoutes: [
           {
             path: '/ipmodule',
@@ -759,59 +653,94 @@ function SideNav(props) {
   }, [hasTeamsAccess, hasInboxAccess])
 
   useEffect(() => {
-    setClickedNavItem('')
-    setExpanded(false)
-  }, [router.pathname])
+    try {
+      setCollapsed(localStorage.getItem('sidenav-collapsed') === '1')
+    } catch (error) {
+      console.warn('Could not read sidenav state', error)
+    }
+  }, [])
+
+  useEffect(() => {
+    document.documentElement.setAttribute(
+      'data-sidenav',
+      collapsed ? 'collapsed' : 'expanded',
+    )
+    try {
+      localStorage.setItem('sidenav-collapsed', collapsed ? '1' : '0')
+    } catch (error) {
+      console.warn('Could not save sidenav state', error)
+    }
+  }, [collapsed])
+
+  useEffect(() => {
+    const match = routes.find((route) => {
+      if (route.subRoutes?.length) {
+        return (
+          isRouteActive(router.pathname, route.path) ||
+          route.subRoutes.some((subRoute) =>
+            isRouteActive(router.pathname, subRoute.path),
+          )
+        )
+      }
+      return false
+    })
+    setClickedNavItem(match?.name || '')
+  }, [router.pathname, routes])
 
   return (
-    <div
-      className={`h-screen z-20 left-0 top-0 flex flex-col gap-3 min-w-[12%] duration-[0.5s] overflow-x-hidden border-r-2 w-12`}
-    >
-      {/* <button
-        className={`${expanded ? 'w-[50px]' : 'w-full'} self-end transition-[width] duration-[0.5s]`}
-        onClick={() => setExpanded(!expanded)}
+    <>
+      <button
+        type="button"
+        className="sidenav-toggle"
+        onClick={() => setCollapsed((current) => !current)}
+        aria-label={collapsed ? 'Show navigation' : 'Hide navigation'}
+        title={collapsed ? 'Show navigation' : 'Hide navigation'}
       >
-        {expanded ? (
-          <ArrowBackOutlinedIcon sx={{ color: '#D7E2F4' }} />
+        {collapsed ? (
+          <Menu fontSize="small" />
         ) : (
-          <MenuOutlinedIcon sx={{ color: '#D7E2F4' }} />
+          <ChevronLeft fontSize="small" />
         )}
-      </button> */}
-      <div className="flex flex-col items-center justify-center gap-3 ">
-        <img src={originslogo.src} className="  w-36 h-36" />
-        {/* <span className='text-2xl font-extrabold text-[#06aee9]'>HMS</span> */}
-      </div>
-      <div className="flex flex-col gap-3">
-        {routes.map((eachRouteObj, i) => {
-          // const userModule = user.moduleList?.find(
-          //   eachModuleObj => eachModuleObj.enum == eachRouteObj.relatedModule,
-          // )
-          // console.log('module list', user.moduleList, userModule)
-          const NavOption = withPermission(
-            NavItem,
-            false,
-            eachRouteObj.relatedModule,
-            [ACCESS_TYPES.READ, ACCESS_TYPES.WRITE],
-          )
-          return (
-            <NavOption
-              key={eachRouteObj.name + i}
-              expanded={expanded}
-              clickedNavItem={clickedNavItem}
-              setClickedNavItem={setClickedNavItem}
-              icon={eachRouteObj.icon}
-              Iconn={eachRouteObj.Iconn}
-              name={eachRouteObj.name}
-              path={eachRouteObj.path}
-              subRoutes={eachRouteObj.subRoutes}
-              badgeCount={
-                eachRouteObj.path === '/ticketing' ? totalCount : undefined
-              }
+      </button>
+      <div className="sidenav-shell h-screen z-20 left-0 top-0 flex flex-col gap-2 overflow-hidden">
+        <div className="sidenav-brand">
+          <div className="sidenav-logo-frame">
+            <img
+              src={originslogo.src}
+              alt="Ortus"
+              className="sidenav-logo-img"
             />
-          )
-        })}
-      </div>
-      {/* <div className="flex flex-col-reverse gap-3 grow ">
+          </div>
+          <span className="sidenav-brand-title">Ortus</span>
+        </div>
+        <div className="flex flex-col gap-1 overflow-y-auto pb-4">
+          {routes.map((eachRouteObj, i) => {
+            // const userModule = user.moduleList?.find(
+            //   eachModuleObj => eachModuleObj.enum == eachRouteObj.relatedModule,
+            // )
+            // console.log('module list', user.moduleList, userModule)
+            const NavOption = withPermission(
+              NavItem,
+              false,
+              eachRouteObj.relatedModule,
+              [ACCESS_TYPES.READ, ACCESS_TYPES.WRITE],
+            )
+            return (
+              <NavOption
+                key={eachRouteObj.name + i}
+                expanded={expanded}
+                clickedNavItem={clickedNavItem}
+                setClickedNavItem={setClickedNavItem}
+                icon={eachRouteObj.icon}
+                Iconn={eachRouteObj.Iconn}
+                name={eachRouteObj.name}
+                path={eachRouteObj.path}
+                subRoutes={eachRouteObj.subRoutes}
+              />
+            )
+          })}
+        </div>
+        {/* <div className="flex flex-col-reverse gap-3 grow ">
         <LogoutNavButton
           key={'logout'}
           expanded={expanded}
@@ -822,7 +751,8 @@ function SideNav(props) {
         // subRoutes={eachRouteObj.subRoutes}
         />
       </div> */}
-    </div>
+      </div>
+    </>
   )
 }
 

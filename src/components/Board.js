@@ -275,7 +275,7 @@ const getFirstOverduePackageMilestone = (patientDetails) => {
   ).find((milestone) => milestone.status === 'overdue')
 }
 
-export const Board = ({ allAppointmentsData, updateStage }) => {
+export const Board = ({ allAppointmentsData, updateStage, focusStage }) => {
   const [cards, setCards] = useState(allAppointmentsData?.data)
   const [activeSearchColumn, setActiveSearchColumn] = useState(null) // Add this state
 
@@ -284,55 +284,60 @@ export const Board = ({ allAppointmentsData, updateStage }) => {
   }, [allAppointmentsData?.data])
 
   return (
-    <div className="flex h-full w-full gap-3 overflow-scroll py-6 px-3">
+    <div className="appt-board">
       {/* 'Booked','Arrived','Scan','Doctor','Seen','Done' */}
       <Column
         title="Booked"
+        hint="Waiting to arrive"
         stage="Booked"
-        headingColor="text-secondary border-2 border-secondary rounded-md w-full p-3"
         cards={cards}
         setCards={setCards}
         updateStage={updateStage}
+        focusStage={focusStage}
         activeSearchColumn={activeSearchColumn}
         setActiveSearchColumn={setActiveSearchColumn}
       />
       <Column
         title="Check-In / Vitals"
+        hint="Arrival and vitals"
         stage="Scan"
-        headingColor="text-secondary border-2 border-secondary rounded-md w-full p-3"
         cards={cards}
         setCards={setCards}
         updateStage={updateStage}
+        focusStage={focusStage}
         activeSearchColumn={activeSearchColumn}
         setActiveSearchColumn={setActiveSearchColumn}
       />
       <Column
         title="Doctor"
+        hint="In consultation"
         stage="Doctor"
-        headingColor="text-secondary border-2 border-secondary rounded-md w-full p-3"
         cards={cards}
         setCards={setCards}
         updateStage={updateStage}
+        focusStage={focusStage}
         activeSearchColumn={activeSearchColumn}
         setActiveSearchColumn={setActiveSearchColumn}
       />
       <Column
         title="Seen / Billing"
+        hint="Prescription and billing"
         stage="Seen"
-        headingColor="text-secondary border-2 border-secondary rounded-md w-full p-3"
         cards={cards}
         setCards={setCards}
         updateStage={updateStage}
+        focusStage={focusStage}
         activeSearchColumn={activeSearchColumn}
         setActiveSearchColumn={setActiveSearchColumn}
       />
       <Column
         title="Completed"
+        hint="Visit closed"
         stage="Done"
-        headingColor="text-secondary border-2 border-secondary rounded-md w-full p-3"
         cards={cards}
         setCards={setCards}
         updateStage={updateStage}
+        focusStage={focusStage}
         activeSearchColumn={activeSearchColumn}
         setActiveSearchColumn={setActiveSearchColumn}
       />
@@ -342,11 +347,12 @@ export const Board = ({ allAppointmentsData, updateStage }) => {
 
 const Column = ({
   title,
-  headingColor,
+  hint,
   cards,
   stage,
   setCards,
   updateStage,
+  focusStage,
   activeSearchColumn,
   setActiveSearchColumn,
 }) => {
@@ -545,79 +551,76 @@ const Column = ({
   })
 
   return (
-    <div className="min-w-48 lg:min-w-[15.7%] shrink-0 grow" key={stage}>
-      <div className="mb-3 flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <h3 className={`font-medium ${headingColor}`}>
-            {title} ({filteredCards?.length})
-          </h3>
+    <div
+      className={`appt-col${focusStage && focusStage !== stage ? ' is-dimmed' : ''}${focusStage === stage ? ' is-focused' : ''}`}
+      data-stage={stage}
+      key={stage}
+    >
+      <div className="appt-col-header">
+        <div className="appt-col-head">
+          <div className="min-w-0 flex-1">
+            <h3>{title}</h3>
+            {hint ? <small>{hint}</small> : null}
+          </div>
+          <span className="appt-col-count">{filteredCards?.length || 0}</span>
           <IconButton
             size="small"
             onClick={handleSearchClick}
-            className="hover:bg-secondary/10"
+            className="appt-icon-btn"
           >
             <CgSearch className="text-secondary w-4 h-4" />
           </IconButton>
         </div>
 
-        {/* Search Popper */}
-        <Popper
-          open={searchOpen}
-          anchorEl={searchAnchorEl}
-          placement="top-end"
-          transition
-          className="z-50"
-        >
-          {({ TransitionProps }) => (
-            <Fade {...TransitionProps} timeout={350}>
-              <Paper className="p-2 shadow-lg" sx={{ minWidth: '200px' }}>
-                <div className="flex items-center gap-2">
-                  <TextField
-                    size="small"
-                    placeholder="Search patient..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="flex-1"
-                    autoFocus
-                    InputProps={{
-                      startAdornment: (
-                        <CgSearch className="text-gray-400 mr-2" />
-                      ),
-                    }}
-                  />
+        {searchOpen ? (
+          <div className="appt-col-search">
+            <TextField
+              size="small"
+              fullWidth
+              placeholder="Search this column..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              autoFocus
+              InputProps={{
+                startAdornment: <CgSearch className="text-gray-400 mr-2" />,
+                endAdornment: (
                   <IconButton size="small" onClick={handleSearchClose}>
                     <Close className="w-4 h-4" />
                   </IconButton>
-                </div>
-                {searchQuery && (
-                  <Typography variant="caption" className="mt-1 text-gray-500">
-                    Found {filteredCards?.length} results
-                  </Typography>
-                )}
-              </Paper>
-            </Fade>
-          )}
-        </Popper>
+                ),
+              }}
+            />
+            {searchQuery ? (
+              <Typography variant="caption" className="mt-1 text-gray-500">
+                Found {filteredCards?.length} results
+              </Typography>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       <div
         onDrop={handleDragEnd}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
-        className={`h-[90%] overflow-scroll w-full p-2 flex flex-col gap-2 rounded transition-colors ${
-          active ? 'bg-secondary' : 'bg-primary'
-        }`}
+        className={`appt-col-body ${active ? 'is-active' : ''}`}
       >
-        {filteredCards?.map((c) => {
-          return (
-            <Card
-              key={getAppointmentCompositeId(c)}
-              patientDetails={c}
-              handleDragStart={handleDragStart}
-              stage={stage}
-            />
-          )
-        })}
+        {filteredCards?.length ? (
+          filteredCards.map((c) => {
+            return (
+              <Card
+                key={getAppointmentCompositeId(c)}
+                patientDetails={c}
+                handleDragStart={handleDragStart}
+                stage={stage}
+              />
+            )
+          })
+        ) : (
+          <div className="appt-col-empty">
+            {searchQuery ? 'No matching patients' : 'No patients in this stage'}
+          </div>
+        )}
         <DropIndicator beforeId={null} stage={stage} />
       </div>
     </div>
@@ -919,10 +922,11 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
   }
 
   const getBgClass = (visitType) => {
+    if (!visitType) return 'bg-slate-100 text-slate-700'
     if (visitType.startsWith('Fe')) return 'bg-blue-100 text-blue-700'
     if (visitType.startsWith('An')) return 'bg-purple-100 text-purple-700'
     if (visitType.startsWith('Gy')) return 'bg-emerald-100 text-emerald-700'
-    return 'bg-gray-400' // Default color
+    return 'bg-slate-100 text-slate-700'
   }
 
   const handlePrintInvoice = async (e, bill) => {
@@ -975,9 +979,9 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
         layoutId={appointmentCompositeId}
         draggable="true"
         onDragStart={(e) => handleDragStart(e, patientDetails)}
-        className={`cursor-grab rounded-lg bg-white p-2 shadow-md hover:shadow-lg transition-all duration-200 relative ${
+        className={`appt-card ${
           stage === 'Doctor' && patientDetails?.isPrescribed === 1
-            ? 'border-t-4 border-t-green-500'
+            ? 'is-prescribed'
             : ''
         }`}
       >
@@ -985,15 +989,11 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
         {(stage === 'Doctor' || stage === 'Seen' || stage === 'Done') &&
           patientDetails?.noShow !== 1 &&
           patientDetails?.isPrescribed === 1 && (
-            <div className="absolute -top-3 right-2 bg-green-500 text-white text-xs px-2 py-0.5 rounded-full shadow-md">
-              Prescribed
-            </div>
+            <div className="appt-card-badge is-ok">Prescribed</div>
           )}
 
         {stage === 'Done' && patientDetails?.noShow === 1 && (
-          <div className="absolute -top-3 right-2 bg-red-500 text-white text-xs px-2 py-0.5 rounded-full shadow-md">
-            No Show
-          </div>
+          <div className="appt-card-badge is-alert">No Show</div>
         )}
 
         {/* Delayed Warning Alert */}
@@ -1009,7 +1009,7 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
             <Tooltip title="View Status">
               <IconButton
                 size="small"
-                className="bg-secondary/10 hover:bg-secondary/20"
+                className="appt-icon-btn"
                 onClick={handleStatusClick}
                 aria-describedby={`status-popper-${appointmentCompositeId}`}
               >
@@ -1127,7 +1127,7 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
         </Popper>
 
         {/* Patient Info Section */}
-        <div className="flex items-start space-x-3 relative">
+        <div className="appt-card-top">
           {/* <div
             className={`absolute -right-1 -top-1 z-20 rounded-md px-2 text-white ${getBgClass(
               patientDetails?.visitType || '',
@@ -1135,21 +1135,19 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
           >
             {patientDetails?.visitType.slice(0, 2)}
           </div> */}
-          <div className="relative w-12 h-12">
+          <div className="relative w-[42px] h-[42px] shrink-0">
             {patientDetails?.photoPath != null &&
             patientDetails?.photoPath != 'null' ? (
               <img
                 src={patientDetails.photoPath}
                 alt="profilePic"
-                width={50}
-                height={50}
-                className="rounded-full ring-2 ring-secondary/20 w-full h-full object-cover"
+                width={42}
+                height={42}
+                className="appt-avatar"
               />
             ) : (
-              <div className="w-[50px] h-[50px] rounded-full bg-secondary/10 flex items-center justify-center">
-                <span className="text-2xl font-semibold text-secondary">
-                  {patientDetails?.patientName?.charAt(0)?.toUpperCase()}
-                </span>
+              <div className="appt-avatar-fallback">
+                {patientDetails?.patientName?.charAt(0)?.toUpperCase()}
               </div>
             )}
 
@@ -1163,72 +1161,61 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
             )}
           </div>
 
-          <div className="flex-1">
-            <Tooltip title={patientDetails?.patientName}>
-              <h3 className="font-semibold text-lg  truncate max-w-[200px]">
-                <Button
-                  variant="text"
-                  className="text-secondary capitalize"
-                  onClick={() => {
-                    router.push(
-                      `/patient/register?search=${patientDetails?.patientAadhaar}`,
-                    )
-                  }}
-                >
-                  {patientDetails?.patientName?.toLowerCase()}
-                </Button>
-              </h3>
+          <div className="appt-card-identity">
+            <Tooltip title={patientDetails?.patientName || ''}>
+              <button
+                type="button"
+                className="appt-card-name"
+                onClick={() => {
+                  router.push(
+                    `/patient/register?search=${patientDetails?.patientAadhaar}`,
+                  )
+                }}
+              >
+                {patientDetails?.patientName}
+              </button>
             </Tooltip>
-            <div className="flex flex-col items-start gap-2 text-xs text-gray-500 pl-1.5">
-              <Tooltip title={patientDetails?.appointmentReason}>
-                <span className="text-xs text-gray-500 truncate max-w-[180px]">
-                  {patientDetails?.appointmentReason}
-                </span>
-              </Tooltip>
-              {/* <span>•</span> */}
-            </div>
+            <Tooltip title={patientDetails?.appointmentReason || ''}>
+              <span className="appt-card-reason">
+                {patientDetails?.appointmentReason}
+              </span>
+            </Tooltip>
           </div>
-          {stage === 'Booked' && !isReceptionistUser && (
-            <Tooltip title="Edit Appointment">
-              <IconButton
-                size="small"
-                className="bg-secondary/10 hover:bg-secondary/20"
-                onClick={handleEditAppointments}
-                aria-describedby={`status-popper-${appointmentCompositeId}`}
-              >
-                <Edit className="text-secondary w-4 h-4" color="primary" />
-              </IconButton>
-            </Tooltip>
-          )}
-          {patientDetails?.isDelayed != 'Yes' && (
-            <Tooltip title="View Status">
-              <IconButton
-                size="small"
-                className="bg-secondary/10 hover:bg-secondary/20"
-                onClick={handleStatusClick}
-                aria-describedby={`status-popper-${appointmentCompositeId}`}
-              >
-                <InfoOutlined className="text-secondary w-4 h-4" />
-              </IconButton>
-            </Tooltip>
-          )}
+          <div className="appt-card-tools">
+            {stage === 'Booked' && !isReceptionistUser && (
+              <Tooltip title="Edit Appointment">
+                <IconButton
+                  size="small"
+                  className="appt-icon-btn"
+                  onClick={handleEditAppointments}
+                  aria-describedby={`status-popper-${appointmentCompositeId}`}
+                >
+                  <Edit className="text-secondary w-4 h-4" color="primary" />
+                </IconButton>
+              </Tooltip>
+            )}
+            {patientDetails?.isDelayed != 'Yes' && (
+              <Tooltip title="View Status">
+                <IconButton
+                  size="small"
+                  className="appt-icon-btn"
+                  onClick={handleStatusClick}
+                  aria-describedby={`status-popper-${appointmentCompositeId}`}
+                >
+                  <InfoOutlined className="text-secondary w-4 h-4" />
+                </IconButton>
+              </Tooltip>
+            )}
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 my-2">
-          <div className="h-[1px] flex-1 bg-gray-200"></div>
-          <div className="flex items-center gap-2">
-            <span
-              className={`${getBgClass(
-                patientDetails?.visitType,
-              )} px-2 py-1 rounded-md text-xs font-medium`}
-            >
-              {patientDetails?.visitType}
-            </span>
-            <span className="text-xs bg-secondary/10 text-secondary px-2 py-1 rounded-md font-medium">
-              {patientDetails?.type}
-            </span>
-          </div>
-          <div className="h-[1px] flex-1 bg-gray-200"></div>
+        <div className="appt-card-tags">
+          <span className={`appt-tag ${getBgClass(patientDetails?.visitType)}`}>
+            {patientDetails?.visitType}
+          </span>
+          <span className="appt-tag bg-sky-50 text-sky-700">
+            {patientDetails?.type}
+          </span>
         </div>
 
         {packageStatusSummary && (
@@ -1343,36 +1330,35 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
         )}
 
         {/* Doctor & Time Info */}
-        <div className="flex items-center gap-2 justify-between">
-          <div className="flex items-center gap-1">
+        <div className="appt-meta">
+          <div className="appt-meta-item">
             <div className="p-1 bg-secondary/10 rounded-full">
-              <FaUserDoctor size={16} className="text-secondary" />
+              <FaUserDoctor size={14} className="text-secondary" />
             </div>
             <Tooltip title={patientDetails?.doctorName}>
-              <span className="text-sm font-medium truncate max-w-[120px]">
+              <span className="truncate max-w-[120px]">
                 {patientDetails?.doctorName}
               </span>
             </Tooltip>
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="appt-meta-item">
             <div className="p-1 bg-secondary/10 rounded-full">
-              <FaClock size={16} className="text-secondary" />
+              <FaClock size={14} className="text-secondary" />
             </div>
-            <span className="text-sm">{patientDetails?.timeStart}</span>
+            <span>{patientDetails?.timeStart}</span>
           </div>
         </div>
 
         {/* Action Buttons Section */}
-        <Divider className="my-2" />
-        <div className="mt-2 space-y-2">
+        <div className="mt-1 space-y-2">
           {/* Consultation Fee Section */}
           {stage == 'Booked' ? (
             // patientDetails?.type?.toLowerCase() == 'consultation' &&
             patientDetails?.lastConsultationDetails == null ||
             patientDetails?.lastConsultationDetails?.paymentSince >=
               patientDetails?.lastConsultationDetails?.validityPeriod ? (
-              <div className="flex items-center gap-2">
+              <div className="appt-card-actions">
                 {patientDetails?.type?.toLowerCase() == 'consultation' && (
                   <div>
                     <PermissionedPayButton
@@ -1418,7 +1404,7 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
                 )}
               </div>
             ) : (
-              <div className="flex items-center gap-2 text-xs text-gray-600 bg-gray-50 p-2 rounded">
+              <div className="appt-paid-row">
                 <CheckCircleSharp className="text-green-500" />
                 <span className="flex-1">
                   Paid on{' '}
@@ -1459,7 +1445,7 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
 
           {/* Vitals Section */}
           {stage == 'Scan' && (
-            <div className="flex items-center gap-2">
+            <div className="appt-card-actions">
               <PermissionedVitalsButton
                 hasVitals={vitalsData?.id}
                 onClick={handleOpenVitalsModal}

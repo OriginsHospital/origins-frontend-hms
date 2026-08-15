@@ -101,23 +101,28 @@ function OpdSummaryDisplay({ patientId, className = '', editable = true }) {
   const hasSummary = !!summaryContent
 
   return (
-    <Box className={`mb-3 ${className}`}>
+    <Box
+      className={`mb-3 overflow-hidden rounded-xl border border-[#b7e8e4] ${className}`}
+    >
       <div
         style={{
-          backgroundColor: '#000',
+          background: 'linear-gradient(135deg, #0abab5 0%, #0e8f8a 100%)',
           color: '#fff',
-          padding: '8px 12px',
+          padding: '10px 16px',
           position: 'relative',
-          minHeight: 40,
+          minHeight: 48,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
+          borderTopLeftRadius: 12,
+          borderTopRightRadius: 12,
         }}
       >
         <span
           style={{
             fontWeight: 700,
-            letterSpacing: '0.05em',
+            letterSpacing: '0.08em',
+            fontSize: 13,
           }}
         >
           SUMMARY
@@ -125,19 +130,26 @@ function OpdSummaryDisplay({ patientId, className = '', editable = true }) {
         {editable && !isEditing && (
           <Button
             size="small"
-            variant="outlined"
+            variant="contained"
+            color="inherit"
             startIcon={<Edit fontSize="small" />}
             onClick={handleStartEdit}
             sx={{
               position: 'absolute',
               right: 12,
-              color: '#fff',
-              borderColor: 'rgba(255,255,255,0.7)',
-              minWidth: 'auto',
+              zIndex: 2,
+              minHeight: 36,
+              px: 2,
+              fontWeight: 800,
               textTransform: 'none',
+              background: '#ffffff',
+              color: '#0a7370',
+              boxShadow: '0 2px 8px rgba(10, 115, 112, 0.28)',
+              '& .MuiButton-startIcon': { color: '#0a7370' },
               '&:hover': {
-                borderColor: '#fff',
-                backgroundColor: 'rgba(255,255,255,0.08)',
+                background: '#f0fbfa',
+                color: '#0a7370',
+                boxShadow: '0 3px 10px rgba(10, 115, 112, 0.35)',
               },
             }}
           >
@@ -147,20 +159,26 @@ function OpdSummaryDisplay({ patientId, className = '', editable = true }) {
         {editable && isEditing && (
           <Box
             className="flex items-center gap-2"
-            sx={{ position: 'absolute', right: 12 }}
+            sx={{ position: 'absolute', right: 12, zIndex: 2 }}
           >
             <Button
               size="small"
               variant="outlined"
+              color="inherit"
               onClick={handleCancelEdit}
               disabled={saveMutation.isPending}
               sx={{
+                minHeight: 36,
+                px: 2,
+                fontWeight: 800,
                 color: '#fff',
-                borderColor: 'rgba(255,255,255,0.7)',
+                borderColor: '#fff',
+                borderWidth: 2,
                 textTransform: 'none',
                 '&:hover': {
+                  borderWidth: 2,
                   borderColor: '#fff',
-                  backgroundColor: 'rgba(255,255,255,0.08)',
+                  backgroundColor: 'rgba(255,255,255,0.12)',
                 },
               }}
             >
@@ -169,7 +187,7 @@ function OpdSummaryDisplay({ patientId, className = '', editable = true }) {
             <Button
               size="small"
               variant="contained"
-              color="primary"
+              color="inherit"
               startIcon={
                 saveMutation.isPending ? (
                   <CircularProgress size={14} color="inherit" />
@@ -179,7 +197,20 @@ function OpdSummaryDisplay({ patientId, className = '', editable = true }) {
               }
               onClick={handleSave}
               disabled={saveMutation.isPending}
-              sx={{ textTransform: 'none' }}
+              sx={{
+                minHeight: 36,
+                px: 2,
+                fontWeight: 800,
+                textTransform: 'none',
+                background: '#ffffff',
+                color: '#0a7370',
+                boxShadow: '0 2px 8px rgba(10, 115, 112, 0.28)',
+                '& .MuiButton-startIcon': { color: '#0a7370' },
+                '&:hover': {
+                  background: '#f0fbfa',
+                  color: '#0a7370',
+                },
+              }}
             >
               Save
             </Button>
@@ -205,12 +236,13 @@ function OpdSummaryDisplay({ patientId, className = '', editable = true }) {
       ) : (
         <Box
           sx={{
-            border: '1px solid #000',
-            p: 1.5,
-            minHeight: 60,
+            border: 'none',
+            borderTop: '1px solid #b7e8e4',
+            p: 2,
+            minHeight: 72,
             bgcolor: '#fff',
             '& table': { width: '100%', borderCollapse: 'collapse' },
-            '& td, & th': { border: '1px solid #ccc', p: 1 },
+            '& td, & th': { border: '1px solid #b7e8e4', p: 1 },
           }}
         >
           {hasSummary ? (

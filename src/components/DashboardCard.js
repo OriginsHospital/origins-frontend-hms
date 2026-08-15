@@ -1,23 +1,33 @@
 import Link from 'next/link'
 import React from 'react'
+import { motion } from 'framer-motion'
 
-const DashboardCard = ({ title, subtitle, Icon, href }) => {
+const DashboardCard = ({ title, subtitle, Icon, href, index = 0 }) => {
   return (
-    <Link
-      href={href}
-      className="w-full p-4 rounded  relative overflow-hidden group bg-white shadow border"
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.28, delay: Math.min(index * 0.04, 0.32) }}
     >
-      <div className="absolute inset-0 bg-gradient-to-r from-secondary to-primary translate-y-[100%] group-hover:translate-y-[0%] transition-transform duration-300" />
-
-      <Icon className="absolute z-10 -top-12 -right-12 text-9xl text-slate-100 group-hover:text-secondary group-hover:rotate-12 transition-transform duration-300" />
-      <Icon className="mb-2 text-2xl text-secondary group-hover:text-white transition-colors relative z-10 duration-300" />
-      <h3 className="font-medium text-lg text-secondary group-hover:text-white relative z-10 duration-300">
-        {title}
-      </h3>
-      <p className="text-slate-400 group-hover:text-violet-200 relative z-10 duration-300">
-        {subtitle}
-      </p>
-    </Link>
+      <Link
+        href={href}
+        className="group flex items-start gap-3 w-full min-h-[84px] p-3.5 rounded-xl relative overflow-hidden bg-white shadow-card border border-[#cfe4ee] hover:-translate-y-0.5 hover:shadow-panel hover:border-secondary/40 transition-all duration-200"
+      >
+        <span className="relative z-10 flex items-center justify-center w-11 h-11 rounded-xl bg-[#e7f7fc] text-secondary shrink-0 group-hover:bg-secondary group-hover:text-white group-hover:scale-110 transition-all duration-200">
+          <Icon className="text-[22px]" />
+        </span>
+        <div className="relative z-10 min-w-0">
+          <h3 className="font-bold text-[16px] leading-tight text-ink">
+            {title}
+          </h3>
+          {subtitle ? (
+            <p className="text-[13px] leading-snug text-muted mt-0.5">
+              {subtitle}
+            </p>
+          ) : null}
+        </div>
+      </Link>
+    </motion.div>
   )
 }
 

@@ -28,29 +28,10 @@ import {
   getRevenueBranchFullName,
 } from '@/utils/branchMapping'
 import { roundCurrency } from '@/utils/currencyFormat'
-
-const SERVICE_COLORS = {
-  'IVF PACKAGE': '#27ae60',
-  PHARMACY: '#008080',
-  'LAB TEST': '#f39c12',
-  CONSULTATION: '#2980b9',
-  SONOGRAPHY: '#9b59b6',
-  PROCEDURE: '#16a085',
-  MEDICATION: '#1abc9c',
-  'OPD PACKAGE': '#d35400',
-}
-
-const FALLBACK_COLORS = [
-  '#1abc9c',
-  '#3498db',
-  '#9b59b6',
-  '#f1c40f',
-  '#e67e22',
-  '#e74c3c',
-  '#2ecc71',
-  '#34495e',
-  '#7f8c8d',
-]
+import {
+  buildCategoryDataset,
+  getCategoryColor,
+} from '@/utils/revenueCategories'
 
 const sortRowsByPatientName = (rows = []) =>
   [...rows].sort((a, b) =>
@@ -75,107 +56,6 @@ const getReportBranchId = (row) => {
     row.branchId ??
     null
   )
-}
-
-// Map service names (productType) to advance payment categories
-const getCategoryFromServiceName = (serviceName) => {
-  if (!serviceName) return 'Others'
-
-  const upperServiceName = String(serviceName).toUpperCase().trim()
-
-  // IVF Package - Registration Fee, D1, Trigger, Middle, FET, UPT, Donor Booking
-  if (
-    upperServiceName.includes('REGISTRATION') ||
-    upperServiceName.includes('DAY1') ||
-    upperServiceName === 'D1' ||
-    upperServiceName.includes('TRIGGER') ||
-    upperServiceName.includes('PICKUP') ||
-    upperServiceName.includes('PICK UP') ||
-    upperServiceName.includes('PICK-UP') ||
-    upperServiceName.includes('FET') ||
-    (upperServiceName.includes('UPT') &&
-      !upperServiceName.includes('UPTPOSITIVE')) ||
-    upperServiceName.includes('DONOR_BOOKING') ||
-    upperServiceName.includes('DONOR BOOKING') ||
-    upperServiceName === 'DONOR_BOOKING_AMOUNT' ||
-    upperServiceName === 'DAY1_AMOUNT' ||
-    upperServiceName === 'REGISTRATION_FEE' ||
-    upperServiceName === 'FET_AMOUNT' ||
-    upperServiceName === 'PICKUP_AMOUNT' ||
-    upperServiceName.includes('MIDDLE')
-  ) {
-    return 'IVF Package'
-  }
-
-  // Embryo Freezing - All freezing-related services
-  if (
-    upperServiceName.includes('FREEZING') ||
-    upperServiceName.includes('EMBRYO FREEZING') ||
-    upperServiceName.includes('DAY5FREEZING') ||
-    upperServiceName.includes('DAY5 FREEZING') ||
-    upperServiceName === 'DAY5FREEZING_AMOUNT' ||
-    (upperServiceName.includes('EMBRYO') &&
-      upperServiceName.includes('FREEZING'))
-  ) {
-    return 'Embryo Freezing'
-  }
-
-  // PGTA - Preimplantation Genetic Testing
-  if (
-    upperServiceName.includes('PGTA') ||
-    upperServiceName.includes('PGT') ||
-    upperServiceName.includes('EMBRYOS FOR PGTA') ||
-    (upperServiceName.includes('EMBRYO') &&
-      upperServiceName.includes('PGTA')) ||
-    upperServiceName.includes('PGT-A')
-  ) {
-    return 'PGTA'
-  }
-
-  // ERA - Endometrial Receptivity Analysis
-  if (upperServiceName.includes('ERA') || upperServiceName === 'ERA_AMOUNT') {
-    return 'ERA'
-  }
-
-  // Procedures - LSCS, Hysteroscopy, Consultation, Scan, Observation, etc.
-  if (
-    upperServiceName.includes('LSCS') ||
-    upperServiceName.includes('HYSTEROSCOPY') ||
-    upperServiceName.includes('HYTEROSCOPY') ||
-    upperServiceName.includes('LAPAROSCOPY') ||
-    upperServiceName.includes('POLYPECTOMY') ||
-    upperServiceName.includes('CERCLAGE') ||
-    upperServiceName.includes('CONSULTATION') ||
-    upperServiceName.includes('OBSERVATION') ||
-    upperServiceName.includes('OP FEE') ||
-    upperServiceName === 'SCAN' ||
-    upperServiceName.includes('SONOGRAPHY') ||
-    upperServiceName.includes('OVULATION SCAN') ||
-    upperServiceName.includes('DISCHARGE')
-  ) {
-    return 'Procedures'
-  }
-
-  // Donor Sperm
-  if (
-    upperServiceName.includes('DONOR SPERM') ||
-    upperServiceName.includes('DONOR_SPERM')
-  ) {
-    return 'Donor Sperm'
-  }
-
-  // Microfluidics
-  if (
-    upperServiceName.includes('MICROFLUIDICS') ||
-    upperServiceName.includes('MICRO FLUIDS') ||
-    upperServiceName.includes('MICROFLUIDS') ||
-    upperServiceName === 'MICRO FLUIDS'
-  ) {
-    return 'Microfluidics'
-  }
-
-  // Default to Others (Pharmacy, Lab Test, Medication, etc.)
-  return 'Others'
 }
 
 const SalesDashboard = ({
@@ -787,84 +667,45 @@ const SalesDashboard = ({
   }
 
   const pieChartDataset = useMemo(() => {
-    if (!visibleSalesRows || visibleSalesRows.length === 0) {
-      return { labels: [], amounts: [], colors: [] }
+    const named = buildCategoryDataset(visibleSalesRows)
+    return {
+      labels: named.labels,
+      amounts: named.amounts,
+      colors: named.labels.map((label) => getCategoryColor(label)),
     }
-
-    // Group by advance payment category instead of individual service names
-    const totalsByCategory = visibleSalesRows.reduce((acc, row) => {
-      const serviceName = String(row.productType || 'Unknown')
-      const category = getCategoryFromServiceName(serviceName)
-
-      if (!acc[category]) {
-        acc[category] = 0
-      }
-      acc[category] += Number(row.amount) || 0
-      return acc
-    }, {})
-
-    // Define category order and colors
-    const categoryOrder = [
-      'IVF Package',
-      'Embryo Freezing',
-      'PGTA',
-      'ERA',
-      'Procedures',
-      'Donor Sperm',
-      'Microfluidics',
-      'Others',
-    ]
-
-    const categoryColors = {
-      'IVF Package': '#27ae60',
-      'Embryo Freezing': '#3498db',
-      PGTA: '#9b59b6',
-      ERA: '#f1c40f',
-      Procedures: '#e67e22',
-      'Donor Sperm': '#e74c3c',
-      Microfluidics: '#2ecc71',
-      Others: '#34495e',
-    }
-
-    // Sort labels by predefined order, then by amount (descending)
-    const labels = Object.keys(totalsByCategory).sort((a, b) => {
-      const indexA = categoryOrder.indexOf(a)
-      const indexB = categoryOrder.indexOf(b)
-
-      // If both are in the order list, sort by index
-      if (indexA !== -1 && indexB !== -1) {
-        return indexA - indexB
-      }
-      // If only one is in the order list, prioritize it
-      if (indexA !== -1) return -1
-      if (indexB !== -1) return 1
-      // If neither is in the order list, sort by amount (descending)
-      return totalsByCategory[b] - totalsByCategory[a]
-    })
-
-    const amounts = labels.map((label) =>
-      roundCurrency(totalsByCategory[label]),
-    )
-
-    const assignedColors = labels.map((label) => {
-      if (categoryColors[label]) {
-        return categoryColors[label]
-      }
-      // Fallback color for unknown categories
-      return '#7f8c8d'
-    })
-
-    return { labels, amounts, colors: assignedColors }
   }, [visibleSalesRows])
 
   const hasChartData =
     pieChartDataset.labels.length > 0 &&
     pieChartDataset.amounts.some((amount) => amount > 0)
 
+  const gridSx = {
+    border: '1px solid #cfe4ee',
+    borderRadius: '16px',
+    backgroundColor: '#ffffff',
+    overflow: 'hidden',
+    '& .MuiDataGrid-columnHeaders, & .MuiDataGrid-columnHeader': {
+      backgroundColor: '#e7f7fc',
+    },
+    '& .MuiDataGrid-columnHeaderTitle': {
+      color: '#123047',
+      fontWeight: 800,
+    },
+    '& .MuiDataGrid-row:nth-of-type(even)': {
+      backgroundColor: '#f8fcfe',
+    },
+    '& .MuiDataGrid-cell': {
+      color: '#123047',
+      fontWeight: 600,
+    },
+    '& .MuiDataGrid-footerContainer': {
+      borderTop: '1px solid #cfe4ee',
+    },
+  }
+
   return (
     <>
-      <div className="grid grid-cols-12 gap-5">
-        {/* Table Section with null check */}
+      <div className="grid grid-cols-12 items-stretch gap-4">
         {activeView === 'sales' ? (
           <div className="col-span-12 lg:col-span-8">
             <SalesTable
@@ -881,6 +722,7 @@ const SalesDashboard = ({
               filters={reportFilters}
               onRowsChange={scheduleVisibleRowsUpdate}
               getRowId={getRevenueRowId}
+              sx={gridSx}
             />
           </div>
         ) : (
@@ -898,23 +740,19 @@ const SalesDashboard = ({
               branchName={branchName}
               filters={reportFilters}
               getRowId={getRevenueRowId}
+              sx={gridSx}
             />
           </div>
         )}
-        {/* Chart Section with null check */}
-        <div className="col-span-12 lg:col-span-4">
-          {activeView === 'sales' ? (
+        {activeView === 'sales' ? (
+          <div className="col-span-12 h-full min-h-[420px] lg:col-span-4">
             <SalesChart
               dataset={pieChartDataset}
               isLoading={isChartLoading}
               hasData={hasChartData}
             />
-          ) : (
-            <div className="text-center p-4 text-gray-500">
-              No chart available for the selected view
-            </div>
-          )}
-        </div>
+          </div>
+        ) : null}
       </div>
 
       {showRevenueActionsColumn && (
@@ -1119,34 +957,29 @@ const SalesTable = ({
   filters,
   onRowsChange,
   getRowId,
+  sx,
 }) => (
-  <div className="p-5">
-    {/* <Typography variant="h6" className="mb-4">
-      {title}
-    </Typography> */}
-    <FilteredDataGrid
-      key={`SalesTable-${branchId}-${data?.length}`}
-      rows={data || []}
-      getRowId={
-        getRowId || ((row) => `${row.orderId}-${row.productType || ''}`)
-      }
-      columns={columns}
-      className="h-[60vh]"
-      customFilters={customFilters}
-      filterData={filterData}
-      getUniqueValues={getUniqueValues}
-      reportName={reportName}
-      reportType={reportType}
-      branchName={branchName}
-      filters={filters}
-      onRowsChange={onRowsChange}
-      initialState={{
-        sorting: {
-          sortModel: [{ field: 'patientName', sort: 'asc' }],
-        },
-      }}
-    />
-  </div>
+  <FilteredDataGrid
+    key={`SalesTable-${branchId}-${data?.length}`}
+    rows={data || []}
+    getRowId={getRowId || ((row) => `${row.orderId}-${row.productType || ''}`)}
+    columns={columns}
+    className="h-[68vh]"
+    customFilters={customFilters}
+    filterData={filterData}
+    getUniqueValues={getUniqueValues}
+    reportName={reportName}
+    reportType={reportType}
+    branchName={branchName}
+    filters={filters}
+    onRowsChange={onRowsChange}
+    sx={sx}
+    initialState={{
+      sorting: {
+        sortModel: [{ field: 'patientName', sort: 'asc' }],
+      },
+    }}
+  />
 )
 
 export default SalesDashboard

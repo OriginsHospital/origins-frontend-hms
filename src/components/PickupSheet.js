@@ -85,10 +85,10 @@ function PickupSheet({ TreatmentCycleId }) {
 
   return (
     <div className="p-4">
-      <Typography variant="h6" gutterBottom>
+      <Typography variant="h6" className="mb-3 font-bold text-slate-800">
         OPU Sheet
       </Typography>
-      <div className="flex flex-wrap justify-end gap-2">
+      <div className="mb-3 flex flex-wrap justify-end gap-2">
         <Button
           color="secondary"
           variant="outlined"

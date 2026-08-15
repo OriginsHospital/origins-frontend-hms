@@ -18,6 +18,7 @@ import { SideNav } from '@/components/SideNav'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import PreLoginContainer from '@/components/PreLoginContainer'
 import { ThemeProvider } from '@mui/material/styles'
+import CssBaseline from '@mui/material/CssBaseline'
 import { useEffect } from 'react'
 import { requestInterceptor } from '../utils/requestInterceptor'
 
@@ -39,12 +40,13 @@ export default function App({ Component, pageProps }) {
       <QueryClientProvider client={queryClient}>
         <LocalizationProvider dateAdapter={AdapterDayjs}>
           <ThemeProvider theme={theme}>
+            <CssBaseline />
             <Loader>
               <Script
                 id="razorpay-checkout-js"
                 src="https://checkout.razorpay.com/v1/checkout.js"
               />
-              <ToastContainer />
+              <ToastContainer newestOnTop />
               {/* <SideDrawer /> */}
               {router.pathname.startsWith('/login') ||
               router.pathname === '/register' ||
