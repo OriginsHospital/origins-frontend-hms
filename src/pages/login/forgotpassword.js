@@ -1,16 +1,13 @@
-import { useState } from 'react'
-import { useSelector, useDispatch } from 'react-redux'
 import Link from 'next/link'
 import { ToastContainer, toast } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import { Bounce } from 'react-toastify'
 import { API_ROUTES } from '../../constants/constants'
-import { Formik, Form, Field, ErrorMessage } from 'formik'
+import { Formik, Form, ErrorMessage } from 'formik'
 import * as Yup from 'yup'
+import AuthShell, { AuthEmailField } from '@/components/AuthShell'
 
 function ForgotPassword() {
-  const dispatch = useDispatch()
-
   const initialValues = {
     email: '',
   }
@@ -70,63 +67,47 @@ function ForgotPassword() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-6 py-12">
-      <div className="auth-card">
-        <h2 className="text-center text-2xl font-bold tracking-tight text-ink mb-6">
-          Forgot your password?
-        </h2>
-        <Formik
-          initialValues={initialValues}
-          validationSchema={validationSchema}
-          onSubmit={handleForgotPassword}
-        >
-          {({ isSubmitting }) => (
-            <Form className="space-y-6">
-              <div>
-                <label
-                  htmlFor="email"
-                  className="block text-sm font-medium text-ink"
-                >
-                  Email address
-                </label>
-                <div className="mt-2">
-                  <Field
-                    id="email"
-                    name="email"
-                    type="email"
-                    className="auth-field"
-                  />
-                  <ErrorMessage
-                    name="email"
-                    component="div"
-                    className="text-red-500 p-2 text-sm"
-                  />
-                </div>
-              </div>
-              <div>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="auth-submit"
-                >
-                  {isSubmitting ? 'Please wait...' : 'Get your password'}
-                </button>
-              </div>
-            </Form>
-          )}
-        </Formik>
-
-        <p className="mt-8 text-center text-sm text-muted">
-          {'Not registered? '}
-          <Link
-            href="/register"
-            className="font-semibold text-secondary hover:text-[#0284b8]"
-          >
-            Click here to register
+    <AuthShell
+      title="Forgot password"
+      subtitle="Enter your email and we will send reset instructions"
+      footer={
+        <p className="text-center text-sm text-muted">
+          Remembered it?{' '}
+          <Link href="/login" className="auth-link">
+            Back to sign in
           </Link>
         </p>
-      </div>
-    </div>
+      }
+    >
+      <Formik
+        initialValues={initialValues}
+        validationSchema={validationSchema}
+        onSubmit={handleForgotPassword}
+      >
+        {({ isSubmitting }) => (
+          <Form className="space-y-5">
+            <div>
+              <label htmlFor="email" className="auth-label">
+                Email address
+              </label>
+              <AuthEmailField />
+              <ErrorMessage
+                name="email"
+                component="div"
+                className="auth-error"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="auth-submit"
+            >
+              {isSubmitting ? 'Please wait...' : 'Send reset link'}
+            </button>
+          </Form>
+        )}
+      </Formik>
+    </AuthShell>
   )
 }
 

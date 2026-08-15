@@ -6,14 +6,14 @@ import { API_ROUTES } from '../../constants/constants'
 import { ToastContainer, toast, Bounce } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import { useRouter } from 'next/router'
-import Image from 'next/image'
-import doctor from '../../../public/login.png'
-import { Formik, Form, Field, ErrorMessage } from 'formik'
+import { Formik, Form, ErrorMessage } from 'formik'
 import * as Yup from 'yup'
-import hospitalImage from '../../../public/hospital_image.jpg'
-import originslogo from '../../../public/originslogo.png'
 import { useQueryClient } from '@tanstack/react-query'
 import { getNewAccessToken } from '@/constants/apis'
+import AuthShell, {
+  AuthEmailField,
+  AuthPasswordField,
+} from '@/components/AuthShell'
 const toastconfig = {
   position: 'top-right',
   autoClose: 5000,
@@ -145,129 +145,100 @@ function Login() {
   }
 
   return (
-    <div className="auth-split">
-      <div className="w-full flex flex-col justify-center px-6 sm:px-10 lg:px-16 py-12">
-        <div className="auth-card mx-auto">
-          <div className="text-center mb-7">
-            <h2 className="text-3xl font-bold text-ink mb-2">Welcome back</h2>
-            <p className="text-muted">Sign in to Ortus</p>
+    <AuthShell
+      title="Welcome back"
+      subtitle="Sign in to Ortus to continue your clinic workflow"
+      footer={
+        <>
+          <div className="flex justify-center">
+            <Link href="/login/changePassword" className="auth-link">
+              Change password
+            </Link>
           </div>
-
-          <Formik
-            initialValues={initialValues}
-            validationSchema={validationSchema}
-            onSubmit={handleLogin}
-          >
-            {({ isSubmitting }) => (
-              <Form className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-ink">Email</label>
-                  <Field
-                    id="email"
-                    name="email"
-                    type="email"
-                    className="auth-field"
-                    placeholder="your@email.com"
-                  />
-                  <ErrorMessage
-                    name="email"
-                    component="div"
-                    className="text-rose-500 text-xs mt-1"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium text-ink">
-                    Password
-                  </label>
-                  <Field
-                    id="password"
-                    name="password"
-                    type="password"
-                    className="auth-field"
-                    placeholder="Enter your password"
-                  />
-                  <ErrorMessage
-                    name="password"
-                    component="div"
-                    className="text-rose-500 text-xs mt-1"
-                  />
-                  <div className="flex justify-end mt-2">
-                    <Link
-                      href="/login/forgotpassword"
-                      className="text-sm font-medium text-secondary hover:text-[#0284b8] transition duration-150"
-                    >
-                      Forgot password?
-                    </Link>
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="auth-submit mt-4"
-                >
-                  {isSubmitting ? (
-                    <span className="flex items-center justify-center">
-                      <svg
-                        className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                      >
-                        <circle
-                          className="opacity-25"
-                          cx="12"
-                          cy="12"
-                          r="10"
-                          stroke="currentColor"
-                          strokeWidth="4"
-                        ></circle>
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                        ></path>
-                      </svg>
-                      Logging in...
-                    </span>
-                  ) : (
-                    'Login'
-                  )}
-                </button>
-              </Form>
-            )}
-          </Formik>
-
-          <div className="mt-7 space-y-2">
-            <div className="flex justify-center mt-1">
-              <Link
-                href="/login/changePassword"
-                className="text-sm font-medium text-secondary hover:text-[#0284b8] transition duration-150"
-              >
-                Change password?
-              </Link>
+          <p className="text-center text-sm text-muted mt-3">
+            {`Don't have an account? `}
+            <Link href="/register" className="auth-link">
+              Register here
+            </Link>
+          </p>
+        </>
+      }
+    >
+      <Formik
+        initialValues={initialValues}
+        validationSchema={validationSchema}
+        onSubmit={handleLogin}
+      >
+        {({ isSubmitting }) => (
+          <Form className="space-y-4">
+            <div>
+              <label htmlFor="email" className="auth-label">
+                Email
+              </label>
+              <AuthEmailField />
+              <ErrorMessage
+                name="email"
+                component="div"
+                className="auth-error"
+              />
             </div>
-            <p className="text-center text-sm text-muted mt-2">
-              {`Don't have an account? `}
-              <Link
-                href="/register"
-                className="font-medium text-secondary hover:text-[#0284b8] transition duration-150"
-              >
-                Register here
-              </Link>
-            </p>
-          </div>
-        </div>
-      </div>
-      <div className="auth-hero hidden lg:flex bg-cover bg-center justify-center items-center p-12">
-        <Image
-          src={originslogo}
-          alt="Origins logo"
-          className="relative w-[62%] max-w-md h-auto object-contain"
-        />
-      </div>
-    </div>
+
+            <div>
+              <div className="auth-label-row">
+                <label htmlFor="password" className="auth-label mb-0">
+                  Password
+                </label>
+                <Link href="/login/forgotpassword" className="auth-link">
+                  Forgot password?
+                </Link>
+              </div>
+              <div className="mt-1.5">
+                <AuthPasswordField id="password" name="password" />
+              </div>
+              <ErrorMessage
+                name="password"
+                component="div"
+                className="auth-error"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="auth-submit mt-2"
+            >
+              {isSubmitting ? (
+                <span className="flex items-center justify-center">
+                  <svg
+                    className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                  Signing in...
+                </span>
+              ) : (
+                'Sign in'
+              )}
+            </button>
+          </Form>
+        )}
+      </Formik>
+    </AuthShell>
   )
 }
 

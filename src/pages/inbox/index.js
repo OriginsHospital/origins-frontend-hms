@@ -200,7 +200,8 @@ function Inbox() {
   return (
     <Box
       sx={{
-        height: '100vh',
+        height: '100%',
+        minHeight: 0,
         display: 'flex',
         flexDirection: 'column',
         bgcolor: '#f5f7fa',
@@ -236,15 +237,27 @@ function Inbox() {
       </Box>
 
       {/* Main Content Area */}
-      <Box sx={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      <Box
+        sx={{
+          flex: 1,
+          display: 'flex',
+          overflow: 'hidden',
+          flexDirection: { xs: 'column', md: 'row' },
+          minHeight: 0,
+        }}
+      >
         {/* Left Sidebar - Categories */}
         <Box
           sx={{
-            width: 280,
+            width: { xs: '100%', md: 280 },
+            maxWidth: { xs: '100%', md: 280 },
             bgcolor: 'white',
-            borderRight: '1px solid #e0e0e0',
+            borderRight: { xs: 0, md: '1px solid #e0e0e0' },
+            borderBottom: { xs: '1px solid #e0e0e0', md: 0 },
             p: 2,
             overflowY: 'auto',
+            maxHeight: { xs: 220, md: 'none' },
+            flexShrink: 0,
           }}
         >
           <Typography

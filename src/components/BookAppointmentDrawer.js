@@ -99,12 +99,18 @@ export default function BookAppointmentDrawer({ patient, onClose }) {
             <div className="flex items-center gap-2 text-[#0284b8]">
               <EventAvailable fontSize="small" />
               <Typography
-                sx={{ fontWeight: 800, fontSize: 18, color: '#123047' }}
+                sx={{
+                  fontWeight: 800,
+                  fontSize: { xs: 17, sm: 19 },
+                  color: '#123047',
+                }}
               >
                 Book appointment
               </Typography>
             </div>
-            <Typography sx={{ mt: 0.5, color: '#5a7384', fontSize: 13 }}>
+            <Typography
+              sx={{ mt: 0.5, color: '#5a7384', fontSize: { xs: 14, sm: 15 } }}
+            >
               {displayName}
               {formData?.patientId ? ` · ${formData.patientId}` : ''}
             </Typography>

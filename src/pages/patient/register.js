@@ -798,7 +798,7 @@ export default function Register() {
 
   return (
     <div className="pb-14 ">
-      <div className="px-4 py-4 grid grid-cols-[1fr_auto_1fr] items-center gap-4">
+      <div className="px-3 sm:px-4 py-4 flex flex-col lg:grid lg:grid-cols-[1fr_auto_1fr] items-stretch lg:items-center gap-3">
         <div className="flex justify-start">
           <Button
             variant="outlined"
@@ -819,10 +819,10 @@ export default function Register() {
             Back
           </Button>
         </div>
-        <div className="flex items-center justify-center gap-5">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3">
           <TextField
             placeholder="Search by Patient ID / Mobile / Aadhaar"
-            className="w-[300px] bg-white"
+            className="w-full sm:w-[300px] bg-white"
             type="search"
             value={searchValue}
             onChange={handleSearchChange}
@@ -845,9 +845,14 @@ export default function Register() {
       </div>
       <hr />
       <TabContext value={tab}>
-        <div className="flex bg-white ">
+        <div className="flex bg-white overflow-x-auto">
           {/* <Box> */}
-          <TabList onChange={handleChangeTab}>
+          <TabList
+            onChange={handleChangeTab}
+            variant="scrollable"
+            scrollButtons="auto"
+            allowScrollButtonsMobile
+          >
             {/* <span value='patientRecord'>Patient Details</span> */}
             <Tab label="Patient" value="patientRecord" />
             {formData.id && <Tab label="Visit" value="visitRecord" />}

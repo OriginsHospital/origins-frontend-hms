@@ -5,8 +5,6 @@ import 'react-toastify/dist/ReactToastify.css'
 import Link from 'next/link'
 import { API_ROUTES } from '@/constants/constants'
 import { useRouter } from 'next/router'
-import Image from 'next/image'
-import leftImage from '../../../public/login.png'
 import { useQuery } from '@tanstack/react-query'
 import { getRoles } from '@/constants/apis'
 import { Formik, Form, Field, ErrorMessage } from 'formik'
@@ -14,8 +12,7 @@ import * as Yup from 'yup'
 import Select from 'react-select'
 import { useSelector } from 'react-redux'
 import { CgEye, CgEyeAlt } from 'react-icons/cg'
-import originslogo from '../../../public/originslogo.png'
-import Footer from '@/components/Footer'
+import AuthShell from '@/components/AuthShell'
 function Register() {
   const router = useRouter()
 
@@ -257,151 +254,148 @@ function Register() {
   }
 
   return (
-    <div className="auth-split">
-      <div className="auth-hero hidden lg:flex bg-cover bg-center justify-center items-center p-12">
-        <Image
-          src={originslogo}
-          alt="Origins logo"
-          className="relative w-[62%] max-w-md h-auto object-contain"
-        />
-      </div>
+    <AuthShell
+      wide
+      title="Create account"
+      subtitle="Join Ortus to get started"
+      footer={
+        <p className="text-center text-sm text-muted">
+          Already have an account?{' '}
+          <Link href="/login" className="auth-link">
+            Sign in
+          </Link>
+        </p>
+      }
+    >
+      <Formik
+        initialValues={initialValues}
+        validationSchema={validationSchema}
+        onSubmit={onSubmit}
+      >
+        {({ isSubmitting, setFieldValue }) => (
+          <Form className="space-y-3">
+            {/* Form Fields */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Full Name Field */}
+              <div className="col-span-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Full Name
+                </label>
+                <Field
+                  name="fullName"
+                  type="text"
+                  disabled={otpSent}
+                  className="auth-field"
+                  placeholder="Enter your full name"
+                />
+                <ErrorMessage
+                  name="fullName"
+                  component="div"
+                  className="text-rose-500 text-xs mt-1"
+                />
+              </div>
 
-      <div className="w-full flex flex-col justify-center px-6 sm:px-10 lg:px-16 py-10 overflow-y-auto">
-        <div className="auth-card mx-auto w-full max-w-lg">
-          <div className="text-center mb-5">
-            <h2 className="text-3xl font-bold text-ink mb-2">Create account</h2>
-            <p className="text-muted">Join Ortus to get started</p>
-          </div>
+              {/* Email Field */}
+              <div className="col-span-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Email
+                </label>
+                <Field
+                  name="email"
+                  type="email"
+                  disabled={otpSent}
+                  className="auth-field"
+                  placeholder="your@email.com"
+                />
+                <ErrorMessage
+                  name="email"
+                  component="div"
+                  className="text-rose-500 text-xs mt-1"
+                />
+              </div>
 
-          <Formik
-            initialValues={initialValues}
-            validationSchema={validationSchema}
-            onSubmit={onSubmit}
-          >
-            {({ isSubmitting, setFieldValue }) => (
-              <Form className="space-y-3">
-                {/* Form Fields */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {/* Full Name Field */}
-                  <div className="col-span-2">
-                    <label className="text-sm font-medium text-gray-700">
-                      Full Name
-                    </label>
-                    <Field
-                      name="fullName"
-                      type="text"
-                      disabled={otpSent}
-                      className="auth-field"
-                      placeholder="Enter your full name"
-                    />
-                    <ErrorMessage
-                      name="fullName"
-                      component="div"
-                      className="text-rose-500 text-xs mt-1"
-                    />
-                  </div>
+              {/* Username Field */}
+              <div className="col-span-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Aadhaar Number
+                </label>
+                <Field
+                  name="aadhaarNo"
+                  type="text"
+                  disabled={otpSent}
+                  maxLength={12}
+                  className="auth-field"
+                  placeholder="Enter 12-digit Aadhaar number"
+                />
+                <ErrorMessage
+                  name="aadhaarNo"
+                  component="div"
+                  className="text-rose-500 text-xs mt-1"
+                />
+              </div>
 
-                  {/* Email Field */}
-                  <div className="col-span-2">
-                    <label className="text-sm font-medium text-gray-700">
-                      Email
-                    </label>
-                    <Field
-                      name="email"
-                      type="email"
-                      disabled={otpSent}
-                      className="auth-field"
-                      placeholder="your@email.com"
-                    />
-                    <ErrorMessage
-                      name="email"
-                      component="div"
-                      className="text-rose-500 text-xs mt-1"
-                    />
-                  </div>
+              {/* Username Field */}
+              <div className="col-span-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Username
+                </label>
+                <Field
+                  name="userName"
+                  type="text"
+                  disabled={otpSent}
+                  className="auth-field"
+                  placeholder="Choose a username"
+                />
+                <ErrorMessage
+                  name="userName"
+                  component="div"
+                  className="text-rose-500 text-xs mt-1"
+                />
+              </div>
 
-                  {/* Username Field */}
-                  <div className="col-span-2">
-                    <label className="text-sm font-medium text-gray-700">
-                      Aadhaar Number
-                    </label>
-                    <Field
-                      name="aadhaarNo"
-                      type="text"
-                      disabled={otpSent}
-                      maxLength={12}
-                      className="auth-field"
-                      placeholder="Enter 12-digit Aadhaar number"
-                    />
-                    <ErrorMessage
-                      name="aadhaarNo"
-                      component="div"
-                      className="text-rose-500 text-xs mt-1"
-                    />
-                  </div>
+              {/* Password Fields */}
+              <div>
+                <label className="text-sm font-medium text-gray-700">
+                  Password
+                </label>
+                <div className="relative">
+                  <Field
+                    name="password"
+                    type={showPassword ? 'text' : 'password'}
+                    disabled={otpSent}
+                    className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-150 pr-10"
+                  />
+                  <button
+                    type="button"
+                    className="absolute inset-y-0 right-0 mt-1 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? (
+                      <CgEyeAlt className="h-5 w-5" />
+                    ) : (
+                      <CgEye className="h-5 w-5" />
+                    )}
+                  </button>
+                </div>
+                <ErrorMessage
+                  name="password"
+                  component="div"
+                  className="text-rose-500 text-xs mt-1"
+                />
+              </div>
 
-                  {/* Username Field */}
-                  <div className="col-span-2">
-                    <label className="text-sm font-medium text-gray-700">
-                      Username
-                    </label>
-                    <Field
-                      name="userName"
-                      type="text"
-                      disabled={otpSent}
-                      className="auth-field"
-                      placeholder="Choose a username"
-                    />
-                    <ErrorMessage
-                      name="userName"
-                      component="div"
-                      className="text-rose-500 text-xs mt-1"
-                    />
-                  </div>
-
-                  {/* Password Fields */}
-                  <div>
-                    <label className="text-sm font-medium text-gray-700">
-                      Password
-                    </label>
-                    <div className="relative">
-                      <Field
-                        name="password"
-                        type={showPassword ? 'text' : 'password'}
-                        disabled={otpSent}
-                        className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-150 pr-10"
-                      />
-                      <button
-                        type="button"
-                        className="absolute inset-y-0 right-0 mt-1 pr-3 flex items-center text-gray-400 hover:text-gray-600"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        {showPassword ? (
-                          <CgEyeAlt className="h-5 w-5" />
-                        ) : (
-                          <CgEye className="h-5 w-5" />
-                        )}
-                      </button>
-                    </div>
-                    <ErrorMessage
-                      name="password"
-                      component="div"
-                      className="text-rose-500 text-xs mt-1"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium text-gray-700">
-                      Confirm Password
-                    </label>
-                    <div className="relative">
-                      <Field
-                        name="confirmPassword"
-                        type={showConfirmPassword ? 'text' : 'password'}
-                        disabled={otpSent}
-                        className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-150 pr-10"
-                      />
-                      {/* <button
+              <div>
+                <label className="text-sm font-medium text-gray-700">
+                  Confirm Password
+                </label>
+                <div className="relative">
+                  <Field
+                    name="confirmPassword"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    disabled={otpSent}
+                    className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-150 pr-10"
+                  />
+                  {/* <button
                         type="button"
                         className="absolute inset-y-0 right-0 mt-1 pr-3 flex items-center text-gray-400 hover:text-gray-600"
                         onClick={() =>
@@ -414,180 +408,165 @@ function Register() {
                           <CgEye className="h-5 w-5" />
                         )}
                       </button> */}
-                    </div>
-                    <ErrorMessage
-                      name="confirmPassword"
-                      component="div"
-                      className="text-rose-500 text-xs mt-1"
-                    />
-                  </div>
-
-                  {/* Role and Branch Selection */}
-                  <div>
-                    <label className="text-sm font-medium text-gray-700">
-                      Role
-                    </label>
-                    <Field
-                      as="select"
-                      name="role"
-                      disabled={otpSent}
-                      onChange={(e) => onRoleChange(e, setFieldValue)}
-                      className="auth-field"
-                    >
-                      <option value="">Select Role</option>
-                      {data?.status == 200 &&
-                        data.data?.map((eachRole) => (
-                          <option key={eachRole.name} value={eachRole.id}>
-                            {eachRole.name}
-                          </option>
-                        ))}
-                    </Field>
-                    <ErrorMessage
-                      name="role"
-                      component="div"
-                      className="text-rose-500 text-xs mt-1"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-medium text-gray-700">
-                      Branch
-                    </label>
-                    <Select
-                      instanceId="postType"
-                      name="branches"
-                      isMulti
-                      // disabled={otpSent}
-                      options={dropdowns?.branches.map((branch) => ({
-                        value: branch.id,
-                        label: branch.name,
-                      }))}
-                      onChange={(selectedOptions) => {
-                        // if (otpSent) {
-                        setFieldValue(
-                          'branches',
-                          selectedOptions.map((option) => option.value),
-                        )
-                        // }
-                      }}
-                      className="mt-1"
-                      styles={{
-                        control: (base) => ({
-                          ...base,
-                          borderRadius: '0.5rem',
-                          borderColor: '#D1D5DB',
-                        }),
-                      }}
-                    />
-                    <ErrorMessage
-                      name="branches"
-                      component="div"
-                      className="text-rose-500 text-xs mt-1"
-                    />
-                  </div>
-
-                  {/* OTP Field */}
-                  {otpSent && (
-                    <div className="col-span-2">
-                      <label className="text-sm font-medium text-gray-700 block mb-2">
-                        Enter OTP
-                      </label>
-                      <div className="flex gap-2 justify-between">
-                        {[...Array(6)].map((_, index) => (
-                          <Field key={index} name="otp">
-                            {({ field, form }) => (
-                              <input
-                                type="text"
-                                name={`otp-${index}`}
-                                maxLength="1"
-                                className="w-12 h-12 text-center text-xl font-semibold border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
-                                value={field.value[index] || ''}
-                                onChange={(e) =>
-                                  handleOtpChange(
-                                    e,
-                                    index,
-                                    form.setFieldValue,
-                                    form.values,
-                                  )
-                                }
-                                onKeyDown={(e) => handleKeyDown(e, index)}
-                                onPaste={(e) =>
-                                  handlePaste(e, form.setFieldValue)
-                                }
-                                style={{
-                                  WebkitAppearance: 'none',
-                                  MozAppearance: 'textfield',
-                                }}
-                              />
-                            )}
-                          </Field>
-                        ))}
-                      </div>
-                      <ErrorMessage
-                        name="otp"
-                        component="div"
-                        className="text-rose-500 text-xs mt-2"
-                      />
-                      <p className="text-sm text-gray-500 mt-2">
-                        Enter the 6-digit code sent to your email
-                      </p>
-                    </div>
-                  )}
                 </div>
+                <ErrorMessage
+                  name="confirmPassword"
+                  component="div"
+                  className="text-rose-500 text-xs mt-1"
+                />
+              </div>
 
-                {/* Submit Button */}
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="auth-submit"
+              {/* Role and Branch Selection */}
+              <div>
+                <label className="text-sm font-medium text-gray-700">
+                  Role
+                </label>
+                <Field
+                  as="select"
+                  name="role"
+                  disabled={otpSent}
+                  onChange={(e) => onRoleChange(e, setFieldValue)}
+                  className="auth-field"
                 >
-                  {isSubmitting ? (
-                    <span className="flex items-center">
-                      <svg
-                        className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                        xmlns="http://www.w3.org/2000/svg"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                      >
-                        <circle
-                          className="opacity-25"
-                          cx="12"
-                          cy="12"
-                          r="10"
-                          stroke="currentColor"
-                          strokeWidth="4"
-                        ></circle>
-                        <path
-                          className="opacity-75"
-                          fill="currentColor"
-                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                        ></path>
-                      </svg>
-                      Processing...
-                    </span>
-                  ) : otpSent ? (
-                    'Verify OTP and Register'
-                  ) : (
-                    'Send OTP'
-                  )}
-                </button>
-              </Form>
-            )}
-          </Formik>
+                  <option value="">Select Role</option>
+                  {data?.status == 200 &&
+                    data.data?.map((eachRole) => (
+                      <option key={eachRole.name} value={eachRole.id}>
+                        {eachRole.name}
+                      </option>
+                    ))}
+                </Field>
+                <ErrorMessage
+                  name="role"
+                  component="div"
+                  className="text-rose-500 text-xs mt-1"
+                />
+              </div>
 
-          {/* Login Link */}
-          <p className="mt-8 text-center text-sm text-muted">
-            Already have an account?{' '}
-            <Link
-              href="/login"
-              className="font-medium text-secondary hover:text-[#0284b8] transition duration-150"
+              <div>
+                <label className="text-sm font-medium text-gray-700">
+                  Branch
+                </label>
+                <Select
+                  instanceId="postType"
+                  name="branches"
+                  isMulti
+                  // disabled={otpSent}
+                  options={dropdowns?.branches.map((branch) => ({
+                    value: branch.id,
+                    label: branch.name,
+                  }))}
+                  onChange={(selectedOptions) => {
+                    // if (otpSent) {
+                    setFieldValue(
+                      'branches',
+                      selectedOptions.map((option) => option.value),
+                    )
+                    // }
+                  }}
+                  className="mt-1"
+                  styles={{
+                    control: (base) => ({
+                      ...base,
+                      borderRadius: '0.5rem',
+                      borderColor: '#D1D5DB',
+                    }),
+                  }}
+                />
+                <ErrorMessage
+                  name="branches"
+                  component="div"
+                  className="text-rose-500 text-xs mt-1"
+                />
+              </div>
+
+              {/* OTP Field */}
+              {otpSent && (
+                <div className="col-span-2">
+                  <label className="text-sm font-medium text-gray-700 block mb-2">
+                    Enter OTP
+                  </label>
+                  <div className="flex gap-2 justify-between">
+                    {[...Array(6)].map((_, index) => (
+                      <Field key={index} name="otp">
+                        {({ field, form }) => (
+                          <input
+                            type="text"
+                            name={`otp-${index}`}
+                            maxLength="1"
+                            className="w-12 h-12 text-center text-xl font-semibold border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
+                            value={field.value[index] || ''}
+                            onChange={(e) =>
+                              handleOtpChange(
+                                e,
+                                index,
+                                form.setFieldValue,
+                                form.values,
+                              )
+                            }
+                            onKeyDown={(e) => handleKeyDown(e, index)}
+                            onPaste={(e) => handlePaste(e, form.setFieldValue)}
+                            style={{
+                              WebkitAppearance: 'none',
+                              MozAppearance: 'textfield',
+                            }}
+                          />
+                        )}
+                      </Field>
+                    ))}
+                  </div>
+                  <ErrorMessage
+                    name="otp"
+                    component="div"
+                    className="text-rose-500 text-xs mt-2"
+                  />
+                  <p className="text-sm text-gray-500 mt-2">
+                    Enter the 6-digit code sent to your email
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="auth-submit"
             >
-              Login here
-            </Link>
-          </p>
-        </div>
-      </div>
-    </div>
+              {isSubmitting ? (
+                <span className="flex items-center">
+                  <svg
+                    className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                  Processing...
+                </span>
+              ) : otpSent ? (
+                'Verify OTP and Register'
+              ) : (
+                'Send OTP'
+              )}
+            </button>
+          </Form>
+        )}
+      </Formik>
+    </AuthShell>
   )
 }
 

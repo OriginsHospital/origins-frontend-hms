@@ -53,14 +53,14 @@ export default function Header() {
 
   return (
     <div className="flex flex-col">
-      <div className="app-header fixed top-0 right-0 z-10 flex justify-end items-center px-5">
-        <div className="flex items-center gap-3">
+      <div className="app-header fixed top-0 right-0 z-10 flex justify-end items-center gap-1 px-3 sm:px-5">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <NotificationBell />
-          <span className="flex flex-col items-end pr-2">
-            <span className="text-ink font-semibold text-sm leading-tight">
+          <span className="flex flex-col items-end pr-1 sm:pr-2 min-w-0">
+            <span className="text-ink font-semibold text-sm leading-tight truncate max-w-[140px] sm:max-w-[220px]">
               {userDetails?.fullName || userDetails?.userName || ''}
             </span>
-            <span className="text-secondary text-xs font-medium">
+            <span className="text-secondary text-xs font-medium truncate max-w-[140px] sm:max-w-[220px]">
               {userDetails?.roleDetails?.name}
             </span>
           </span>
@@ -69,7 +69,7 @@ export default function Header() {
         <div className="items-center gap-3 block">
           <div ref={anchorEl}>
             <CgProfile
-              size={32}
+              size={28}
               color="#0284b8"
               className="cursor-pointer rounded-full hover:opacity-80 transition-opacity"
               onClick={handleOpen}
@@ -126,7 +126,7 @@ export default function Header() {
         </div>
       </div>
 
-      <div className="flex items-center min-h-9 bg-primary/80 border-b border-[#cfe4ee] w-full text-ink">
+      <div className="flex items-center min-h-7 bg-primary/80 border-b border-[#cfe4ee] w-full text-ink">
         <DisplayAlerts />
       </div>
     </div>

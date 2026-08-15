@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react'
+import { useState, useMemo, useRef, useEffect, useLayoutEffect } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ToastContainer, toast } from 'react-toastify'
 import { Bounce } from 'react-toastify'
@@ -291,7 +291,15 @@ const SubNavItem = ({ eachSubRouteObj, i }) => {
 function SideNav(props) {
   const user = useSelector((store) => store.user)
   const [expanded, setExpanded] = useState(false)
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false
+    if (window.innerWidth < 1024) return true
+    try {
+      return localStorage.getItem('sidenav-collapsed') === '1'
+    } catch (error) {
+      return false
+    }
+  })
   const [clickedNavItem, setClickedNavItem] = useState('')
   const router = useRouter()
 
@@ -653,24 +661,43 @@ function SideNav(props) {
   }, [hasTeamsAccess, hasInboxAccess])
 
   useEffect(() => {
-    try {
-      setCollapsed(localStorage.getItem('sidenav-collapsed') === '1')
-    } catch (error) {
-      console.warn('Could not read sidenav state', error)
+    if (typeof window === 'undefined') return undefined
+    const media = window.matchMedia('(max-width: 1023px)')
+    const syncOverlay = () => {
+      if (media.matches) {
+        setCollapsed(true)
+      } else {
+        try {
+          setCollapsed(localStorage.getItem('sidenav-collapsed') === '1')
+        } catch (error) {
+          console.warn('Could not restore sidenav state', error)
+        }
+      }
     }
+    syncOverlay()
+    media.addEventListener('change', syncOverlay)
+    return () => media.removeEventListener('change', syncOverlay)
   }, [])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.documentElement.setAttribute(
       'data-sidenav',
       collapsed ? 'collapsed' : 'expanded',
     )
     try {
-      localStorage.setItem('sidenav-collapsed', collapsed ? '1' : '0')
+      if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
+        localStorage.setItem('sidenav-collapsed', collapsed ? '1' : '0')
+      }
     } catch (error) {
       console.warn('Could not save sidenav state', error)
     }
   }, [collapsed])
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      setCollapsed(true)
+    }
+  }, [router.pathname])
 
   useEffect(() => {
     const match = routes.find((route) => {
@@ -689,6 +716,14 @@ function SideNav(props) {
 
   return (
     <>
+      {!collapsed ? (
+        <button
+          type="button"
+          className="sidenav-backdrop"
+          aria-label="Close navigation"
+          onClick={() => setCollapsed(true)}
+        />
+      ) : null}
       <button
         type="button"
         className="sidenav-toggle"

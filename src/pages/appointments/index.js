@@ -390,7 +390,7 @@ const Appointments = () => {
 
       <div className="appt-toolbar">
         <Autocomplete
-          className="w-[150px]"
+          className="w-full sm:w-[150px]"
           options={branches || []}
           getOptionLabel={(option) => option?.branchCode || option?.name || ''}
           value={branches?.find((branch) => branch.id === branchId) || null}
@@ -434,7 +434,11 @@ const Appointments = () => {
           placeholder="Search patient, doctor, ID..."
           value={globalSearch}
           onChange={(event) => setGlobalSearch(event.target.value)}
-          sx={{ minWidth: 240, flex: '1 1 220px' }}
+          sx={{
+            minWidth: { xs: '100%', sm: 200 },
+            flex: '1 1 220px',
+            maxWidth: '100%',
+          }}
           InputProps={{
             startAdornment: (
               <InputAdornment position="start">

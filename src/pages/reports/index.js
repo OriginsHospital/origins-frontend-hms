@@ -207,7 +207,7 @@ function Reports() {
   }, [user?.email])
 
   return (
-    <div className=" w-full grid gap-4 grid-cols-2 lg:grid-cols-4 m-4">
+    <div className="w-full grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 m-3 sm:m-4">
       {filteredSubNav?.map((eachNav, i) => {
         const CardComponent = eachNav.relatedModule
           ? withPermission(DashboardCard, false, eachNav.relatedModule, [

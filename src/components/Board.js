@@ -283,6 +283,24 @@ export const Board = ({ allAppointmentsData, updateStage, focusStage }) => {
     setCards(allAppointmentsData?.data)
   }, [allAppointmentsData?.data])
 
+  useEffect(() => {
+    const restoreHiddenColumns = () => {
+      document.querySelectorAll('.appt-col').forEach((column) => {
+        if (column.style.opacity === '0') {
+          column.style.opacity = ''
+        }
+      })
+    }
+
+    restoreHiddenColumns()
+    window.addEventListener('dragend', restoreHiddenColumns)
+    window.addEventListener('drop', restoreHiddenColumns)
+    return () => {
+      window.removeEventListener('dragend', restoreHiddenColumns)
+      window.removeEventListener('drop', restoreHiddenColumns)
+    }
+  }, [])
+
   return (
     <div className="appt-board">
       {/* 'Booked','Arrived','Scan','Doctor','Seen','Done' */}
@@ -392,12 +410,18 @@ const Column = ({
   }
 
   const handleDragEnd = (e) => {
+    e.preventDefault()
     const cardId = e.dataTransfer.getData('cardId')
     setActive(false)
     clearHighlights()
+    restoreColumnOpacity()
 
     const indicators = getIndicators()
     const { element } = getNearestIndicator(e, indicators)
+
+    if (!element) {
+      return
+    }
 
     const before = element.dataset.before || -1
     console.log(before, cardId, stage)
@@ -494,6 +518,10 @@ const Column = ({
     const indicators = els || getIndicators()
 
     indicators.forEach((i) => {
+      if (i.classList?.contains('appt-col')) {
+        i.style.opacity = ''
+        return
+      }
       i.style.opacity = '0'
     })
   }
@@ -504,6 +532,9 @@ const Column = ({
     clearHighlights(indicators)
 
     const el = getNearestIndicator(e, indicators)
+    if (!el?.element || el.element.classList?.contains('appt-col')) {
+      return
+    }
 
     el.element.style.opacity = '1'
   }
@@ -533,12 +564,28 @@ const Column = ({
   }
 
   const getIndicators = () => {
-    return Array.from(document.querySelectorAll(`[data-stage="${stage}"]`))
+    return Array.from(
+      document.querySelectorAll(
+        `[data-drop-indicator="true"][data-stage="${stage}"]`,
+      ),
+    )
   }
 
-  const handleDragLeave = () => {
+  const restoreColumnOpacity = () => {
+    document.querySelectorAll('.appt-col').forEach((column) => {
+      if (column.style.opacity === '0') {
+        column.style.opacity = ''
+      }
+    })
+  }
+
+  const handleDragLeave = (e) => {
+    if (e.currentTarget.contains(e.relatedTarget)) {
+      return
+    }
     clearHighlights()
     setActive(false)
+    restoreColumnOpacity()
   }
 
   // Filter cards by stage and search query
@@ -1229,11 +1276,11 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
             }`}
           >
             <div className="mb-1 flex items-center justify-between gap-2">
-              <span className="text-[11px] font-semibold text-gray-700">
+              <span className="text-[13px] font-semibold text-gray-700">
                 IVF Package
               </span>
               <span
-                className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                className={`rounded-full px-2 py-0.5 text-[12px] font-semibold ${
                   packageStatusSummary.status === 'overdue'
                     ? 'bg-red-100 text-red-700'
                     : packageStatusSummary.status === 'pending'
@@ -1293,7 +1340,7 @@ const Card = ({ patientDetails, stage, handleDragStart }) => {
                         handleOpenMilestoneBilling(milestone.productTypeEnum)
                       }
                     }}
-                    className={`rounded px-1.5 py-1 text-center text-[10px] font-semibold ${
+                    className={`rounded px-1.5 py-1 text-center text-[12px] font-semibold ${
                       milestone.pendingAmount > 0 ? 'cursor-pointer' : ''
                     } ${
                       milestone.status === 'paid'
@@ -1540,7 +1587,8 @@ const DropIndicator = ({ beforeId, stage }) => {
     <div
       data-before={beforeId || -1}
       data-stage={stage}
-      className="my-0.5 h-0.5 w-full opacity-0"
+      data-drop-indicator="true"
+      className="appt-drop-indicator my-0.5 h-0.5 w-full opacity-0"
     />
   )
 }

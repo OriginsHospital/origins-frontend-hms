@@ -4,8 +4,12 @@ import Link from 'next/link'
 import { ToastContainer, toast, Bounce } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 import { API_ROUTES } from '../../constants/constants'
-import { Formik, Form, Field, ErrorMessage } from 'formik'
+import { Formik, Form, ErrorMessage } from 'formik'
 import * as Yup from 'yup'
+import AuthShell, {
+  AuthEmailField,
+  AuthPasswordField,
+} from '@/components/AuthShell'
 
 const toastconfig = {
   position: 'top-right',
@@ -85,129 +89,98 @@ function ChangePassword() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-6 py-12">
-      <div className="auth-card">
-        <h2 className="text-center text-2xl font-bold tracking-tight text-ink mb-6">
-          Change your password
-        </h2>
-
-        <Formik
-          initialValues={initialValues}
-          validationSchema={validationSchema}
-          onSubmit={handleChangePassword}
-        >
-          {({ isSubmitting, isValid, dirty }) => (
-            <Form className="space-y-4">
-              <div>
-                <label
-                  htmlFor="email"
-                  className="block text-sm font-medium text-ink"
-                >
-                  Email address
-                </label>
-                <div className="mt-2">
-                  <Field
-                    id="email"
-                    name="email"
-                    type="email"
-                    className="auth-field"
-                  />
-                  <ErrorMessage
-                    name="email"
-                    component="div"
-                    className="text-red-500 p-2 text-sm"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="oldPassword"
-                  className="block text-sm font-medium text-ink"
-                >
-                  Old password
-                </label>
-                <div className="mt-2">
-                  <Field
-                    id="oldPassword"
-                    name="oldPassword"
-                    type="password"
-                    className="auth-field"
-                  />
-                  <ErrorMessage
-                    name="oldPassword"
-                    component="div"
-                    className="text-red-500 p-2 text-sm"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="newPassword"
-                  className="block text-sm font-medium text-ink"
-                >
-                  New password
-                </label>
-                <div className="mt-2">
-                  <Field
-                    id="newPassword"
-                    name="newPassword"
-                    type="password"
-                    className="auth-field"
-                  />
-                  <ErrorMessage
-                    name="newPassword"
-                    component="div"
-                    className="text-red-500 p-2 text-sm"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label
-                  htmlFor="confirmPassword"
-                  className="block text-sm font-medium text-ink"
-                >
-                  Confirm password
-                </label>
-                <div className="mt-2">
-                  <Field
-                    id="confirmPassword"
-                    name="confirmPassword"
-                    type="password"
-                    className="auth-field"
-                  />
-                  <ErrorMessage
-                    name="confirmPassword"
-                    component="div"
-                    className="text-red-500 p-2 text-sm"
-                  />
-                </div>
-              </div>
-              <div>
-                <button
-                  type="submit"
-                  disabled={isSubmitting || !isValid || !dirty}
-                  className="auth-submit disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isSubmitting ? 'Please wait...' : 'Change password'}
-                </button>
-              </div>
-            </Form>
-          )}
-        </Formik>
-
-        <p className="mt-5 text-center text-sm text-muted">
-          <Link
-            href="/login"
-            className="font-semibold text-secondary hover:text-[#0284b8]"
-          >
-            Back to login
+    <AuthShell
+      title="Change password"
+      subtitle="Update your Ortus password and return to sign in"
+      footer={
+        <p className="text-center text-sm text-muted">
+          <Link href="/login" className="auth-link">
+            Back to sign in
           </Link>
         </p>
-      </div>
-    </div>
+      }
+    >
+      <Formik
+        initialValues={initialValues}
+        validationSchema={validationSchema}
+        onSubmit={handleChangePassword}
+      >
+        {({ isSubmitting, isValid, dirty }) => (
+          <Form className="space-y-4">
+            <div>
+              <label htmlFor="email" className="auth-label">
+                Email address
+              </label>
+              <AuthEmailField />
+              <ErrorMessage
+                name="email"
+                component="div"
+                className="auth-error"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="oldPassword" className="auth-label">
+                Current password
+              </label>
+              <AuthPasswordField
+                id="oldPassword"
+                name="oldPassword"
+                placeholder="Enter current password"
+                autoComplete="current-password"
+              />
+              <ErrorMessage
+                name="oldPassword"
+                component="div"
+                className="auth-error"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="newPassword" className="auth-label">
+                New password
+              </label>
+              <AuthPasswordField
+                id="newPassword"
+                name="newPassword"
+                placeholder="Enter new password"
+                autoComplete="new-password"
+              />
+              <ErrorMessage
+                name="newPassword"
+                component="div"
+                className="auth-error"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="confirmPassword" className="auth-label">
+                Confirm password
+              </label>
+              <AuthPasswordField
+                id="confirmPassword"
+                name="confirmPassword"
+                placeholder="Re-enter new password"
+                autoComplete="new-password"
+              />
+              <ErrorMessage
+                name="confirmPassword"
+                component="div"
+                className="auth-error"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSubmitting || !isValid || !dirty}
+              className="auth-submit disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? 'Please wait...' : 'Update password'}
+            </button>
+          </Form>
+        )}
+      </Formik>
+    </AuthShell>
   )
 }
 

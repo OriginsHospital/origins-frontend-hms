@@ -104,20 +104,53 @@ theme = createTheme({
   },
   typography: {
     fontFamily: '"DM Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif',
-    h1: { fontWeight: 700, letterSpacing: '-0.03em', color: brand.ink },
-    h2: { fontWeight: 700, letterSpacing: '-0.03em', color: brand.ink },
-    h3: { fontWeight: 700, letterSpacing: '-0.02em', color: brand.ink },
-    h4: { fontWeight: 700, letterSpacing: '-0.02em', color: brand.ink },
-    h5: { fontWeight: 600, letterSpacing: '-0.015em', color: brand.ink },
-    h6: { fontWeight: 600, letterSpacing: '-0.01em', color: brand.ink },
-    subtitle1: { fontWeight: 600, color: brand.ink },
-    subtitle2: { fontWeight: 600, color: brand.muted },
-    body1: { color: brand.ink },
-    body2: { color: brand.muted },
+    fontSize: 14,
+    htmlFontSize: 16,
+    h1: {
+      fontWeight: 700,
+      letterSpacing: '-0.03em',
+      color: brand.ink,
+      fontSize: '1.5rem',
+    },
+    h2: {
+      fontWeight: 700,
+      letterSpacing: '-0.03em',
+      color: brand.ink,
+      fontSize: '1.35rem',
+    },
+    h3: {
+      fontWeight: 700,
+      letterSpacing: '-0.02em',
+      color: brand.ink,
+      fontSize: '1.2rem',
+    },
+    h4: {
+      fontWeight: 700,
+      letterSpacing: '-0.02em',
+      color: brand.ink,
+      fontSize: '1.1rem',
+    },
+    h5: {
+      fontWeight: 600,
+      letterSpacing: '-0.015em',
+      color: brand.ink,
+      fontSize: '1.05rem',
+    },
+    h6: {
+      fontWeight: 600,
+      letterSpacing: '-0.01em',
+      color: brand.ink,
+      fontSize: '1rem',
+    },
+    subtitle1: { fontWeight: 600, color: brand.ink, fontSize: '15px' },
+    subtitle2: { fontWeight: 600, color: brand.muted, fontSize: '13px' },
+    body1: { color: brand.ink, fontSize: '15px', lineHeight: 1.45 },
+    body2: { color: brand.muted, fontSize: '13px', lineHeight: 1.4 },
     button: {
       textTransform: 'none',
       fontWeight: 600,
       letterSpacing: 0,
+      fontSize: '13px',
     },
   },
   shadows: [
@@ -144,9 +177,10 @@ theme = createTheme({
       },
       styleOverrides: {
         root: {
-          borderRadius: 10,
-          minHeight: 40,
-          paddingInline: 16,
+          borderRadius: 8,
+          minHeight: 34,
+          paddingInline: 12,
+          fontSize: '13px',
         },
         containedPrimary: {
           background: `linear-gradient(180deg, ${brand.cyan} 0%, ${brand.cyanDark} 100%)`,
@@ -213,9 +247,20 @@ theme = createTheme({
       styleOverrides: {
         paper: {
           borderRadius: 16,
-          maxHeight: '88vh',
+          margin: 16,
+          maxHeight: 'calc(100dvh - 24px)',
           width: 'min(100%, 920px)',
+          '@media (max-width: 640px)': {
+            margin: 0,
+            width: '100%',
+            maxWidth: '100%',
+            maxHeight: '100dvh',
+            height: '100dvh',
+            borderRadius: 0,
+          },
           overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
           boxShadow: '0 24px 64px rgba(18, 48, 71, 0.22)',
           border: `1px solid ${brand.border}`,
         },
@@ -230,7 +275,7 @@ theme = createTheme({
       styleOverrides: {
         root: {
           fontWeight: 700,
-          fontSize: '1.05rem',
+          fontSize: '1.15rem',
           color: brand.ink,
           padding: '14px 20px',
           borderBottom: `1px solid ${brand.border}`,
@@ -242,7 +287,8 @@ theme = createTheme({
       styleOverrides: {
         root: {
           padding: '18px 20px',
-          maxHeight: 'calc(88vh - 128px)',
+          minHeight: 0,
+          overflowY: 'auto',
         },
         dividers: {
           borderColor: brand.border,
@@ -256,6 +302,7 @@ theme = createTheme({
           borderTop: `1px solid ${brand.border}`,
           background: brand.washSoft,
           gap: 8,
+          flexWrap: 'wrap',
         },
       },
     },
@@ -272,7 +319,12 @@ theme = createTheme({
         paper: {
           borderLeft: `1px solid ${brand.border}`,
           boxShadow: '-16px 0 40px rgba(18, 48, 71, 0.12)',
-          maxWidth: 'min(520px, 92vw)',
+          width: 'min(560px, 100vw)',
+          maxWidth: '100vw',
+          '@media (max-width: 640px)': {
+            width: '100vw',
+            maxWidth: '100vw',
+          },
         },
       },
     },
@@ -308,7 +360,7 @@ theme = createTheme({
       styleOverrides: {
         tooltip: {
           backgroundColor: brand.ink,
-          fontSize: 12,
+          fontSize: 13,
           borderRadius: 8,
           padding: '6px 10px',
         },
@@ -327,7 +379,8 @@ theme = createTheme({
         root: {
           textTransform: 'none',
           fontWeight: 600,
-          minHeight: 44,
+          minHeight: 36,
+          fontSize: '13px',
         },
       },
     },

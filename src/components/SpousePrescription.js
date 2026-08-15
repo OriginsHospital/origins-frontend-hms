@@ -610,233 +610,278 @@ function SpousePrescription({
         uniqueKey="addSpousePrescription"
         closeOnOutsideClick={true}
         maxWidth="md"
+        paperSx={{
+          height: 'calc(100dvh - 32px)',
+          maxHeight: 'calc(100dvh - 32px) !important',
+          width: '100%',
+          margin: '16px',
+          borderRadius: 2,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+        contentSx={{
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          minHeight: 0,
+          flex: '1 1 auto',
+          maxHeight: 'none',
+          p: 0,
+        }}
       >
-        <div className="flex items-center justify-between gap-3 border-b border-[#e3eef3] px-1 pb-3">
-          <span className="text-xl font-bold text-slate-800">
-            Spouse Prescription
-          </span>
-          <IconButton onClick={() => dispatch(closeModal())}>
-            <Close />
-          </IconButton>
-        </div>
-        {activeVisitAppointments && (
-          <div className="flex flex-col gap-2 py-2">
-            <span className="font-semibold">Previous Prescriptions</span>
-            <Select
-              options={activeVisitAppointments.map((appointment) => ({
-                value: `${appointment.type}-${appointment.appointmentId}`,
-                label: `${dayjs(appointment.appointmentDate).format(
-                  'DD-MM-YYYY',
-                )} | ${appointment.type} | ${appointment.doctorName}`,
-                appointment: appointment,
-              }))}
-              onChange={(selected) => {
-                if (
-                  selected &&
-                  confirm('Are you sure you want to copy this prescription?')
-                ) {
-                  const [type, appointmentId] = selected.value.split('-')
-                  fetchAndSetLineBills(type, appointmentId)
-                } else {
-                  setDefaultLineBillValues(null)
-                  setNotesValue('')
-                }
-              }}
-              placeholder="Select appointment to copy prescription"
-              isClearable
-            />
+        <div className="flex h-full min-h-0 flex-1 flex-col">
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#e3eef3] bg-white px-6 pb-3 pt-4">
+            <span className="text-xl font-bold text-slate-800">
+              Spouse Prescription
+            </span>
+            <IconButton onClick={() => dispatch(closeModal())}>
+              <Close />
+            </IconButton>
           </div>
-        )}
-        <div className="flex flex-col gap-3">
-          {/* Notes Section */}
-          {/* <h1 className="text-2xl font-semibold">Spouse Prescription</h1> */}
-          <div className="flex flex-col gap-2">
-            <span className="font-semibold">Notes</span>
-            <RichText value={notesValue} setValue={setNotesValue} />
-          </div>
-
-          {/* Bill Types Section */}
-          {allBillTypeValues ? (
-            billTypes.map((billType) => {
-              const defaultValues =
-                defaultLineBillValues?.[billType.id]?.map((billData) => ({
-                  value: billData.id,
-                  label: billData.name,
-                  status: billData.status,
-                })) ?? []
-
-              let selectOptions =
-                allBillTypeValues?.[billType.name]?.map((data) =>
-                  billType.name === 'Pharmacy'
-                    ? buildPharmacySelectOption(data)
-                    : { value: data.id, label: data.name },
-                ) ?? []
-
-              if (billType.name === 'Pharmacy') {
-                const kitOptions = medicineKits.map((kit) => ({
-                  value: kit.kitValue,
-                  label: kit.kitName,
-                  isKit: true,
-                }))
-                selectOptions = [...kitOptions, ...selectOptions]
-              }
-              // console.log(selectOptions)
-              return (
-                <React.Fragment key={`${billType.name}-multiselect`}>
-                  <p className="font-semibold">{billType.name}</p>
-
-                  {/* Paid Items Display */}
-                  <div className="flex flex-wrap gap-2">
-                    {defaultValues.map(
-                      (item) =>
-                        item.status === 'PAID' && (
-                          <span
-                            key={`paid-${item.value}`}
-                            className="text-success-content bg-success p-1 px-2 rounded-md"
-                          >
-                            {item.label}
-                          </span>
-                        ),
-                    )}
-                  </div>
-
-                  {/* Selection Component */}
-                  {/* <span>{selectOptions.map(item => item.value)}</span> */}
-                  <Select
-                    isMulti
-                    name={billType.name}
-                    value={defaultValues
-                      .filter((item) => item.status !== 'PAID')
-                      .map((item) =>
-                        billType.name === 'Pharmacy'
-                          ? enrichPharmacySelectValue(item, allBillTypeValues)
-                          : item,
-                      )}
-                    options={selectOptions}
-                    onChange={setSelectedValues(billType.name)}
-                    classNamePrefix={`select-${billType.name.toLowerCase()}`}
-                    filterOption={
-                      billType.name === 'Pharmacy'
-                        ? pharmacyStartsWithFilter
-                        : undefined
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4">
+            {activeVisitAppointments && (
+              <div className="flex flex-col gap-2 pb-4">
+                <span className="font-semibold">Previous Prescriptions</span>
+                <Select
+                  options={activeVisitAppointments.map((appointment) => ({
+                    value: `${appointment.type}-${appointment.appointmentId}`,
+                    label: `${dayjs(appointment.appointmentDate).format(
+                      'DD-MM-YYYY',
+                    )} | ${appointment.type} | ${appointment.doctorName}`,
+                    appointment: appointment,
+                  }))}
+                  onChange={(selected) => {
+                    if (
+                      selected &&
+                      confirm(
+                        'Are you sure you want to copy this prescription?',
+                      )
+                    ) {
+                      const [type, appointmentId] = selected.value.split('-')
+                      fetchAndSetLineBills(type, appointmentId)
+                    } else {
+                      setDefaultLineBillValues(null)
+                      setNotesValue('')
                     }
-                    styles={
-                      billType.name === 'Pharmacy'
-                        ? pharmacySelectStyles
-                        : undefined
-                    }
-                    formatOptionLabel={
-                      billType.name === 'Pharmacy'
-                        ? formatPharmacyOptionLabel
-                        : undefined
-                    }
-                  />
-                  {billType.name === 'Pharmacy' && (
-                    <PrescriptionPharmacyLowStockLegend />
-                  )}
+                  }}
+                  placeholder="Select appointment to copy prescription"
+                  isClearable
+                  menuPortalTarget={
+                    typeof document !== 'undefined' ? document.body : undefined
+                  }
+                  menuPosition="fixed"
+                  styles={{
+                    menuPortal: (base) => ({ ...base, zIndex: 2000 }),
+                  }}
+                />
+              </div>
+            )}
+            <div className="flex flex-col gap-3">
+              {/* Notes Section */}
+              {/* <h1 className="text-2xl font-semibold">Spouse Prescription</h1> */}
+              <div className="prescription-notes flex flex-col gap-2">
+                <span className="font-semibold">Notes</span>
+                <RichText value={notesValue} setValue={setNotesValue} />
+              </div>
 
-                  {/* Pharmacy Section */}
-                  {billType.name === 'Pharmacy' && (
-                    <div className="h-48 border flex flex-col items-center p-2 overflow-y-auto gap-2 bg-primary/10 rounded-lg">
-                      {defaultLineBillValues?.['3']?.length > 0 ? (
-                        defaultLineBillValues['3'].map(
-                          (prescription, index) =>
-                            prescription.id &&
-                            prescription.status !== 'PAID' && (
-                              <RenderPrescriptionPharmacy
-                                key={`prescription-${prescription.id}-${index}`}
-                                prescriptionRowIndex={index}
-                                prescriptionName={prescription.name}
-                                prescribedQuantity={
-                                  prescription.prescribedQuantity
-                                }
-                                deleteClicked={handleDeleteClicked}
-                                duplicateClicked={handleDuplicateClicked}
-                                daysChange={handleDaysChange}
-                                prescriptionIntake={
-                                  prescription.prescriptionDetails
-                                }
-                                prescriptionIntakeChange={handleIntakeChange}
-                                prescriptionDays={prescription.prescriptionDays}
-                              />
+              {/* Bill Types Section */}
+              {allBillTypeValues ? (
+                billTypes.map((billType) => {
+                  const defaultValues =
+                    defaultLineBillValues?.[billType.id]?.map((billData) => ({
+                      value: billData.id,
+                      label: billData.name,
+                      status: billData.status,
+                    })) ?? []
+
+                  let selectOptions =
+                    allBillTypeValues?.[billType.name]?.map((data) =>
+                      billType.name === 'Pharmacy'
+                        ? buildPharmacySelectOption(data)
+                        : { value: data.id, label: data.name },
+                    ) ?? []
+
+                  if (billType.name === 'Pharmacy') {
+                    const kitOptions = medicineKits.map((kit) => ({
+                      value: kit.kitValue,
+                      label: kit.kitName,
+                      isKit: true,
+                    }))
+                    selectOptions = [...kitOptions, ...selectOptions]
+                  }
+                  // console.log(selectOptions)
+                  return (
+                    <React.Fragment key={`${billType.name}-multiselect`}>
+                      <p className="font-semibold">{billType.name}</p>
+
+                      {/* Paid Items Display */}
+                      <div className="flex flex-wrap gap-2">
+                        {defaultValues.map(
+                          (item) =>
+                            item.status === 'PAID' && (
+                              <span
+                                key={`paid-${item.value}`}
+                                className="text-success-content bg-success p-1 px-2 rounded-md"
+                              >
+                                {item.label}
+                              </span>
                             ),
-                        )
-                      ) : (
-                        <div className="flex justify-center h-full items-center">
-                          <span>No medicine selected</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {billType.name === 'Pharmacy' && (
-                    <div className="border flex flex-col p-2 overflow-y-auto gap-2 rounded-lg">
-                      {defaultLineBillValues?.['3']?.length > 0 ? (
-                        defaultLineBillValues['3'].map((prescription) =>
-                          prescription.id && prescription.status === 'PAID' ? (
-                            <div
-                              className="w-full border p-2 flex items-center justify-between rounded bg-gray-100"
-                              key={`paid-${prescription.id}`}
-                            >
-                              <div className="w-full flex items-center justify-between gap-4">
-                                <span
-                                  className="text-sm font-medium w-40 min-w-0 overflow-hidden whitespace-nowrap text-ellipsis"
-                                  title={prescription.name}
-                                >
-                                  {prescription.name}
-                                </span>
-                                <div className="flex flex-col">
-                                  <span className="text-xs text-gray-500">
-                                    Quantity
-                                  </span>
-                                  <span className="text-sm">
-                                    {prescription.prescribedQuantity}
-                                  </span>
-                                </div>
-                                <div className="flex flex-col">
-                                  <span className="text-xs text-gray-500">
-                                    Days
-                                  </span>
-                                  <span className="text-sm">
-                                    {prescription.prescriptionDays}
-                                  </span>
-                                </div>
-                                <div className="flex flex-col">
-                                  <span className="text-xs text-gray-500">
-                                    Intake
-                                  </span>
-                                  <span className="text-sm">
-                                    {prescription?.prescriptionDetails.startsWith(
-                                      'OTHER_',
-                                    )
-                                      ? prescription?.prescriptionDetails?.split(
-                                          '_',
-                                        )[1]
-                                      : prescription?.prescriptionDetails}
-                                  </span>
-                                </div>
-                                <span className="px-2 py-1 text-xs font-medium text-green-700 bg-green-100 rounded-full">
-                                  Paid
-                                </span>
-                              </div>
-                            </div>
-                          ) : null,
-                        )
-                      ) : (
-                        <div className="flex justify-center h-full items-center">
-                          <span>No medicine selected</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </React.Fragment>
-              )
-            })
-          ) : (
-            <p>No details available</p>
-          )}
+                        )}
+                      </div>
 
-          {/* Action Buttons */}
-          <div className="flex justify-end">
+                      {/* Selection Component */}
+                      {/* <span>{selectOptions.map(item => item.value)}</span> */}
+                      <Select
+                        isMulti
+                        name={billType.name}
+                        value={defaultValues
+                          .filter((item) => item.status !== 'PAID')
+                          .map((item) =>
+                            billType.name === 'Pharmacy'
+                              ? enrichPharmacySelectValue(
+                                  item,
+                                  allBillTypeValues,
+                                )
+                              : item,
+                          )}
+                        options={selectOptions}
+                        onChange={setSelectedValues(billType.name)}
+                        classNamePrefix={`select-${billType.name.toLowerCase()}`}
+                        menuPortalTarget={
+                          typeof document !== 'undefined'
+                            ? document.body
+                            : undefined
+                        }
+                        menuPosition="fixed"
+                        filterOption={
+                          billType.name === 'Pharmacy'
+                            ? pharmacyStartsWithFilter
+                            : undefined
+                        }
+                        styles={{
+                          ...(billType.name === 'Pharmacy'
+                            ? pharmacySelectStyles
+                            : {}),
+                          menuPortal: (base) => ({ ...base, zIndex: 2000 }),
+                        }}
+                        formatOptionLabel={
+                          billType.name === 'Pharmacy'
+                            ? formatPharmacyOptionLabel
+                            : undefined
+                        }
+                      />
+                      {billType.name === 'Pharmacy' && (
+                        <PrescriptionPharmacyLowStockLegend />
+                      )}
+
+                      {/* Pharmacy Section */}
+                      {billType.name === 'Pharmacy' && (
+                        <div className="h-48 border flex flex-col items-center p-2 overflow-y-auto gap-2 bg-primary/10 rounded-lg">
+                          {defaultLineBillValues?.['3']?.length > 0 ? (
+                            defaultLineBillValues['3'].map(
+                              (prescription, index) =>
+                                prescription.id &&
+                                prescription.status !== 'PAID' && (
+                                  <RenderPrescriptionPharmacy
+                                    key={`prescription-${prescription.id}-${index}`}
+                                    prescriptionRowIndex={index}
+                                    prescriptionName={prescription.name}
+                                    prescribedQuantity={
+                                      prescription.prescribedQuantity
+                                    }
+                                    deleteClicked={handleDeleteClicked}
+                                    duplicateClicked={handleDuplicateClicked}
+                                    daysChange={handleDaysChange}
+                                    prescriptionIntake={
+                                      prescription.prescriptionDetails
+                                    }
+                                    prescriptionIntakeChange={
+                                      handleIntakeChange
+                                    }
+                                    prescriptionDays={
+                                      prescription.prescriptionDays
+                                    }
+                                  />
+                                ),
+                            )
+                          ) : (
+                            <div className="flex justify-center h-full items-center">
+                              <span>No medicine selected</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {billType.name === 'Pharmacy' && (
+                        <div className="border flex flex-col p-2 overflow-y-auto gap-2 rounded-lg">
+                          {defaultLineBillValues?.['3']?.length > 0 ? (
+                            defaultLineBillValues['3'].map((prescription) =>
+                              prescription.id &&
+                              prescription.status === 'PAID' ? (
+                                <div
+                                  className="w-full border p-2 flex items-center justify-between rounded bg-gray-100"
+                                  key={`paid-${prescription.id}`}
+                                >
+                                  <div className="w-full flex items-center justify-between gap-4">
+                                    <span
+                                      className="text-sm font-medium w-40 min-w-0 overflow-hidden whitespace-nowrap text-ellipsis"
+                                      title={prescription.name}
+                                    >
+                                      {prescription.name}
+                                    </span>
+                                    <div className="flex flex-col">
+                                      <span className="text-xs text-gray-500">
+                                        Quantity
+                                      </span>
+                                      <span className="text-sm">
+                                        {prescription.prescribedQuantity}
+                                      </span>
+                                    </div>
+                                    <div className="flex flex-col">
+                                      <span className="text-xs text-gray-500">
+                                        Days
+                                      </span>
+                                      <span className="text-sm">
+                                        {prescription.prescriptionDays}
+                                      </span>
+                                    </div>
+                                    <div className="flex flex-col">
+                                      <span className="text-xs text-gray-500">
+                                        Intake
+                                      </span>
+                                      <span className="text-sm">
+                                        {prescription?.prescriptionDetails.startsWith(
+                                          'OTHER_',
+                                        )
+                                          ? prescription?.prescriptionDetails?.split(
+                                              '_',
+                                            )[1]
+                                          : prescription?.prescriptionDetails}
+                                      </span>
+                                    </div>
+                                    <span className="px-2 py-1 text-xs font-medium text-green-700 bg-green-100 rounded-full">
+                                      Paid
+                                    </span>
+                                  </div>
+                                </div>
+                              ) : null,
+                            )
+                          ) : (
+                            <div className="flex justify-center h-full items-center">
+                              <span>No medicine selected</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </React.Fragment>
+                  )
+                })
+              ) : (
+                <p>No details available</p>
+              )}
+            </div>
+          </div>
+          <div className="flex shrink-0 justify-end border-t border-[#e3eef3] bg-white px-6 py-3">
             <div className="flex gap-2">
               <Button
                 className="capitalize"

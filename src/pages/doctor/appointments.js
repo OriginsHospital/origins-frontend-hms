@@ -948,7 +948,7 @@ function ConsultationsAndTreatments({
         </div>
         <div>
           {reportData ? (
-            <div className="grid grid-cols-4 gap-4 h-[70vh] overflow-y-auto">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 h-[70vh] overflow-y-auto">
               <div className="col-span-1">
                 <div className="flex flex-col gap-2 border p-4 rounded-lg">
                   <span className="">

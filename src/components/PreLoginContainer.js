@@ -63,8 +63,10 @@ function PreLoginContainer(props) {
   }, [user.isAuthenticated, isClient, router])
 
   return (
-    <div className="min-h-screen flex flex-col bg-canvas">
-      <div className="flex-1">{!user.isAuthenticated && props.children}</div>
+    <div className="auth-page">
+      <div className="auth-page-body">
+        {!user.isAuthenticated && props.children}
+      </div>
       <Footer />
 
       {/* Legal Modals */}

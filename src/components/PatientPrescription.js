@@ -843,35 +843,46 @@ function PatientPrescription({
         closeOnOutsideClick={true}
         maxWidth="lg"
         paperSx={{
-          maxHeight: 'min(92vh, 960px)',
+          height: 'calc(100dvh - 32px)',
+          maxHeight: 'calc(100dvh - 32px) !important',
           width: '100%',
+          margin: '16px',
           borderRadius: 2,
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
         }}
+        contentSx={{
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          minHeight: 0,
+          flex: '1 1 auto',
+          maxHeight: 'none',
+          p: 0,
+        }}
       >
-        <div className="flex max-h-[min(92vh,960px)] min-h-0 flex-col overflow-hidden">
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-7 pt-4 sm:px-8">
-            <div className="relative flex items-center justify-between gap-4 border-b border-[#e3eef3] pb-3">
-              <span className="text-xl font-bold text-slate-800">
-                Patient Prescription
+        <div className="flex h-full min-h-0 flex-1 flex-col">
+          <div className="relative flex shrink-0 items-center justify-between gap-4 border-b border-[#e3eef3] bg-white px-6 pb-3 pt-4 sm:px-8">
+            <span className="text-xl font-bold text-slate-800">
+              Patient Prescription
+            </span>
+            {patientName ? (
+              <span className="pointer-events-none absolute left-1/2 max-w-[50%] -translate-x-1/2 truncate text-center text-xl font-bold text-gray-900">
+                {patientName}
               </span>
-              {patientName ? (
-                <span className="pointer-events-none absolute left-1/2 max-w-[50%] -translate-x-1/2 truncate text-center text-xl font-bold text-gray-900">
-                  {patientName}
-                </span>
-              ) : null}
+            ) : null}
 
-              <IconButton
-                onClick={() => dispatch(closeModal())}
-                size="small"
-                aria-label="Close prescription"
-              >
-                <Close />
-              </IconButton>
-            </div>
-            <div className="mt-4 flex flex-col gap-4">
+            <IconButton
+              onClick={() => dispatch(closeModal())}
+              size="small"
+              aria-label="Close prescription"
+            >
+              <Close />
+            </IconButton>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-4 sm:px-8">
+            <div className="flex flex-col gap-4">
               {activeVisitAppointments && (
                 <div className="flex flex-col gap-2">
                   <span className="font-semibold">Previous Prescriptions</span>
@@ -905,11 +916,20 @@ function PatientPrescription({
                     }}
                     placeholder="Select appointment to copy prescription"
                     isClearable
+                    menuPortalTarget={
+                      typeof document !== 'undefined'
+                        ? document.body
+                        : undefined
+                    }
+                    menuPosition="fixed"
+                    styles={{
+                      menuPortal: (base) => ({ ...base, zIndex: 2000 }),
+                    }}
                   />
                 </div>
               )}
               {/* Notes Section */}
-              <div className="flex flex-col gap-2">
+              <div className="prescription-notes flex flex-col gap-2">
                 <span className="font-semibold">Notes</span>
                 <RichText value={notesValue} setValue={setNotesValue} />
               </div>
@@ -986,14 +1006,21 @@ function PatientPrescription({
                         options={selectOptions}
                         onChange={setSelectedValues(billType.name)}
                         classNamePrefix={`select-${billType.name.toLowerCase()}`}
+                        menuPortalTarget={
+                          typeof document !== 'undefined'
+                            ? document.body
+                            : undefined
+                        }
+                        menuPosition="fixed"
                         filterOption={
                           isPharmacyBillType
                             ? pharmacyStartsWithFilter
                             : undefined
                         }
-                        styles={
-                          isPharmacyBillType ? pharmacySelectStyles : undefined
-                        }
+                        styles={{
+                          ...(isPharmacyBillType ? pharmacySelectStyles : {}),
+                          menuPortal: (base) => ({ ...base, zIndex: 2000 }),
+                        }}
                         formatOptionLabel={
                           isPharmacyBillType
                             ? formatPharmacyOptionLabel
@@ -1152,34 +1179,25 @@ function PatientPrescription({
               ) : (
                 <p>No details available</p>
               )}
-
-              {/* Action Buttons */}
-              <div className="flex justify-end">
-                {/* <Button
-              className="capitalize"
-              variant="outlined"
-              onClick={() => dispatch(closeModal())}
-            >
-              Close
-            </Button> */}
-                <div className="flex gap-2">
-                  <Button
-                    className="capitalize"
-                    variant="outlined"
-                    onClick={handlePrintPrescription}
-                  >
-                    Print
-                  </Button>
-                  <Button
-                    className="text-white capitalize"
-                    variant="contained"
-                    onClick={onSaveClick}
-                    disabled={isPending}
-                  >
-                    {isPending ? 'Saving...' : 'Save'}
-                  </Button>
-                </div>
-              </div>
+            </div>
+          </div>
+          <div className="flex shrink-0 justify-end border-t border-[#e3eef3] bg-white px-6 py-3 sm:px-8">
+            <div className="flex gap-2">
+              <Button
+                className="capitalize"
+                variant="outlined"
+                onClick={handlePrintPrescription}
+              >
+                Print
+              </Button>
+              <Button
+                className="text-white capitalize"
+                variant="contained"
+                onClick={onSaveClick}
+                disabled={isPending}
+              >
+                {isPending ? 'Saving...' : 'Save'}
+              </Button>
             </div>
           </div>
         </div>

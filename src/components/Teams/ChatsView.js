@@ -1068,11 +1068,11 @@ function ChatsView() {
   }, [])
 
   return (
-    <Box className="flex h-[calc(100vh-200px)]">
+    <Box className="flex flex-col md:flex-row h-auto md:h-[calc(100vh-200px)] min-h-[420px]">
       {/* Chat List Sidebar */}
       <Paper
         elevation={2}
-        className="w-80 flex flex-col border-r border-gray-200"
+        className="w-full md:w-80 flex flex-col border-r border-gray-200 max-h-[40vh] md:max-h-none"
       >
         <Box className="p-4 border-b border-gray-200">
           <Box className="flex items-center gap-2 mb-3">

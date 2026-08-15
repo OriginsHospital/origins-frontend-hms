@@ -574,12 +574,12 @@ function PatientRegistration() {
         {/* {
           allPatients.isLoading && <div>Loading...</div>
         } */}
-        <div className="w-full px-4 py-2 grid grid-cols-[1fr_auto_1fr] items-center gap-4">
-          <div />
-          <div className="flex items-center justify-center gap-5">
+        <div className="w-full px-3 sm:px-4 py-2 flex flex-col lg:grid lg:grid-cols-[1fr_auto_1fr] items-stretch lg:items-center gap-3">
+          <div className="hidden lg:block" />
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3">
             <TextField
               placeholder="Search by Patient ID / Mobile / Name / Aadhaar"
-              className="w-[350px] md:w-[450px] lg:w-[500px] bg-white"
+              className="w-full sm:w-[350px] md:w-[450px] lg:w-[500px] bg-white"
               type="search"
               value={searchValue}
               onChange={(e) => setSearchValue(e.target.value)}

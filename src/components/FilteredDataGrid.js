@@ -62,6 +62,7 @@ const FilteredDataGrid = ({
           color: '#123047',
           fontWeight: 600,
           overflow: 'hidden',
+          fontSize: 14,
         },
         '& .MuiDataGrid-cellContent': {
           color: '#123047',
@@ -72,6 +73,7 @@ const FilteredDataGrid = ({
         '& .MuiDataGrid-columnHeaderTitle': {
           color: '#123047',
           fontWeight: 800,
+          fontSize: 14,
         },
         '& .MuiDataGrid-columnSeparator': {
           display: 'none',

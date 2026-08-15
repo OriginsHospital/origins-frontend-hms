@@ -80,14 +80,14 @@
 .apptName {
   font-weight: 700;
   color: #165e63;
-  font-size: 0.92rem;
+  font-size: 1rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .apptType {
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: #5a7384;
   text-transform: uppercase;
@@ -102,7 +102,7 @@
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   color: #0a7370;
   background: #e6faf8;
 }
@@ -180,7 +180,7 @@
   min-height: 28px;
   padding: 0 10px;
   border-radius: 999px;
-  font-size: 0.78rem;
+  font-size: 0.85rem;
   font-weight: 700;
 }
 
@@ -213,7 +213,7 @@
 
 .statLabel {
   display: block;
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -223,7 +223,7 @@
 .statValue {
   display: block;
   margin-top: 4px;
-  font-size: 0.92rem;
+  font-size: 1rem;
   font-weight: 800;
   color: #165e63;
   line-height: 1.25;
@@ -253,7 +253,7 @@
 }
 
 .sectionTitle {
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -325,5 +325,38 @@
 
   .profileName {
     font-size: 1.15rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: 8px;
+    gap: 10px;
+  }
+
+  .demoGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .profileBanner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .avatar {
+    width: 56px;
+    height: 56px;
+  }
+
+  .toolbar,
+  .actionsRow {
+    width: 100%;
+  }
+
+  .toolbar :global(.MuiButton-root),
+  .actionsRow :global(.MuiButton-root) {
+    flex: 1 1 auto;
   }
 }

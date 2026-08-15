@@ -20,6 +20,7 @@ export default function Modal({
   showCloseButton,
   onOutsideClick,
   paperSx, // Additional sx props for Paper component
+  contentSx, // Additional sx props for DialogContent
 }) {
   const modal = useSelector((store) => store.modal)
   const dispatch = useDispatch()
@@ -71,9 +72,14 @@ export default function Modal({
       PaperProps={{
         sx: {
           zIndex: 1300,
-          maxHeight: '88vh',
+          display: 'flex',
+          flexDirection: 'column',
+          margin: { xs: 0, sm: '16px' },
+          maxHeight: { xs: '100dvh', sm: 'calc(100dvh - 32px)' },
+          height: { xs: '100dvh', sm: 'auto' },
+          width: { xs: '100%', sm: undefined },
           overflow: 'hidden',
-          borderRadius: '16px',
+          borderRadius: { xs: 0, sm: '16px' },
           ...paperSx,
         },
       }}
@@ -151,9 +157,16 @@ export default function Modal({
       <DialogContent
         sx={{
           p: title || showCloseButton ? undefined : 0,
+          minHeight: 0,
+          flex: '1 1 auto',
+          overflowY: 'auto',
+          maxHeight: 'none',
           '&.MuiDialogContent-root': {
             p: title || showCloseButton ? undefined : 0,
+            minHeight: 0,
+            maxHeight: 'none',
           },
+          ...contentSx,
         }}
       >
         {children}

@@ -715,7 +715,7 @@ const PatientDetails = ({ details }) => {
         {/* <Typography variant="h6" className="mb-3">
           Patient Details
         </Typography> */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* {Object.entries(details).map(([key, value]) => (
             <div key={key}>
               <Typography variant="subtitle2" color="textSecondary">

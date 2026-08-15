@@ -23,18 +23,14 @@ const Footer = () => {
   return (
     <Box
       component="footer"
-      className="bg-ink text-white py-3 shadow-lg"
+      className="auth-footer py-3"
       sx={{
-        position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        zIndex: 1000,
+        mt: 'auto',
       }}
     >
       <Container maxWidth="lg">
         <Box className="flex flex-col md:flex-row justify-between items-center">
-          <Typography variant="body2" className="text-gray-300 mb-2 md:mb-0">
+          <Typography variant="body2" className="mb-2 md:mb-0">
             © {new Date().getFullYear()} ORIGINS HOSPITAL-SPL. All rights
             reserved.
           </Typography>
@@ -42,25 +38,25 @@ const Footer = () => {
           <Box className="flex flex-wrap gap-4 text-sm items-center">
             <button
               onClick={() => handleOpenModal('termsAndConditionsModal')}
-              className="text-gray-300 hover:text-white transition-colors duration-200 cursor-pointer"
+              className="transition-colors duration-200 cursor-pointer"
             >
               Terms and Conditions
             </button>
             <button
               onClick={() => handleOpenModal('privacyPolicyModal')}
-              className="text-gray-300 hover:text-white transition-colors duration-200 cursor-pointer"
+              className="transition-colors duration-200 cursor-pointer"
             >
               Privacy Policy
             </button>
             <button
               onClick={() => handleOpenModal('contactModal')}
-              className="text-gray-300 hover:text-white transition-colors duration-200 cursor-pointer"
+              className="transition-colors duration-200 cursor-pointer"
             >
               Contact Us
             </button>
             <button
               onClick={() => handleOpenModal('refundPolicyModal')}
-              className="text-gray-300 hover:text-white transition-colors duration-200 cursor-pointer"
+              className="transition-colors duration-200 cursor-pointer"
             >
               Refund Policy
             </button>

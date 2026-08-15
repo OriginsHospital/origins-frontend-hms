@@ -33,7 +33,7 @@ import Breadcrumb from '@/components/Breadcrumb'
 import { grnVendorReportFilterData } from '@/constants/filters'
 
 const Index = () => {
-  const user = useSelector(store => store.user)
+  const user = useSelector((store) => store.user)
   const [columns, setColumns] = useState([
     'grnNo',
     'date',
@@ -59,13 +59,13 @@ const Index = () => {
   })
   const dispatch = useDispatch()
 
-  const handlePayment = e => {
+  const handlePayment = (e) => {
     dispatch(openModal('vendorPayments'))
     setSelectedVendor(e.row)
   }
 
-  const chipComponent = params => {
-    const getStatusBG = status => {
+  const chipComponent = (params) => {
+    const getStatusBG = (status) => {
       switch (status) {
         case 'DUE':
           return 'error'
@@ -120,9 +120,9 @@ const Index = () => {
   ]
 
   // Get unique values for dropdowns
-  const getUniqueValues = field => {
+  const getUniqueValues = (field) => {
     if (!reportsData) return []
-    const values = new Set(reportsData.map(row => row[field]))
+    const values = new Set(reportsData.map((row) => row[field]))
     return Array.from(values).filter(Boolean)
   }
 
@@ -157,10 +157,10 @@ const Index = () => {
       dispatch(hideLoader())
     }
   }, [isReportFetchLoading])
-  const camelToNormalCase = str => {
+  const camelToNormalCase = (str) => {
     return str
       .replace(/([A-Z])/g, ' $1')
-      .replace(/^./, str => str.toUpperCase())
+      .replace(/^./, (str) => str.toUpperCase())
       .trim()
   }
   const handlePaymentComplete = async () => {
@@ -201,7 +201,7 @@ const Index = () => {
             sectionData={selectedVendorPayment}
           />
           <Divider className="mb-3" />
-          <div className="grid grid-cols-4  gap-5">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-5">
             <div>
               <Typography
                 variant="body2"
@@ -237,7 +237,7 @@ const Index = () => {
                   : null
               }
               name="paymentDate"
-              onChange={newValue =>
+              onChange={(newValue) =>
                 setPaymentPayload({
                   ...paymentPayload,
                   paymentDate: dayjs(newValue).format('YYYY-MM-DD'),
@@ -249,7 +249,7 @@ const Index = () => {
               <RadioGroup
                 value={paymentPayload?.typeOfPayment}
                 name="typeOfPayment"
-                onChange={e =>
+                onChange={(e) =>
                   setPaymentPayload({
                     ...paymentPayload,
                     [e.target.name]: e.target.value,
@@ -275,7 +275,7 @@ const Index = () => {
               multiline={true}
               rows={2}
               value={paymentPayload.remarks}
-              onChange={e =>
+              onChange={(e) =>
                 setPaymentPayload({
                   ...paymentPayload,
                   [e.target.name]: e.target.value,
@@ -307,12 +307,12 @@ const Index = () => {
       <div className="">
         <FilteredDataGrid
           rows={reportsData || []}
-          columns={columns?.map(columnName => ({
+          columns={columns?.map((columnName) => ({
             field: columnName,
             headerName: camelToNormalCase(columnName),
             width: 150,
             renderCell: columnName == 'status' && chipComponent,
-            cellClassName: params =>
+            cellClassName: (params) =>
               params.row.stage === 'DUE' ? 'bg-red-100' : 'bg-green-100',
           }))}
           customFilters={customFilters}

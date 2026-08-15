@@ -1875,9 +1875,9 @@ function Managefields() {
   }
 
   return (
-    <div className="w-full h-[calc(100vh-160px)] p-5 flex gap-5">
+    <div className="w-full min-h-0 h-auto lg:h-[calc(100vh-160px)] p-3 sm:p-5 flex flex-col lg:flex-row gap-3 sm:gap-5">
       <TabContext value={selectedTab}>
-        <div className="min-w-60 h-full flex flex-col gap-3 shadow rounded bg-white">
+        <div className="w-full lg:min-w-60 lg:w-60 h-auto lg:h-full flex flex-col gap-3 shadow rounded bg-white">
           <span className="text-3xl font-semibold text-secondary p-5 text-center border-b">
             {'Master Data'}
           </span>

@@ -29,8 +29,14 @@ function SideDrawer({
           handleClose()
         }
       }}
+      PaperProps={{
+        sx: {
+          width: { xs: '100vw', sm: 'min(560px, 100vw)' },
+          maxWidth: '100vw',
+        },
+      }}
     >
-      <div className="relative p-4 pt-12 h-screen min-w-48 md:min-w-96 bg-white overflow-y-auto">
+      <div className="relative p-4 pt-12 h-dvh w-full min-w-0 bg-white overflow-y-auto">
         <IconButton
           onClick={handleClose}
           aria-label="Close"

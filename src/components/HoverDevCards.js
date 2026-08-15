@@ -635,7 +635,7 @@ const HoverDevCards = () => {
   const cards = visibleGroup?.cards || dashboard.cards || []
 
   return (
-    <div className="p-5 md:p-7">
+    <div className="p-3 sm:p-4">
       {roleKey === 'doctor' ? (
         <DoctorTodayAppointments
           eyebrow={dashboard.eyebrow}
@@ -643,14 +643,14 @@ const HoverDevCards = () => {
           roleName={roleName}
         />
       ) : (
-        <div className="mb-5 rounded-2xl border border-[#cfe4ee] bg-white p-4 shadow-card">
+        <div className="mb-5 rounded-2xl border border-[#cfe4ee] bg-white p-3 shadow-card">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-secondary">
             {dashboard.eyebrow}
           </p>
-          <h1 className="mt-1 text-2xl font-bold text-ink">
+          <h1 className="mt-1 text-xl font-bold text-ink">
             {dashboard.headline(user)}
           </h1>
-          <p className="mt-1 max-w-3xl text-[15px] text-muted">
+          <p className="mt-1 max-w-3xl text-[14px] text-muted">
             {dashboard.description}
           </p>
           <div className="mt-3 inline-flex items-center rounded-full bg-primary px-3 py-1 text-xs font-semibold text-[#0284b8]">
@@ -683,7 +683,7 @@ const HoverDevCards = () => {
         </div>
       ) : null}
 
-      <div className="grid gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+      <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
         {cards.map((each, i) => {
           const CardPermission = withPermission(
             Card,

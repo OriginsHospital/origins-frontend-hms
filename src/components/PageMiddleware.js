@@ -207,7 +207,7 @@ export default function PageMiddleware(props) {
       <FutureCycleModalGlobal />
       <div className="flex flex-row overflow-x-hidden">
         <SideNav />
-        <div className="pt-[56px] self-stretch h-screen overflow-hidden grow relative flex flex-col bg-canvas">
+        <div className="app-main-column self-stretch h-screen overflow-hidden grow relative flex flex-col bg-canvas">
           <TabBar />
           <div
             className={`flex-1 min-h-0 bg-canvas ${

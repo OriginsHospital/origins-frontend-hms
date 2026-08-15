@@ -14,10 +14,10 @@ function DisplayAlerts() {
     refetchInterval: 1000 * 60,
   })
   if (isLoading)
-    return <div className="px-4 py-2 text-sm text-muted">Loading alerts…</div>
+    return <div className="px-3 py-0.5 text-xs text-muted">Loading alerts…</div>
   return (
     <Marquee speed={50} pauseOnHover={true}>
-      <div className="flex items-center gap-4 py-1.5 text-sm text-ink">
+      <div className="flex items-center gap-4 py-0.5 text-[13px] text-ink">
         {alertsData?.data?.map((alert) => (
           <div key={alert.id} className="flex items-center gap-4">
             <span>{alert.alertMessage}</span>
