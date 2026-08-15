@@ -98,11 +98,17 @@ export default function VisitDetail({
   }
 
   return (
-    <div className={fullWidth ? 'w-full mb-1' : 'flex justify-end mb-5'}>
-      <FormControl fullWidth={fullWidth} className={fullWidth ? 'w-full' : ''}>
-        <InputLabel id="visit-label">
-          {selectedVisit ? '' : 'New Visit'}
-        </InputLabel>
+    <div className={fullWidth ? 'w-full' : 'flex justify-end mb-5'}>
+      <FormControl
+        fullWidth={fullWidth}
+        size={fullWidth ? 'small' : 'medium'}
+        className={fullWidth ? 'w-full' : ''}
+      >
+        {!fullWidth && (
+          <InputLabel id="visit-label">
+            {selectedVisit ? '' : 'New Visit'}
+          </InputLabel>
+        )}
         <Select
           value={
             visits?.data?.length === 0
@@ -111,10 +117,50 @@ export default function VisitDetail({
                 ? selectedVisit.id
                 : ''
           }
-          labelId="visit-label"
-          label={selectedVisit ? '' : 'New Visit'}
+          labelId={fullWidth ? undefined : 'visit-label'}
+          label={fullWidth ? undefined : selectedVisit ? '' : 'New Visit'}
           name="visit"
-          className={`bg-white rounded-lg ${fullWidth ? 'w-full' : 'min-w-48'} h-12 outline-none border-none`}
+          displayEmpty={fullWidth}
+          className={`bg-white rounded-lg ${fullWidth ? 'w-full' : 'min-w-48'} outline-none border-none`}
+          sx={
+            fullWidth
+              ? {
+                  minHeight: 40,
+                  '& .MuiOutlinedInput-notchedOutline': {
+                    legend: { display: 'none' },
+                  },
+                  '& .MuiSelect-select': {
+                    display: 'flex',
+                    alignItems: 'center',
+                    py: '8px !important',
+                  },
+                }
+              : { height: 48 }
+          }
+          renderValue={
+            fullWidth
+              ? (value) => {
+                  if (!visits?.data?.length) return 'No Visits Available'
+                  const index = visits.data.findIndex(
+                    (visit) => visit.id === value,
+                  )
+                  const visit = visits.data[index]
+                  if (!visit) return ''
+                  return (
+                    <span className="flex items-center justify-between gap-3 w-full min-w-0">
+                      <span className="truncate text-sm text-[#123047]">
+                        {index + 1}. {getVisitById(visit.type)}
+                      </span>
+                      {visit.isActive === 1 ? (
+                        <span className="shrink-0 bg-[#dcfce7] rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#16a34a]">
+                          active
+                        </span>
+                      ) : null}
+                    </span>
+                  )
+                }
+              : undefined
+          }
           onChange={handleChangeVisit}
         >
           {visits?.data?.length === 0 ? (
@@ -123,29 +169,24 @@ export default function VisitDetail({
             </MenuItem>
           ) : (
             visits?.data?.map((each, index) => (
-              <MenuItem key={each.id} value={each.id}>
-                {each.isActive === 1 ? (
-                  <span className="flex flex-row-reverse items-center gap-3">
-                    <span className="bg-[#dcfce7] rounded-3xl px-2 py-1.5 text-[#22c55e]">
+              <MenuItem key={each.id} value={each.id} dense>
+                <span className="flex items-center justify-between gap-3 w-full min-w-0">
+                  <span className="truncate text-sm text-[#123047]">
+                    {index + 1}. {getVisitById(each.type)}
+                  </span>
+                  {each.isActive === 1 ? (
+                    <span className="shrink-0 bg-[#dcfce7] rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#16a34a]">
                       active
                     </span>
-                    <span>
-                      {index + 1}.{getVisitById(each.type)}
-                      {/* {getPackageNameById(each.packageChosen)} */}
-                    </span>
-                  </span>
-                ) : (
-                  <span>
-                    {index + 1}. {getVisitById(each.type)}
-                    {/* {getPackageNameById(each.packageChosen)} */}
-                  </span>
-                )}
+                  ) : null}
+                </span>
               </MenuItem>
             ))
           )}
           <MenuItem
-            className="text-secondary flex float-end px-3 py-2 cursor-pointer"
+            className="text-secondary px-3 py-2 cursor-pointer"
             value="createVisit"
+            dense
           >
             Create new Visit
           </MenuItem>

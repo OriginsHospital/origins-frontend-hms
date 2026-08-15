@@ -266,8 +266,8 @@ html[data-sidenav='collapsed'] .sidenav-shell {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: 12px 12px 8px;
+  align-items: stretch;
+  padding: 8px 8px 4px;
 }
 
 .sidenav-logo-frame {
@@ -275,34 +275,28 @@ html[data-sidenav='collapsed'] .sidenav-shell {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 2px 6px;
+  padding: 0;
+  overflow: hidden;
   border: 0;
   background: transparent;
   box-shadow: none;
-  border-radius: 0;
+  border-radius: 14px;
 }
 
 .sidenav-logo-img {
-  width: auto;
-  max-width: 118px;
+  display: block;
+  width: 100%;
+  max-width: 100%;
   height: auto;
-  max-height: 64px;
   object-fit: contain;
   background: transparent;
   border: 0;
   box-shadow: none;
-  border-radius: 10px;
+  border-radius: 14px;
 }
 
 .sidenav-brand-title {
-  margin-top: 6px;
-  color: #ffffff;
-  font-size: 15px;
-  font-weight: 800;
-  letter-spacing: 0.16em;
-  line-height: 1.1;
-  text-transform: uppercase;
-  text-shadow: 0 6px 16px rgba(0, 0, 0, 0.28);
+  display: none;
 }
 
 .sidenav-item-row {
@@ -467,6 +461,113 @@ html[data-sidenav='collapsed'] .sidenav-shell {
   backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--app-border);
   transition: left 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ortus-header-mark {
+  position: absolute;
+  inset: 0 240px 0 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.ortus-header-rule {
+  width: min(88px, 10vw);
+  height: 1px;
+  flex-shrink: 1;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(6, 174, 233, 0.22) 18%,
+    rgba(45, 212, 191, 0.7) 50%,
+    rgba(6, 174, 233, 0.22) 82%,
+    transparent
+  );
+}
+
+.ortus-header-word {
+  position: relative;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.ortus-header-word-fill,
+.ortus-header-word-shimmer {
+  display: block;
+  font-family: 'Cormorant Garamond', 'Times New Roman', serif;
+  font-size: 28px;
+  font-weight: 700;
+  font-style: italic;
+  letter-spacing: 0.34em;
+  text-indent: 0.34em;
+  line-height: 1;
+}
+
+.ortus-header-word-fill {
+  background-image: linear-gradient(
+    105deg,
+    #0b4f78 0%,
+    #0284b8 28%,
+    #06aee9 52%,
+    #2dd4bf 78%,
+    #0284b8 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.85))
+    drop-shadow(0 6px 10px rgba(6, 174, 233, 0.18));
+  animation: ortus-header-flow 9s ease-in-out infinite;
+}
+
+.ortus-header-word-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 34%,
+    rgba(255, 255, 255, 0.92) 50%,
+    transparent 66%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: ortus-header-shimmer 4.2s ease-in-out 1.1s infinite;
+}
+
+@keyframes ortus-header-flow {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes ortus-header-shimmer {
+  0%,
+  58% {
+    background-position: 140% 0;
+  }
+  82%,
+  100% {
+    background-position: -40% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ortus-header-word-fill,
+  .ortus-header-word-shimmer {
+    animation: none;
+  }
 }
 
 .auth-page {
@@ -1544,6 +1645,22 @@ html[data-sidenav='collapsed'] .sidenav-shell {
     left: 0;
   }
 
+  .ortus-header-mark {
+    inset: 0 168px 0 48px;
+    gap: 8px;
+  }
+
+  .ortus-header-word-fill,
+  .ortus-header-word-shimmer {
+    font-size: 22px;
+    letter-spacing: 0.26em;
+    text-indent: 0.26em;
+  }
+
+  .ortus-header-rule {
+    width: min(48px, 8vw);
+  }
+
   .MuiDialog-paper {
     margin: 8px !important;
     width: calc(100vw - 16px) !important;
@@ -1579,6 +1696,22 @@ html[data-sidenav='collapsed'] .sidenav-shell {
   :root {
     --header-height: 44px;
     --page-gutter: 8px;
+  }
+
+  .ortus-header-mark {
+    inset: 0 132px 0 44px;
+    gap: 6px;
+  }
+
+  .ortus-header-word-fill,
+  .ortus-header-word-shimmer {
+    font-size: 18px;
+    letter-spacing: 0.2em;
+    text-indent: 0.2em;
+  }
+
+  .ortus-header-rule {
+    display: none;
   }
 
   .app-page-shell > .w-full.h-full.p-5,
@@ -1648,14 +1781,12 @@ html[data-sidenav='collapsed'] .sidenav-shell {
 }
 
 @media (max-height: 700px) {
-  .sidenav-logo-img {
-    max-height: 48px;
-    max-width: 96px;
+  .sidenav-brand {
+    padding: 6px 8px 2px;
   }
 
-  .sidenav-brand-title {
-    font-size: 13px;
-    margin-top: 4px;
+  .sidenav-logo-img {
+    max-height: 148px;
   }
 
   .MuiDialog-paper {

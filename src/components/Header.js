@@ -54,7 +54,17 @@ export default function Header() {
   return (
     <div className="flex flex-col">
       <div className="app-header fixed top-0 right-0 z-10 flex justify-end items-center gap-1 px-3 sm:px-5">
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+        <div className="ortus-header-mark" aria-label="ORTUS">
+          <span className="ortus-header-rule" aria-hidden="true" />
+          <span className="ortus-header-word">
+            <span className="ortus-header-word-fill">ORTUS</span>
+            <span className="ortus-header-word-shimmer" aria-hidden="true">
+              ORTUS
+            </span>
+          </span>
+          <span className="ortus-header-rule" aria-hidden="true" />
+        </div>
+        <div className="relative z-[1] flex items-center gap-2 sm:gap-3 min-w-0">
           <NotificationBell />
           <span className="flex flex-col items-end pr-1 sm:pr-2 min-w-0">
             <span className="text-ink font-semibold text-sm leading-tight truncate max-w-[140px] sm:max-w-[220px]">
@@ -66,7 +76,7 @@ export default function Header() {
           </span>
         </div>
 
-        <div className="items-center gap-3 block">
+        <div className="relative z-[1] items-center gap-3 block">
           <div ref={anchorEl}>
             <CgProfile
               size={28}

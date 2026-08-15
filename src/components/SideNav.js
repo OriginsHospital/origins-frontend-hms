@@ -742,11 +742,10 @@ function SideNav(props) {
           <div className="sidenav-logo-frame">
             <img
               src={originslogo.src}
-              alt="Ortus"
+              alt="Origins IVF"
               className="sidenav-logo-img"
             />
           </div>
-          <span className="sidenav-brand-title">Ortus</span>
         </div>
         <div className="flex flex-col gap-1 overflow-y-auto pb-4">
           {routes.map((eachRouteObj, i) => {

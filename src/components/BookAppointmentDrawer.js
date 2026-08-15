@@ -132,25 +132,31 @@ export default function BookAppointmentDrawer({ patient, onClose }) {
             </div>
           ) : (
             <>
-              <div className="bg-white rounded-xl border border-[#cfe4ee] p-3 mb-3">
-                <Typography
-                  sx={{
-                    fontWeight: 700,
-                    fontSize: 13,
-                    mb: 1,
-                    color: '#123047',
-                  }}
-                >
-                  Select visit
-                </Typography>
-                <VisitDetail
-                  formData={formData}
-                  visits={visits}
-                  selectedVisit={selectedVisit}
-                  handleChangeVisit={handleChangeVisit}
-                  setSelectedVisit={setSelectedVisit}
-                  fullWidth
-                />
+              <div className="bg-white rounded-xl border border-[#cfe4ee] px-3 py-2 mb-3">
+                <div className="flex items-center gap-3">
+                  <Typography
+                    sx={{
+                      fontWeight: 700,
+                      fontSize: 12,
+                      color: '#5a7384',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Select visit
+                  </Typography>
+                  <div className="flex-1 min-w-0">
+                    <VisitDetail
+                      formData={formData}
+                      visits={visits}
+                      selectedVisit={selectedVisit}
+                      handleChangeVisit={handleChangeVisit}
+                      setSelectedVisit={setSelectedVisit}
+                      fullWidth
+                    />
+                  </div>
+                </div>
               </div>
               {selectedVisit?.id ? (
                 <>

@@ -311,7 +311,7 @@ export default function Appointments({
     <div
       className={
         isPanel
-          ? 'bg-white rounded-xl border border-[#cfe4ee]'
+          ? 'bg-white rounded-xl border border-[#cfe4ee] overflow-hidden'
           : 'bg-white px-5 py-3 rounded shadow'
       }
     >
@@ -319,71 +319,130 @@ export default function Appointments({
         variant="outlined"
         className={isPanel ? 'border-0 shadow-none' : 'm-3 border mt-5'}
       >
-        <div className="p-4 border-b">
-          <h3 className="text-lg font-semibold text-secondary">
+        <div
+          className={
+            isPanel
+              ? 'px-3 py-2 border-b border-[#e6f1f6] flex items-center justify-between gap-2'
+              : 'p-4 border-b'
+          }
+        >
+          <h3
+            className={
+              isPanel
+                ? 'text-sm font-semibold text-secondary'
+                : 'text-lg font-semibold text-secondary'
+            }
+          >
             {bookingContextLabel}
           </h3>
+          {isPanel && canBookNew ? (
+            <Button
+              size="small"
+              className="flex gap-1.5 items-center capitalize text-xs"
+              onClick={openBookingDrawer}
+              variant="outlined"
+              sx={{ minHeight: 30, py: 0.25, px: 1.25 }}
+            >
+              <FaPlusCircle size={13} />
+              <span>New</span>
+            </Button>
+          ) : null}
         </div>
 
-        <div className="p-4">
+        <div className={isPanel ? '' : 'p-4'}>
           <div
             className={
               isPanel
-                ? 'flex flex-col gap-3'
+                ? 'flex flex-col'
                 : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4'
             }
           >
+            {appointments.length === 0 && isPanel ? (
+              <div className="px-3 py-4 text-sm text-[#5a7384]">
+                No appointments yet for this visit.
+              </div>
+            ) : null}
             {appointments.map((eachAppointment) => (
               <div
                 className={
                   isPanel
-                    ? 'p-3.5 rounded-xl border border-[#d7eef7] bg-[#f7fbfd]'
+                    ? 'px-3 py-2 border-b border-[#eef5f8] last:border-b-0 flex items-center justify-between gap-3'
                     : 'p-3 flex flex-col rounded-lg shadow shadow-secondary min-w-0'
                 }
                 key={`${eachAppointment.appointmentSource}-${eachAppointment.appointmentId}`}
               >
-                {eachAppointment.consultationType && (
-                  <span className="text-xs font-semibold text-[#0284b8] mb-1">
-                    {eachAppointment.consultationType}
-                  </span>
-                )}
-                <span
-                  title={eachAppointment.doctorName}
-                  className="font-bold text-[#123047] break-words"
-                >
-                  {eachAppointment.doctorName}
-                </span>
+                <div className="min-w-0 flex-1">
+                  <div
+                    className={
+                      isPanel
+                        ? 'flex items-center gap-2 min-w-0'
+                        : 'flex flex-col'
+                    }
+                  >
+                    {eachAppointment.consultationType ? (
+                      <span className="text-[11px] font-semibold text-[#0284b8] shrink-0">
+                        {eachAppointment.consultationType}
+                      </span>
+                    ) : null}
+                    {isPanel && eachAppointment.consultationType ? (
+                      <span className="text-[#c5d6df] shrink-0">·</span>
+                    ) : null}
+                    <span
+                      title={eachAppointment.doctorName}
+                      className={
+                        isPanel
+                          ? 'font-semibold text-sm text-[#123047] truncate'
+                          : 'font-bold text-[#123047] break-words'
+                      }
+                    >
+                      {eachAppointment.doctorName}
+                    </span>
+                  </div>
+                  {eachAppointment.appointmentReason ? (
+                    <div
+                      className={
+                        isPanel
+                          ? 'mt-0.5 text-xs text-[#5a7384] truncate'
+                          : 'mt-1 text-sm text-[#123047] break-words'
+                      }
+                    >
+                      {eachAppointment.appointmentReason}
+                    </div>
+                  ) : null}
+                </div>
                 <div
                   className={
                     isPanel
-                      ? 'mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[#5a7384]'
+                      ? 'shrink-0 text-right leading-tight'
                       : 'mt-1 flex justify-between gap-2 font-medium text-sm text-[#5a7384]'
                   }
                 >
-                  <span>{eachAppointment.timeStart}</span>
-                  <span>
+                  <span
+                    className={
+                      isPanel
+                        ? 'block text-sm font-medium text-[#123047]'
+                        : undefined
+                    }
+                  >
+                    {eachAppointment.timeStart}
+                  </span>
+                  <span
+                    className={
+                      isPanel ? 'block text-xs text-[#5a7384]' : undefined
+                    }
+                  >
                     {dayjs(eachAppointment.appointmentDate).format(
                       'DD-MM-YYYY',
                     )}
                   </span>
                 </div>
-                {eachAppointment.appointmentReason ? (
-                  <span className="mt-1 text-sm text-[#123047] break-words">
-                    {eachAppointment.appointmentReason}
-                  </span>
-                ) : null}
               </div>
             ))}
-            {canBookNew && (
+            {canBookNew && !isPanel && (
               <Button
-                className={
-                  isPanel
-                    ? 'flex gap-2 items-center capitalize text-sm min-h-[52px]'
-                    : 'flex gap-2 items-center capitalize text-sm'
-                }
+                className="flex gap-2 items-center capitalize text-sm"
                 onClick={openBookingDrawer}
                 variant="outlined"
-                fullWidth={isPanel}
               >
                 <FaPlusCircle size={20} />
                 <span>New Appointment</span>
