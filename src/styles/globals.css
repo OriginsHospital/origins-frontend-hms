@@ -1662,3 +1662,513 @@ html[data-sidenav='collapsed'] .sidenav-shell {
     max-height: calc(100dvh - 12px) !important;
   }
 }
+
+/* ===== Cinematic post-login welcome ===== */
+body.cinematic-welcome-lock {
+  overflow: hidden;
+}
+
+.cinematic-welcome {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: pointer;
+  color: #f4fffb;
+  background:
+    radial-gradient(
+      circle at 50% 42%,
+      rgba(6, 174, 233, 0.16),
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 18% 80%,
+      rgba(110, 231, 197, 0.1),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at 82% 18%,
+      rgba(6, 174, 233, 0.12),
+      transparent 26%
+    ),
+    linear-gradient(180deg, #02080c 0%, #04151d 46%, #031018 100%);
+}
+
+.cinematic-welcome-letterbox {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 9vh;
+  min-height: 42px;
+  background: #000;
+  z-index: 6;
+  pointer-events: none;
+  animation: cinematic-letterbox-in 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.cinematic-welcome-letterbox--top {
+  top: 0;
+  transform-origin: top center;
+}
+
+.cinematic-welcome-letterbox--bottom {
+  bottom: 0;
+  transform-origin: bottom center;
+}
+
+.cinematic-welcome.is-exiting .cinematic-welcome-letterbox--top {
+  animation: cinematic-letterbox-out-top 0.85s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.cinematic-welcome.is-exiting .cinematic-welcome-letterbox--bottom {
+  animation: cinematic-letterbox-out-bottom 0.85s cubic-bezier(0.4, 0, 0.2, 1)
+    both;
+}
+
+.cinematic-welcome-vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 18%,
+    rgba(0, 0, 0, 0.55) 100%
+  );
+  pointer-events: none;
+  z-index: 2;
+}
+
+.cinematic-welcome-rays {
+  position: absolute;
+  inset: -20%;
+  background: repeating-linear-gradient(
+    118deg,
+    transparent 0 46px,
+    rgba(110, 231, 197, 0.035) 46px 48px
+  );
+  animation: cinematic-rays 18s linear infinite;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+.cinematic-welcome-grain {
+  position: absolute;
+  inset: -40%;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.55'/%3E%3C/svg%3E");
+  opacity: 0.18;
+  animation: cinematic-grain 0.28s steps(2) infinite;
+  pointer-events: none;
+  z-index: 5;
+  mix-blend-mode: overlay;
+}
+
+.cinematic-welcome-helix {
+  position: absolute;
+  height: min(78vh, 640px);
+  width: auto;
+  opacity: 0.42;
+  filter: drop-shadow(0 0 18px rgba(6, 174, 233, 0.35));
+  animation: cinematic-helix-float 7.5s ease-in-out infinite;
+  z-index: 1;
+}
+
+.cinematic-welcome-helix--left {
+  left: 4%;
+  top: 12%;
+}
+
+.cinematic-welcome-helix--right {
+  right: 4%;
+  bottom: 8%;
+  animation-name: cinematic-helix-float-flip;
+  animation-delay: -2.4s;
+}
+
+.cinematic-welcome-helix-path {
+  stroke-dasharray: 420;
+  stroke-dashoffset: 420;
+  animation: cinematic-draw 2.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.cinematic-welcome-helix-path--b {
+  animation-delay: 0.18s;
+}
+
+.cinematic-welcome-motif {
+  position: absolute;
+  z-index: 2;
+  opacity: 0;
+  animation: cinematic-motif 5.2s ease-out both;
+  filter: drop-shadow(0 0 12px rgba(110, 231, 197, 0.28));
+}
+
+.cinematic-welcome-motif svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.cinematic-welcome-motif--oocyte {
+  left: 11%;
+  bottom: 16%;
+  width: min(108px, 18vw);
+  animation-delay: 0.9s;
+}
+
+.cinematic-welcome-motif--syringe {
+  right: 8%;
+  top: 18%;
+  width: min(170px, 28vw);
+  animation-delay: 1.05s;
+}
+
+.cinematic-welcome-motif--syringe svg {
+  transform: rotate(-18deg);
+}
+
+.cinematic-welcome-motif--blastocyst {
+  right: 13%;
+  bottom: 18%;
+  width: min(92px, 16vw);
+  animation-delay: 1.2s;
+}
+
+.cinematic-welcome-motif--sperm-a {
+  left: 18%;
+  top: 22%;
+  width: min(110px, 20vw);
+  animation-delay: 1.35s;
+}
+
+.cinematic-welcome-motif--sperm-b {
+  right: 22%;
+  top: 58%;
+  width: min(96px, 18vw);
+  animation-delay: 1.5s;
+}
+
+.cinematic-welcome-particles {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.cinematic-welcome-particle {
+  position: absolute;
+  border-radius: 50%;
+  background: #9af7e2;
+  opacity: 0;
+  box-shadow: 0 0 10px rgba(110, 231, 197, 0.8);
+  animation-name: cinematic-particle;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+.cinematic-welcome-stage {
+  position: relative;
+  z-index: 4;
+  text-align: center;
+  padding: 0 24px;
+  max-width: 96vw;
+}
+
+.cinematic-welcome-kicker {
+  margin: 0;
+  font-family: 'Cinzel', 'DM Sans', serif;
+  font-size: clamp(11px, 1.6vw, 15px);
+  font-weight: 600;
+  letter-spacing: 0.62em;
+  text-transform: uppercase;
+  color: rgba(217, 255, 244, 0.82);
+  animation: cinematic-focus 1.1s cubic-bezier(0.22, 1, 0.36, 1) 0.35s both;
+}
+
+.cinematic-welcome-title-wrap {
+  position: relative;
+  margin: 8px auto 0;
+  line-height: 0.86;
+}
+
+.cinematic-welcome-title-outline,
+.cinematic-welcome-title-fill,
+.cinematic-welcome-title-shimmer {
+  display: block;
+  font-family: 'Cormorant Garamond', 'Times New Roman', serif;
+  font-size: clamp(64px, 16vw, 188px);
+  font-weight: 700;
+  font-style: italic;
+  letter-spacing: 0.12em;
+  text-indent: 0.12em;
+}
+
+.cinematic-welcome-title-outline {
+  color: transparent;
+  -webkit-text-stroke: 1.4px rgba(185, 255, 242, 0.55);
+  text-shadow:
+    0 0 28px rgba(6, 174, 233, 0.45),
+    0 18px 40px rgba(0, 0, 0, 0.45);
+  animation: cinematic-focus 1.35s cubic-bezier(0.22, 1, 0.36, 1) 0.7s both;
+}
+
+.cinematic-welcome-title-fill {
+  position: absolute;
+  inset: 0;
+  background-image:
+    url('/cinematic-ivf-pattern.svg'),
+    linear-gradient(185deg, #e7fffa 0%, #7ef0d6 28%, #06aee9 68%, #9af7e2 100%);
+  background-size:
+    168px 168px,
+    100% 140%;
+  background-position:
+    0 0,
+    50% 0%;
+  background-blend-mode: overlay, normal;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation:
+    cinematic-focus 1.35s cubic-bezier(0.22, 1, 0.36, 1) 0.7s both,
+    cinematic-dna-scroll 16s linear 0.7s infinite;
+}
+
+.cinematic-welcome-title-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 36%,
+    rgba(255, 255, 255, 0.78) 50%,
+    transparent 64%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  mix-blend-mode: screen;
+  animation:
+    cinematic-focus 1.35s cubic-bezier(0.22, 1, 0.36, 1) 0.7s both,
+    cinematic-shimmer 2.6s ease-in-out 1.6s both;
+}
+
+.cinematic-welcome-tagline {
+  margin: 18px 0 0;
+  font-family: 'Cinzel', 'DM Sans', serif;
+  font-size: clamp(11px, 1.5vw, 15px);
+  font-weight: 500;
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: #d9fff4;
+  animation: cinematic-focus 1.1s cubic-bezier(0.22, 1, 0.36, 1) 1.55s both;
+}
+
+.cinematic-welcome-progress {
+  width: min(220px, 42vw);
+  height: 1px;
+  margin: 28px auto 0;
+  overflow: hidden;
+  background: rgba(185, 255, 242, 0.18);
+  animation: cinematic-focus 0.8s ease 1.8s both;
+}
+
+.cinematic-welcome-progress::after {
+  content: '';
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: scaleX(0);
+  transform-origin: left center;
+  background: linear-gradient(90deg, #06aee9, #7ef0d6);
+  animation: cinematic-progress 3.2s cubic-bezier(0.22, 1, 0.36, 1) 1.9s both;
+}
+
+.cinematic-welcome-skip {
+  position: absolute;
+  bottom: calc(9vh + 18px);
+  left: 50%;
+  z-index: 7;
+  margin: 0;
+  transform: translateX(-50%);
+  font-size: 11px;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  color: rgba(244, 255, 251, 0.48);
+  animation: cinematic-focus 0.9s ease 2.2s both;
+}
+
+.cinematic-welcome.is-exiting .cinematic-welcome-stage {
+  animation: cinematic-stage-out 0.85s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+@keyframes cinematic-letterbox-in {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes cinematic-letterbox-out-top {
+  to {
+    transform: translateY(-110%);
+  }
+}
+
+@keyframes cinematic-letterbox-out-bottom {
+  to {
+    transform: translateY(110%);
+  }
+}
+
+@keyframes cinematic-focus {
+  from {
+    opacity: 0;
+    filter: blur(16px);
+    transform: translateY(12px) scale(1.08);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: none;
+  }
+}
+
+@keyframes cinematic-dna-scroll {
+  to {
+    background-position:
+      168px 168px,
+      50% 100%;
+  }
+}
+
+@keyframes cinematic-shimmer {
+  from {
+    background-position: 140% 0;
+  }
+  to {
+    background-position: -40% 0;
+  }
+}
+
+@keyframes cinematic-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes cinematic-helix-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-14px);
+  }
+}
+
+@keyframes cinematic-helix-float-flip {
+  0%,
+  100% {
+    transform: scaleX(-1) translateY(0);
+  }
+  50% {
+    transform: scaleX(-1) translateY(-14px);
+  }
+}
+
+@keyframes cinematic-motif {
+  0% {
+    opacity: 0;
+    transform: translateY(18px) scale(0.86);
+  }
+  18% {
+    opacity: 0.88;
+    transform: none;
+  }
+  100% {
+    opacity: 0.88;
+  }
+}
+
+@keyframes cinematic-particle {
+  0%,
+  100% {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  30% {
+    opacity: 0.7;
+  }
+  70% {
+    opacity: 0.2;
+    transform: translateY(-28px);
+  }
+}
+
+@keyframes cinematic-rays {
+  to {
+    transform: translate3d(-4%, -3%, 0);
+  }
+}
+
+@keyframes cinematic-grain {
+  to {
+    transform: translate3d(2%, -1.5%, 0);
+  }
+}
+
+@keyframes cinematic-progress {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes cinematic-stage-out {
+  to {
+    opacity: 0;
+    filter: blur(10px);
+    transform: scale(1.06);
+  }
+}
+
+@media (max-width: 720px) {
+  .cinematic-welcome-helix {
+    opacity: 0.22;
+  }
+
+  .cinematic-welcome-motif--syringe,
+  .cinematic-welcome-motif--sperm-b {
+    display: none;
+  }
+
+  .cinematic-welcome-title-outline,
+  .cinematic-welcome-title-fill,
+  .cinematic-welcome-title-shimmer {
+    letter-spacing: 0.06em;
+    text-indent: 0.06em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cinematic-welcome *,
+  .cinematic-welcome *::before,
+  .cinematic-welcome *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .cinematic-welcome-title-fill,
+  .cinematic-welcome-title-outline,
+  .cinematic-welcome-kicker,
+  .cinematic-welcome-tagline {
+    opacity: 1;
+    filter: none;
+    transform: none;
+  }
+}

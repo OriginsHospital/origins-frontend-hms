@@ -14,6 +14,7 @@ import AuthShell, {
   AuthEmailField,
   AuthPasswordField,
 } from '@/components/AuthShell'
+import { triggerLoginWelcome } from '@/components/LoginWelcomePreloader'
 const toastconfig = {
   position: 'top-right',
   autoClose: 5000,
@@ -88,6 +89,7 @@ function Login() {
                 'token',
                 refreshTokenResponseJson.data.accessToken,
               )
+              triggerLoginWelcome()
               router.push('/home')
               return {
                 ...user,
@@ -123,6 +125,7 @@ function Login() {
             isAuthenticated: true,
           }
           dispatch(setUser(userObject))
+          triggerLoginWelcome()
 
           const redirectPath = sessionStorage.getItem('redirectPath')
 

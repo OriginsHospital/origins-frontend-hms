@@ -25,6 +25,7 @@ import { requestInterceptor } from '../utils/requestInterceptor'
 const queryClient = new QueryClient()
 import theme from '../styles/theme'
 import { Loader } from '@/components/Loader'
+import LoginWelcomePreloader from '@/components/LoginWelcomePreloader'
 import { ToastContainer } from 'react-toastify'
 import Script from 'next/script'
 
@@ -47,6 +48,7 @@ export default function App({ Component, pageProps }) {
                 src="https://checkout.razorpay.com/v1/checkout.js"
               />
               <ToastContainer newestOnTop />
+              <LoginWelcomePreloader />
               {/* <SideDrawer /> */}
               {router.pathname.startsWith('/login') ||
               router.pathname === '/register' ||
