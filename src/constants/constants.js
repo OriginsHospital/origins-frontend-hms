@@ -337,6 +337,10 @@ export const API_ROUTES = {
   GET_ALL_SCANS_LIST: '/masterData/scans/getAllScansList',
   ADD_NEW_SCAN: '/masterData/scans/addNewScan',
   EDIT_SCAN: '/masterData/scans/editScan',
+  GET_ALL_SCAN_TEMPLATES: '/masterData/scanTemplates/getAllScanTemplates',
+  GET_SCAN_TEMPLATE_MASTER: '/masterData/scanTemplates/getScanTemplate',
+  REALIGN_SCAN_TEMPLATE: '/masterData/scanTemplates/realignScanTemplate',
+  RESTORE_SCAN_TEMPLATE: '/masterData/scanTemplates/restoreScanTemplate',
 
   GET_ALL_EMBRYOLOGY_LIST: '/masterData/embryology/getAllEmbryologyList',
   ADD_NEW_EMBRYOLOGY: '/masterData/embryology/addNewEmbryology',

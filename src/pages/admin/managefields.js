@@ -30,6 +30,7 @@ import { closeModal, openModal } from '@/redux/modalSlice'
 import { ACCESS_TYPES, API_ROUTES } from '@/constants/constants'
 import PharmacyMasterTable from '@/components/PharmacyMasterTable'
 import PharmacyKitMasterPanel from '@/components/PharmacyKitMasterPanel'
+import ScanTemplateMasterPanel from '@/components/ScanTemplateMasterPanel'
 import Modal from '@/components/Modal'
 import Accordion from '@mui/material/Accordion'
 import AccordionDetails from '@mui/material/AccordionDetails'
@@ -874,6 +875,12 @@ const tabs = {
     ],
     editUrl: API_ROUTES.EDIT_SCAN,
   },
+  scanTemplate: {
+    label: 'Scan Template',
+    useCustomPanel: true,
+    customPanel: 'scanTemplate',
+    adminOnly: true,
+  },
   embryology: {
     label: 'Embryology',
     getUrl: API_ROUTES.GET_ALL_EMBRYOLOGY_LIST,
@@ -1486,6 +1493,9 @@ function Managefields() {
     )
   })
   const userDetails = useSelector((state) => state.user)
+  const isAdmin =
+    Number(userDetails?.roleDetails?.id) === 1 ||
+    (userDetails?.roleDetails?.name || '').trim().toLowerCase() === 'admin'
   const [subCategoryPayload, setSubCategoryPayload] = useState({
     name: '',
     categoryId: '',
@@ -1856,14 +1866,26 @@ function Managefields() {
     )
   }
 
+  React.useEffect(() => {
+    if (tabs[selectedTab]?.adminOnly && !isAdmin) {
+      const fallbackTab = Object.keys(tabs)
+        .sort((a, b) => tabs[a].label.localeCompare(tabs[b].label))
+        .find((tab) => !tabs[tab].adminOnly)
+      if (fallbackTab) {
+        setSelectedTab(fallbackTab)
+      }
+    }
+  }, [isAdmin, selectedTab])
+
   // Add this function to filter tabs based on search query
   const filteredTabs = React.useMemo(() => {
     return Object.keys(tabs)
       .sort((a, b) => tabs[a].label.localeCompare(tabs[b].label))
-      .filter((tab) =>
-        tabs[tab].label.toLowerCase().includes(searchQuery.toLowerCase()),
-      )
-  }, [searchQuery])
+      .filter((tab) => {
+        if (tabs[tab].adminOnly && !isAdmin) return false
+        return tabs[tab].label.toLowerCase().includes(searchQuery.toLowerCase())
+      })
+  }, [searchQuery, isAdmin])
 
   const handleOpenCreateModal = () => {
     if (tabs[selectedTab]?.useCustomPanel || !tabs[selectedTab]?.createFields) {
@@ -1981,7 +2003,13 @@ function Managefields() {
             .sort((a, b) => tabs[a].label.localeCompare(tabs[b].label))
             .map((tab) => (
               <TabPanel value={tab} key={tab + 'tabPanel'}>
-                {tabs[tab]?.useCustomPanel ? (
+                {tabs[tab]?.customPanel === 'scanTemplate' ? (
+                  isAdmin ? (
+                    <ScanTemplateMasterPanel
+                      accessToken={userDetails?.accessToken}
+                    />
+                  ) : null
+                ) : tabs[tab]?.useCustomPanel ? (
                   <PharmacyKitMasterPanel
                     accessToken={userDetails?.accessToken}
                   />
